@@ -1,0 +1,4 @@
+# dsh-model-router loader entry. Applied by `dsh plugin add`.
+- insert:
+    - id: model-router
+      name: dsh-model-router

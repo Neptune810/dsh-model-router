@@ -1,0 +1,53 @@
+{
+  "name": "dsh-model-router",
+  "version": "0.3.0",
+  "description": "Flash-only reasoning-effort routing for DeepSeek Harness: classifies each step by its shape and sets the DeepSeek flash model's reasoning effort to match. The model never changes; effort max is opt-in.",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./policy": "./lib/policy.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek",
+    "harness",
+    "plugin",
+    "cordis",
+    "model-router",
+    "reasoning-effort",
+    "flash",
+    "routing"
+  ],
+  "author": "Neptune810",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Neptune810/dsh-model-router.git"
+  },
+  "homepage": "https://github.com/Neptune810/dsh-model-router#readme",
+  "bugs": {
+    "url": "https://github.com/Neptune810/dsh-model-router/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
