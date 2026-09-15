@@ -4,7 +4,7 @@
 
 First public release.
 
-- **npm package name.** Published as `@neptune810/dsh-model-router`: the unscoped
+- **npm package name.** Published as `@neptune810/dsh-model-router@0.3.0` on 2026-09-15: the unscoped
   `dsh-model-router` was taken on npm by an unrelated project, so the scope carries the identity.
   The repository name, the `github:` install spec, the loader row id (`model-router`) and the
   module's exported plugin name are all unchanged; only the loader row's import specifier in

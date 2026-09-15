@@ -80,7 +80,13 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 
 ## Install
 
-`dsh plugin` is a pnpm forwarder, so any pnpm specifier works:
+`dsh plugin` is a pnpm forwarder, so any pnpm specifier works. From the npm registry:
+
+```sh
+dsh plugin --profile web add @neptune810/dsh-model-router
+```
+
+or straight from the repository:
 
 ```sh
 dsh plugin --profile web add github:Neptune810/dsh-model-router

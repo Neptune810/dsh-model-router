@@ -77,7 +77,13 @@ host-only：没有前端 UI，不带客户端 bundle，后台静默生效。
 
 ## 安装
 
-`dsh plugin` 是 pnpm 的前置封装，任何 pnpm 规格都能用：
+`dsh plugin` 是 pnpm 的前置封装，任何 pnpm 规格都能用。从 npm registry 装：
+
+```sh
+dsh plugin --profile web add @neptune810/dsh-model-router
+```
+
+或者直接从仓库装：
 
 ```sh
 dsh plugin --profile web add github:Neptune810/dsh-model-router

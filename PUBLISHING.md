@@ -49,11 +49,11 @@ README regeneration, site build) and the `Submission gate` (`dsh.bundle` read fr
 `package.json`, repository age, per-PR entry cap). Merging is the maintainer's call; the two READMEs
 over there are regenerated on `main` after merge and must not be edited by hand.
 
-## Optional: npm
+## npm
 
-Listing does not require an npm release — the market installs from the repository. Publishing to npm
-as well lets people run `dsh plugin --profile web add @neptune810/dsh-model-router` without the
-`github:` spec, and it is what lets the market show a download count.
+Published: **`@neptune810/dsh-model-router@0.3.0`** (2026-09-15). Listing does not depend on it —
+the market installs from the repository — but a registry package gives storefronts a download count
+and lets people install without the `github:` spec.
 
 **The package is scoped, and it has to be.** The unscoped name `dsh-model-router` was published on
 2026-08-21 by an unrelated author (`thedeveloper256`) and still is. The market links an npm package
@@ -67,14 +67,34 @@ npm login     # the scope has to be yours on npm
 npm publish   # publishConfig.access: public is already set in package.json
 ```
 
-Two prerequisites this machine cannot satisfy on its own:
+### The publish needs a 2FA-capable credential
 
-- **The npm account must own the scope.** A scoped name resolves only when its scope is your npm
-  username or an organization you belong to; npm usernames and GitHub logins are separate
-  namespaces. `@neptune810/dsh-model-router` is currently unregistered, which means only an npm
-  account or org named `neptune810` can publish it.
-- **`npm login` has not been run here** — `npm whoami` reports `ENEEDAUTH`. Publishing from this
-  machine needs a logged-in account or an `NPM_TOKEN`.
+This account is set to auth-and-writes, so a plain `npm login` session is not enough — the PUT is
+refused with
 
-Once the package is on the registry, the install line in both READMEs can be switched to the npm
-spec. Until then they keep the `github:` spec, which is the one that actually resolves.
+```
+403 Forbidden ... Two-factor authentication or granular access token with bypass 2fa enabled is
+required to publish packages.
+```
+
+`npm publish` from an interactive terminal prompts for an OTP and works. For anything
+non-interactive, create an **Access Token** on npmjs.com with *Packages and scopes* = `@neptune810`
+(Read and write) and **Bypass 2FA** enabled, then
+
+```sh
+npm config set //registry.npmjs.org/:_authToken=<token>
+```
+
+That stores the token in plaintext in `~/.npmrc`: treat that file as a secret, and revoke tokens you
+are done with.
+
+### Releasing
+
+Bump `version` in `package.json`, add the CHANGELOG section, commit, then `npm publish`. The
+`repository` field already points back at this repo, so the market picks up a new version on its own
+— nothing to change in the entry.
+
+One wrinkle worth knowing: right after a *first* publish the packument can keep returning 404 for a
+few minutes, because the CDN cached the earlier not-found lookup — the availability check you ran
+before publishing is enough to seed it. The publish itself has landed: the log shows `PUT ... 200`,
+and the tarball URL answers `200` while the packument still 404s. Add a cache-busting query or wait.
