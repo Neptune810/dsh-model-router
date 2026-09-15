@@ -1,4 +1,5 @@
 # dsh-model-router loader entry. Applied by `dsh plugin add`.
 - insert:
     - id: model-router
-      name: dsh-model-router
+      # Quoted: a YAML plain scalar may not start with "@".
+      name: "@neptune810/dsh-model-router"

@@ -1,6 +1,9 @@
 {
-  "name": "dsh-model-router",
+  "name": "@neptune810/dsh-model-router",
   "version": "0.3.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Flash-only reasoning-effort routing for DeepSeek Harness: classifies each step by its shape and sets the DeepSeek flash model's reasoning effort to match. The model never changes; effort max is opt-in.",
   "type": "module",
   "main": "./lib/index.js",

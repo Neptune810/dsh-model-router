@@ -4,6 +4,11 @@
 
 First public release.
 
+- **npm package name.** Published as `@neptune810/dsh-model-router`: the unscoped
+  `dsh-model-router` was taken on npm by an unrelated project, so the scope carries the identity.
+  The repository name, the `github:` install spec, the loader row id (`model-router`) and the
+  module's exported plugin name are all unchanged; only the loader row's import specifier in
+  `cordis.patch.yml` follows the scoped package name.
 - **Flash-only.** The router only drives `deepseek-flash` (DeepSeek-V4.1-Flash). The model never
   changes; the reasoning effort is the only thing it sets. The earlier pro/flash split was removed.
 - **Effort ladder.** `trivial` -> `off`, `standard` -> `low`, `engineering` -> `high`,
