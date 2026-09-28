@@ -65,6 +65,8 @@ effort 字段。
 
 ![深色模式下的输入栏面板](docs/preview-dark.png)
 
+默认不透明（主题的菜单色本身是半透明，会把背后的聊天内容透上来）：![半透明 vs 不透明](docs/preview-background.png)
+
 ## 全部点一点就能配（v0.6.2）
 
 输入栏那个控件就是完整的配置入口，不需要写 JSON/YAML：

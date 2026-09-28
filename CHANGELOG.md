@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.6
+
+**The panel is readable now: opaque by default, with a background switch.**
+
+- The theme's menu colour (\`--dsw-specific-menu\`) is translucent, so the conversation
+  showed through the panel and the text was hard to read. The panel now measures that
+  colour plus \`--dsw-alias-bg-base\`, composes them, and paints an **opaque** surface by
+  default instead of the raw menu token.
+- **更多 → 面板背景** switches between 不透明 and 跟随主题 (the translucent menu colour with a
+  22px backdrop blur). It persists like the other settings (\`panelBg\`).
+- The sticky header inherits the panel surface rather than re-painting a translucent one,
+  so scrolled content no longer shows through the title bar.
+- \`docs/preview-background.png\` shows both surfaces over a busy conversation background.
+- 77 tests.
+
 ## 0.6.5
 
 **Plain wording, hover explanations, and the preview ships with the package.**

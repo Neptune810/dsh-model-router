@@ -25,9 +25,10 @@
   --dsw-elevation-prominent:0 16px 48px rgba(0,0,0,.18);--dsw-alias-scrollbar-bg-l2:rgba(0,0,0,.16);
 }
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-content:center;
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
   font:14px/1.5 system-ui,"Segoe UI",-apple-system,sans-serif;padding:32px}
+.main{display:flex;gap:40px;align-items:center;justify-content:center;flex-wrap:wrap}
 .mr-trigger{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:13px;line-height:20px;cursor:pointer;transition:background .12s,color .12s}
 .mr-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}
 .mr-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-success-primary,#3fb950)}
@@ -74,6 +75,7 @@ body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-
 </style>
 </head>
 <body>
+<div class="main">
 <div class="wrap">
   <button class="mr-trigger" type="button">全授权 <span class="mr-dot" data-yielded="false"></span></button>
   <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
@@ -101,8 +103,79 @@ body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="带图步骤：不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型">带图步骤</span><div class="mr-seg" title="不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型"><button data-active="true" title="按普通规则">不干预</button><button title="强制走带视觉标记的模型">用视觉模型</button></div></div>
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断">任务识别</span><div class="mr-seg" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断"><button data-active="true" title="按预设里的 match 匹配">关键词</button><button title="每轮一次小模型判断">语义</button></div></div>
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="上下文压力：快满时优先用便宜模型">上下文压力</span><div class="mr-seg" title="快满时优先用便宜模型"><button title="不参与判断">关</button><button data-active="true" title="上下文快满时优先便宜模型">快满省</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="半透明的主题菜单色会让背后的聊天内容透上来">面板背景</span><div class="mr-seg" title="选「不透明」最好读；选「跟随主题」会加毛玻璃模糊"><button data-active="true" title="用主题底色算出不透明色，文字最清楚">不透明</button><button title="沿用主题的半透明菜单色，再加背景模糊">跟随主题</button></div></div>
   <div class="mr-foot"><span class="mr-dot" data-yielded="false"></span><span>已接管</span><span class="mr-name" style="text-align:right">deepseek-v4-pro · high · engineering</span></div>
 </div>
 <script>if (location.hash === "#light") document.documentElement.dataset.theme = "light"</script>
+
+</div>
+<h2 style="margin:48px 0 8px;font-size:14px;color:var(--dsw-alias-label-secondary);font-weight:500">半透明 vs 不透明（背景是聊天内容）</h2>
+<div class="busywrap" id="busy">
+  <div class="busytext" id="busytext"></div>
+  <div class="panels">
+    <div class="mr-panel demo" data-bg="theme">
+      <div class="mr-head"><span class="mr-name">跟随主题</span></div>
+      <div class="mr-group">模型池</div>
+      <div class="mr-row" data-static="true"><span class="mr-check">&#10003;</span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">攻坚</span></div>
+      <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-tag">定位</span><div class="mr-seg"><button>日常</button><button data-active="true">攻坚</button></div><span class="mr-tag">价格</span><div class="mr-seg"><button>便宜</button><button>中</button><button data-active="true">贵</button></div></div>
+      <div class="mr-row" data-static="true"><span class="mr-check"></span><span class="mr-name">DeepSeek Flash</span></div>
+      <div class="mr-foot"><span class="mr-dot"></span><span>已接管</span><span class="mr-name" style="text-align:right">deepseek-v4-pro · high</span></div>
+    </div>
+    <div class="mr-panel demo" data-bg="solid" id="solidDemo">
+      <div class="mr-head"><span class="mr-name">不透明</span></div>
+      <div class="mr-group">模型池</div>
+      <div class="mr-row" data-static="true"><span class="mr-check">&#10003;</span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">攻坚</span></div>
+      <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-tag">定位</span><div class="mr-seg"><button>日常</button><button data-active="true">攻坚</button></div><span class="mr-tag">价格</span><div class="mr-seg"><button>便宜</button><button>中</button><button data-active="true">贵</button></div></div>
+      <div class="mr-row" data-static="true"><span class="mr-check"></span><span class="mr-name">DeepSeek Flash</span></div>
+      <div class="mr-foot"><span class="mr-dot"></span><span>已接管</span><span class="mr-name" style="text-align:right">deepseek-v4-pro · high</span></div>
+    </div>
+  </div>
+</div>
+<style>
+.busywrap{position:relative;margin:24px auto 0;padding:24px;overflow:hidden;border-radius:12px;max-width:900px}
+:root[data-theme="dark"] .busywrap{--dsw-specific-menu:rgba(35,35,38,.72);--dsw-alias-bg-base:#1b1b1e}
+:root[data-theme="light"] .busywrap{--dsw-specific-menu:rgba(255,255,255,.72);--dsw-alias-bg-base:#f4f5f7}
+.busytext{position:absolute;inset:0;padding:16px;color:var(--dsw-alias-label-primary);opacity:.85;font-size:13px;line-height:1.7;pointer-events:none}
+.panels{position:relative;display:flex;gap:28px;justify-content:center;flex-wrap:wrap}
+.mr-panel.demo{position:static!important;flex:none!important;max-height:none!important;overflow:visible!important;width:320px}
+</style>
+<script>
+(function () {
+  if (location.hash === "#busy") {
+    var main = document.querySelector(".main");
+    if (main) main.style.display = "none";
+    var title = document.querySelector("h2");
+    if (title) title.style.display = "none";
+  }
+  var lines = [];
+  for (var i = 0; i < 26; i++) {
+    lines.push("这是一段很长的助手回复：我先看了下 routing.js 里的评分逻辑，然后把 tier 和 cost 分别映射成定位与价格 —— 第 " + (i + 1) + " 行，用来模拟背后真实的聊天文字。");
+  }
+  document.getElementById("busytext").textContent = lines.join(" ");
+  // The same measurement the plugin uses: read the theme token, compose it opaque.
+  function read(value) {
+    var probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;background-color:" + value;
+    document.body.appendChild(probe);
+    var raw = getComputedStyle(probe).backgroundColor;
+    document.body.removeChild(probe);
+    return raw;
+  }
+  function parse(raw) {
+    var m = String(raw || "").match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    var parts = m[1].split(",").map(parseFloat);
+    if (parts.length < 3) return null;
+    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+  }
+  var scope = document.getElementById("busy");
+  var token = getComputedStyle(scope).getPropertyValue("--dsw-specific-menu").trim() || "rgba(35,35,38,.72)";
+  var top = parse(read(token));
+  var base = parse(read("var(--dsw-alias-bg-base, #1b1b1e)")) || { r: 27, g: 27, b: 30, a: 1 };
+  var over = function (c, b) { return Math.round(c * top.a + b * (1 - top.a)); };
+  document.getElementById("solidDemo").style.background = "rgb(" + over(top.r, base.r) + "," + over(top.g, base.g) + "," + over(top.b, base.b) + ")";
+})();
+</script>
+
 </body>
 </html>

@@ -69,6 +69,9 @@ advertises none.
 
 ![The composer panel in dark mode](docs/preview-dark.png)
 
+Opaque by default (the theme menu colour is translucent, which let the conversation
+show through): ![translucent vs opaque](docs/preview-background.png)
+
 ## The panel matches the host (v0.6.4)
 
 The composer control is styled with the harness's own tokens — the same 34px rows,

@@ -383,6 +383,17 @@ test('the settings route drives images, classifier and pressure from the UI', as
   assert.equal(state.settings.imagePolicy, 'vision')
   assert.equal(state.settings.classifier, 'llm')
   assert.equal(state.settings.signals.contextPressure, 0)
+  assert.equal(state.settings.panelBg, 'solid')
+
+  const themed = await call(host.routes.get(path), {
+    method: 'POST', url: path, headers: { origin: 'http://localhost', host: 'localhost' },
+    body: { settings: { panelBg: 'theme' } },
+  })
+  assert.equal(themed.status, 200)
+  const after = JSON.parse((await call(host.routes.get('/model-router/state'), {
+    method: 'GET', url: '/model-router/state?sessionId=s1',
+  })).payload)
+  assert.equal(after.settings.panelBg, 'theme')
 })
 
 test('the catalog route lists provider models for the pool UI', async () => {

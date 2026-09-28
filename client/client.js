@@ -41,6 +41,10 @@ window.__ModuleLoader__.load({
 				imagesHint: "带图步骤：不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型",
 				classifierHint: "任务识别：关键词 = 按预设里的 match；语义 = 每轮一次小模型判断",
 				pressureHint: "上下文压力：快满时优先用便宜模型",
+				bg: "面板背景", bgSolid: "不透明", bgTheme: "跟随主题",
+				bgHint: "半透明的主题菜单色会让背后的聊天内容透上来；选「不透明」最好读，选「跟随主题」会加毛玻璃模糊",
+				bgSolidHint: "用主题底色算出不透明色，文字最清楚",
+				bgThemeHint: "沿用主题的半透明菜单色，再加背景模糊",
 				fullHint: "模型和思考等级都交给插件", effortHint: "只让插件调思考等级，模型不动", modelHint: "只让插件换模型，思考等级不动",
 				presets: "任务预设", newPreset: "新建预设", edit: "编辑", remove: "删除",
 				name: "名称", keywords: "关键词", add: "添加", custom: "自定义词，回车添加",
@@ -69,6 +73,10 @@ window.__ModuleLoader__.load({
 				imagesHint: "image steps: leave alone = normal rules; vision model = force a vision-tagged model",
 				classifierHint: "detection: keywords = the match list in your presets; semantic = one small model call per turn",
 				pressureHint: "context pressure: prefer the cheap model when the window is nearly full",
+				bg: "Panel surface", bgSolid: "opaque", bgTheme: "theme",
+				bgHint: "the theme's menu colour is translucent, so the conversation shows through; opaque is the most readable, theme adds a backdrop blur",
+				bgSolidHint: "compute an opaque colour from the theme base — most readable",
+				bgThemeHint: "keep the translucent menu colour and blur what is behind it",
 				fullHint: "let the router change both model and effort", effortHint: "effort only, never the model", modelHint: "model only, never the effort",
 				presets: "Task presets", newPreset: "New preset", edit: "Edit", remove: "Delete",
 				name: "Name", keywords: "Keywords", add: "Add", custom: "custom word, press enter",
@@ -102,7 +110,8 @@ window.__ModuleLoader__.load({
 			".mr-panel{position:fixed;z-index:2147483000;width:372px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}",
 			".mr-panel::-webkit-scrollbar{width:8px}",
 			".mr-panel::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.3));border-radius:4px}",
-			".mr-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:4px 8px 6px;background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;letter-spacing:.02em}",
+			".mr-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:4px 8px 6px;background:inherit;color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;letter-spacing:.02em}",
+			".mr-panel[data-bg=theme]{-webkit-backdrop-filter:blur(22px) saturate(1.15);backdrop-filter:blur(22px) saturate(1.15)}",
 			".mr-group{color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;font-weight:500;line-height:16px;padding:8px 8px 2px}",
 			".mr-row{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:4px 8px;border:0;border-radius:var(--dsw-radius-md,8px);background:0 0;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .12s}",
 			".mr-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}",
@@ -149,6 +158,40 @@ window.__ModuleLoader__.load({
 		}
 
 		const EMPTY_CATALOG = { subscribe: () => () => {}, getSnapshot: () => null }
+
+		/**
+		 * The theme's menu colour is usually translucent, which lets the conversation
+		 * show through the panel. Measure it and compose it over the theme's base
+		 * background so the surface can be painted opaque.
+		 */
+		function resolveSolid() {
+			if (typeof document === "undefined" || !document.body) return null
+			const read = (value) => {
+				const probe = document.createElement("div")
+				probe.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;background-color:" + value
+				document.body.appendChild(probe)
+				const raw = getComputedStyle(probe).backgroundColor
+				document.body.removeChild(probe)
+				return raw
+			}
+			const parse = (raw) => {
+				const match = String(raw || "").match(/rgba?\(([^)]+)\)/)
+				if (!match) return null
+				const parts = match[1].split(",").map((piece) => parseFloat(piece))
+				if (parts.length < 3 || parts.slice(0, 3).some((n) => Number.isNaN(n))) return null
+				return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
+			}
+			const top = parse(read("var(--dsw-specific-menu, #232326)"))
+			if (!top) return null
+			if (top.a >= 0.999) return "rgb(" + [top.r, top.g, top.b].join(",") + ")"
+			const base = parse(read("var(--dsw-alias-bg-base, #1b1b1e)")) || { r: 27, g: 27, b: 30, a: 1 }
+			if (base.a < 0.999) {
+				const dark = (top.r + top.g + top.b) / 3 < 128
+				return dark ? "rgb(30,30,33)" : "rgb(250,250,251)"
+			}
+			const over = (channel, baseChannel) => Math.round(channel * top.a + baseChannel * (1 - top.a))
+			return "rgb(" + [over(top.r, base.r), over(top.g, base.g), over(top.b, base.b)].join(",") + ")"
+		}
 
 		async function api(path, options) {
 			const controller = typeof AbortController !== "undefined" ? new AbortController() : undefined
@@ -213,6 +256,7 @@ window.__ModuleLoader__.load({
 			const [editing, setEditing] = react.useState(null)
 			const [customWord, setCustomWord] = react.useState("")
 			const [customModel, setCustomModel] = react.useState("")
+			const [solidBg, setSolidBg] = react.useState(null)
 			const [poolOverride, setPoolOverride] = react.useState(null)
 			const [hostGroups, setHostGroups] = react.useState([])
 			const [catalogStore, setCatalogStore] = react.useState(props && props.resolveCatalog ? props.resolveCatalog() : undefined)
@@ -274,6 +318,7 @@ window.__ModuleLoader__.load({
 						}
 						: null)
 					load()
+					setSolidBg(resolveSolid())
 					if (props && props.resolveCatalog) {
 						const found = props.resolveCatalog()
 						if (found) setCatalogStore(found)
@@ -570,6 +615,18 @@ window.__ModuleLoader__.load({
 							options: [{ value: "rules", label: t.byRules }, { value: "llm", label: t.byLlm }],
 						})
 					))
+					body.push(h("div", { key: "bg", className: "mr-line", style: { padding: "2px 8px" } },
+						h("span", { className: "mr-name", title: t.bgHint }, t.bg),
+						h(Segmented, {
+							title: t.bgHint, disabled: busy,
+							value: settings.panelBg === "theme" ? "theme" : "solid",
+							onChange: (value) => { setSetting({ panelBg: value }); setSolidBg(resolveSolid()) },
+							options: [
+								{ value: "solid", label: t.bgSolid, title: t.bgSolidHint },
+								{ value: "theme", label: t.bgTheme, title: t.bgThemeHint },
+							],
+						})
+					))
 					body.push(h("div", { key: "pressure", className: "mr-line", style: { padding: "2px 8px" } },
 						h("span", { className: "mr-name", title: t.pressureHint }, t.pressure),
 						h(Segmented, {
@@ -592,12 +649,15 @@ window.__ModuleLoader__.load({
 
 				if (error) body.push(h("div", { key: "error", className: "mr-err" }, error))
 
+				const useThemeBg = settings.panelBg === "theme"
 				const panel = h("div", {
 					key: "panel", ref: panelRef, className: "mr-panel",
+					"data-bg": useThemeBg ? "theme" : "solid",
 					style: {
 						bottom: pos ? pos.bottom : 96,
 						right: pos ? pos.right : 24,
 						maxHeight: pos ? pos.maxHeight : "72vh",
+						background: useThemeBg ? undefined : (solidBg || undefined),
 					},
 					onMouseDown: (event) => event.stopPropagation(),
 				}, body)
