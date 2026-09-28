@@ -21,6 +21,52 @@ Host-only: no browser UI, no client bundle. It runs silently in the background.
 three preset names; `high` corresponds to roughly 75, which is where the published effort curve is
 still steep. Pushing past it costs about 1.6–1.8x the output tokens for a marginal gain.
 
+## Authorization scopes, the model pool and task presets (v0.5)
+
+`control` decides what the router owns. A manual pick always stands; it makes the router stand down
+until the next command or the composer control's **resume** action.
+
+| Scope | Owns |
+| --- | --- |
+| `full` | model + reasoning effort |
+| `effort` | reasoning effort only; the session keeps its model |
+| `model` | model only; the session keeps its thinking level |
+
+The client half registers into the `conversation.input.right` list slot — immediately left of the
+manual model selector — and carries the scope switch, the resume action, the task-type picker, the
+model pool and the task presets. It talks to the host over same-origin `/model-router/*` routes.
+
+**Model pool.** Only pooled models are ever selected.
+
+```yaml
+pool:
+  - { id: deepseek-official/deepseek-flash, cost: 1, tier: cheap }
+  - { id: deepseek-official/deepseek-v4-pro, cost: 8, tier: strong, maxPerTask: 3 }
+  - { id: deepseek-official/deepseek-v4-flash-vision-exp, cost: 1, tags: [vision] }
+  - { id: vendor-x/writer-pro, cost: 20, weights: { 小说续写: 95 } }
+```
+
+`tier: strong` is what hard steps and evidence escalation prefer; `cost` feeds
+`scoring.costPenalty`; `maxPerTask` caps how many steps of one task may spend that entry; a
+`vision` tag is required for image steps once any pooled model carries one.
+
+**Task presets.** A user-defined task type with rules and per-model weights:
+
+```yaml
+presets:
+  小说续写:
+    match: ["续写", "小说", "文风", "/chapter\\s+\\d+/i"]
+    weights: { "vendor-x/writer-pro": 95, "deepseek-official/deepseek-v4-pro": 60 }
+  代码重构:
+    match: ["重构", "refactor", "架构"]
+    weights: { "deepseek-official/deepseek-v4-pro": 90 }
+```
+
+A type pinned in the composer always wins; with nothing pinned the keyword rules run
+(`classifier: rules`). Third-party models keep their own effort vocabulary: the router asks the
+provider what it supports, picks the nearest level, and sends no effort field when the model
+advertises none.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -59,6 +105,16 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
     allowMax: false       # true enables max for auto routing and manual selection alike
     maxFallback: high     # where max collapses when allowMax is false
     allowThinkingOff: false # true re-enables effort "off" (see rule 5: it breaks tool loops)
+    control: full         # full | effort | model — what the router may choose
+    manualOverride:
+      yieldOnManual: true        # a manual pick stands; routing stands down
+      resumeOnNextCommand: true  # …and re-engages on your next command
+    pool: []              # whitelist; empty keeps the single `model` above
+    presets: {}           # task type -> { match: [...], weights: { modelId: 0-100 } }
+    scoring:
+      costPenalty: 0.4    # how strongly relative cost subtracts from a pool score
+    hysteresis:
+      downAfter: 2        # quiet steps required before the effort steps down
     escalateOnErrors: 2   # failed tool results needed to step up
     escalateOnRepeats: 3  # identical retries needed to step up
     scoring:
@@ -82,6 +138,14 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `maxFallback` | `high` | what `max` collapses to |
 | `demoteManualMax` | `true` | also demote a manually selected `max` |
 | `allowThinkingOff` | `false` | allow effort `off` again; only for sessions that stay non-thinking |
+| `control` | `full` | what the router owns: `full`, `effort` or `model` |
+| `manualOverride.yieldOnManual` | `true` | a manual pick makes the router stand down |
+| `manualOverride.resumeOnNextCommand` | `true` | the next command re-engages it |
+| `pool` | `[]` | `provider/model` whitelist with `cost`/`tier`/`tags`/`weights`/`maxPerTask` |
+| `presets` | `{}` | task types with `match` rules and per-model `weights` |
+| `scoring.costPenalty` | `0.4` | relative-cost weight in the pool score |
+| `hysteresis.downAfter` | `2` | quiet steps before a downgrade applies |
+| `classifier` | `rules` | task-type detection: user rules (a pinned type wins first) |
 | `leaveImageSteps` | `true` | steps carrying images keep the caller's model |
 | `imagePolicy` | `keep` | set to `flash` to route image steps too (the flash model has native vision) |
 | `escalateOnErrors` | `2` | failure-evidence threshold |
@@ -127,13 +191,14 @@ enough.
 node --test
 ```
 
-44 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
+68 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
-detector, and tool-result error parsing; `test/plugin.test.js` (14) drives the host wiring with
-ctx/agent doubles — registering listeners, claiming messages, routing each step, raising a
-hand-written `off`, honouring `allowThinkingOff`, pinning a poisoned session to `off`, recovering
-when compaction drops it, pulling a pro conversation back to flash, and demoting a manually selected
-`max`.
+detector, and tool-result error parsing; `test/routing.test.js` (12) covers the pool, preset
+weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
+`test/plugin.test.js` (14) drives the host wiring with ctx/agent doubles; `test/modes.test.js` (8)
+covers the three scopes, manual yield + resume, same-origin route guards, pool/preset editing, a
+pinned task type and a third-party effort vocabulary; `test/client.test.js` (4) loads the shipped
+browser bundle in a VM and asserts the composer contribution.
 
 ## License
 

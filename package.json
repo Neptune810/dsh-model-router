@@ -1,6 +1,6 @@
 {
   "name": "@neptune810/dsh-model-router",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publishConfig": {
     "access": "public"
   },
@@ -10,10 +10,14 @@
   "exports": {
     ".": "./lib/index.js",
     "./policy": "./lib/policy.js",
+    "./routing": "./lib/routing.js",
+    "./config": "./lib/config.js",
+    "./client": "./client/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/",
+    "client/",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -26,6 +30,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   },
   "keywords": [
@@ -38,7 +49,9 @@
     "model-router",
     "reasoning-effort",
     "flash",
-    "routing"
+    "routing",
+    "model-pool",
+    "task-presets"
   ],
   "author": "Neptune810",
   "license": "MIT",

@@ -49,9 +49,30 @@ README regeneration, site build) and the `Submission gate` (`dsh.bundle` read fr
 `package.json`, repository age, per-PR entry cap). Merging is the maintainer's call; the two READMEs
 over there are regenerated on `main` after merge and must not be edited by hand.
 
+## The client half
+
+0.5.0 ships a browser half, so the package now declares both halves:
+
+```json
+"exports": { "./client": "./client/client.js" },
+"dsh": {
+  "bundle": { "patch": "./cordis.patch.yml" },
+  "client": {
+    "platform": "web",
+    "inject": ["@deepseek-ai/dsh-client-ui-slots", "@deepseek-ai/dsh-client-ui-conversation"]
+  }
+}
+```
+
+`client/client.js` is committed, not built — it is written in the same lazy-CJS bundle shape every
+third-party client plugin uses (`window.__ModuleLoader__.load({ id, factory })`), so the package
+still installs without a build step. It registers one contribution into the
+`conversation.input.right` list slot, which the composer renders immediately left of the manual
+model seat.
+
 ## npm
 
-Published: **`@neptune810/dsh-model-router@0.4.0`** (2026-09-29), previously 0.3.0 (2026-09-15).
+Published: **`@neptune810/dsh-model-router@0.5.0`** (2026-09-29), previously 0.4.0 then 0.3.0 (2026-09-15).
 Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
 and lets people install without the `github:` spec.

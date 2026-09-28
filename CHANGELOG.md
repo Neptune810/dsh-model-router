@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.0
+
+**The router now steers a model pool, not just one model's effort — with a composer UI.**
+
+- **Three authorization scopes.** `control: full | effort | model` decides what the router may
+  choose. `full` owns model + effort; `effort` only sets how hard the session's own model thinks;
+  `model` only picks the model and leaves the thinking level alone. The scope is per session
+  (set from the UI) with the profile row as the default.
+- **Manual picks always win, and routing resumes.** The user's own model selection is observed
+  through the session's `modelSelection` projection (the plugin never writes it). A pick makes the
+  router stand down immediately — the pick stands — and it re-engages on the next command or when
+  the composer control's **resume** action calls `POST /model-router/resume`.
+- **Model pool.** `pool` is a whitelist of `provider/model` entries with `cost`, `tier`,
+  `tags` (e.g. `vision`), `maxPerTask` and per-preset `weights`. A model outside the pool is never
+  selected; hard steps and evidence escalation prefer the `strong` tier, routine work stays cheap.
+- **Task presets with weights.** `presets` maps a user-defined task type to keyword/regex rules and
+  per-model weights. A task type pinned in the UI always beats the rules; otherwise the rules run.
+  Third-party models route through their own advertised effort vocabulary
+  (`llm.resolveModel()`), and a model that advertises no reasoning simply gets no effort field.
+- **Hysteresis.** Upgrades apply immediately; downgrades wait `hysteresis.downAfter` quiet steps,
+  and a new command resets the baseline, so one task cannot flap between tiers.
+- **Composer UI.** A client half registers into the `conversation.input.right` list slot — directly
+  left of the manual model selector — with the scope switch, the resume action, the task-type
+  picker, the pool editor and the preset editor. It talks to the host over same-origin
+  `/model-router/*` routes; mutations are refused unless the request is same-origin.
+- Host state (pool, presets, per-session scope and pinned task type) persists in
+  `<profile>/.model-router/state.json`; the row config stays the default layer.
+- 68 tests (`node --test`): policy, routing, host wiring, the three scopes, manual yield/resume,
+  pool/preset editing, third-party effort mapping and the client bundle.
+
 ## 0.4.0
 
 **Thinking stays on — "off" is no longer an automatic route.**

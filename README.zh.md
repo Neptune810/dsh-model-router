@@ -19,6 +19,50 @@ host-only：没有前端 UI，不带客户端 bundle，后台静默生效。
 `high` 是默认上限。V4.1-Flash 底层是一个 1–100 的标量，对外只暴露三个预设名；`high` 约等于 75，
 正是公开曲线仍然陡峭的位置。再往上拉，输出 token 多花约 1.6–1.8 倍，换来的提升却很边际。
 
+## 授权模式、模型池与任务预设（v0.5）
+
+`control` 决定插件能改什么。**手调永远优先**：你一动手，插件立即让位，直到你发下一条命令，或在
+输入栏控件上点「重新接管」。
+
+| 模式 | 控制范围 |
+| --- | --- |
+| `full` 全授权 | 模型 + 思考等级 |
+| `effort` 思考等级模式 | 只调思考等级，模型听你的 |
+| `model` 模型模式 | 只调模型，思考等级听你的 |
+
+客户端半边注册在 `conversation.input.right` 列表槽——正好在**手选模型控件左边**——承载模式切换、
+重新接管、任务类型选择、模型池与任务预设；它通过同源 `/model-router/*` 路由与宿主通信。
+
+**模型池**：只有池里的模型会被选中。
+
+```yaml
+pool:
+  - { id: deepseek-official/deepseek-flash, cost: 1, tier: cheap }
+  - { id: deepseek-official/deepseek-v4-pro, cost: 8, tier: strong, maxPerTask: 3 }
+  - { id: deepseek-official/deepseek-v4-flash-vision-exp, cost: 1, tags: [vision] }
+  - { id: vendor-x/writer-pro, cost: 20, weights: { 小说续写: 95 } }
+```
+
+`tier: strong` 是困难步骤与证据升级时优先的档位；`cost` 参与 `scoring.costPenalty` 扣分；
+`maxPerTask` 限制单个任务能用这个模型几步；一旦池中有模型带 `vision` 标签，带图步骤只在它们
+之间选。
+
+**任务预设**：自定义任务类型 + 规则 + 每模型权重。
+
+```yaml
+presets:
+  小说续写:
+    match: ["续写", "小说", "文风", "/chapter\\s+\\d+/i"]
+    weights: { "vendor-x/writer-pro": 95, "deepseek-official/deepseek-v4-pro": 60 }
+  代码重构:
+    match: ["重构", "refactor", "架构"]
+    weights: { "deepseek-official/deepseek-v4-pro": 90 }
+```
+
+在控件里手动选定的任务类型**优先于规则**；没选才走关键词规则（`classifier: rules`）。第三方模型用
+自己的 effort 词表：插件向 provider 查询它支持哪些档位，取最接近的，模型完全不支持思考时就不发
+effort 字段。
+
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -55,6 +99,16 @@ host-only：没有前端 UI，不带客户端 bundle，后台静默生效。
     allowMax: false       # true 时 auto 与手动选择都放开 max
     maxFallback: high     # allowMax 为 false 时 max 压回的目标
     allowThinkingOff: false # true 才重新允许 effort "off"（见规则 5：会打断工具循环）
+    control: full         # full | effort | model —— 插件能改什么
+    manualOverride:
+      yieldOnManual: true        # 手调即让位
+      resumeOnNextCommand: true  # 下一条命令自动恢复接管
+    pool: []              # 模型池白名单；为空则沿用上面的单模型
+    presets: {}           # 任务类型 -> { match: [...], weights: { 模型id: 0-100 } }
+    scoring:
+      costPenalty: 0.4    # 成本在评分里的扣分权重
+    hysteresis:
+      downAfter: 2        # 降档前需要连续几步没有证据
     escalateOnErrors: 2   # 多少个失败工具结果升一档
     escalateOnRepeats: 3  # 同一工具同参数重试多少次升一档
     scoring:
@@ -78,6 +132,14 @@ host-only：没有前端 UI，不带客户端 bundle，后台静默生效。
 | `maxFallback` | `high` | max 被压回的目标 |
 | `demoteManualMax` | `true` | 是否也降级手动选的 max |
 | `allowThinkingOff` | `false` | 是否重新允许 `off`；只适合全程不思考的会话 |
+| `control` | `full` | 插件能改什么：`full` / `effort` / `model` |
+| `manualOverride.yieldOnManual` | `true` | 手调后是否让位 |
+| `manualOverride.resumeOnNextCommand` | `true` | 下一条命令是否自动恢复 |
+| `pool` | `[]` | `provider/model` 白名单，支持 `cost`/`tier`/`tags`/`weights`/`maxPerTask` |
+| `presets` | `{}` | 任务类型：`match` 规则 + 每模型 `weights` |
+| `scoring.costPenalty` | `0.4` | 成本扣分权重 |
+| `hysteresis.downAfter` | `2` | 降档前的安静步数 |
+| `classifier` | `rules` | 任务类型识别方式（手动选定的类型优先） |
 | `leaveImageSteps` | `true` | 带图步骤保持调用方模型 |
 | `imagePolicy` | `keep` | 改成 `flash` 则带图步骤也路由（flash 有原生视觉） |
 | `escalateOnErrors` | `2` | 失败证据阈值 |
@@ -121,10 +183,11 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 node --test
 ```
 
-44 个用例。`test/policy.test.js`（30 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、证据升级、
-effort 钳制、中毒历史检测、tool-result 错误解析；`test/plugin.test.js`（14 个）用 ctx/agent 替身
-驱动宿主接线——注册监听、领取消息、逐步路由、抬高手写的 `off`、放行 `allowThinkingOff`、把中毒
-会话钉在 `off`、压缩后恢复、把 pro 会话拉回 flash、降级手动选择的 max。
+68 个用例。`test/policy.test.js`（30 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+证据升级、effort 钳制、中毒历史检测、tool-result 错误解析；`test/routing.test.js`（12 个）覆盖模型池、
+预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（14 个）用 ctx/agent 替身
+驱动宿主接线；`test/modes.test.js`（8 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
+任务类型与第三方 effort 词表；`test/client.test.js`（4 个）在 VM 里加载浏览器 bundle 并断言输入栏贡献。
 
 ## 许可证
 
