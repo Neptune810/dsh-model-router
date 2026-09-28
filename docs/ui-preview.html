@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>dsh-model-router · 面板预览</title>
+<style>
+:root[data-theme="dark"]{
+  --dsw-radius-sm:6px;--dsw-radius-md:8px;--dsw-radius-lg:12px;
+  --dsw-specific-menu:#232326;--dsw-alias-bg-base:#1b1b1e;--dsw-alias-bg-module-platform:rgba(255,255,255,.06);
+  --dsw-alias-label-primary:#e8e8ea;--dsw-alias-label-secondary:#a2a8b0;--dsw-alias-label-tertiary:#8b9096;
+  --dsw-alias-label-caption:#8b9096;--dsw-alias-label-dimmed:#6b7076;
+  --dsw-alias-border-l1:rgba(255,255,255,.14);--dsw-alias-interactive-bg-hover:rgba(255,255,255,.09);
+  --dsw-alias-interactive-bg-hover-danger:rgba(248,81,73,.16);--dsw-alias-state-error-primary:#f85149;
+  --dsw-alias-state-success-primary:#3fb950;--dsw-alias-state-warn-label:#d29922;--dsw-alias-state-business-primary:#3b82f6;
+  --dsw-elevation-prominent:0 16px 48px rgba(0,0,0,.5);--dsw-alias-scrollbar-bg-l2:rgba(255,255,255,.16);
+}
+:root[data-theme="light"]{
+  --dsw-radius-sm:6px;--dsw-radius-md:8px;--dsw-radius-lg:12px;
+  --dsw-specific-menu:#ffffff;--dsw-alias-bg-base:#f4f5f7;--dsw-alias-bg-module-platform:rgba(0,0,0,.05);
+  --dsw-alias-label-primary:#1b1c1e;--dsw-alias-label-secondary:#5c6169;--dsw-alias-label-tertiary:#7a8088;
+  --dsw-alias-label-caption:#7a8088;--dsw-alias-label-dimmed:#9aa0a8;
+  --dsw-alias-border-l1:rgba(0,0,0,.12);--dsw-alias-interactive-bg-hover:rgba(0,0,0,.06);
+  --dsw-alias-interactive-bg-hover-danger:rgba(248,81,73,.1);--dsw-alias-state-error-primary:#c62828;
+  --dsw-alias-state-success-primary:#1a7f37;--dsw-alias-state-warn-label:#9a6700;--dsw-alias-state-business-primary:#2f6feb;
+  --dsw-elevation-prominent:0 16px 48px rgba(0,0,0,.18);--dsw-alias-scrollbar-bg-l2:rgba(0,0,0,.16);
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-content:center;
+  background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
+  font:14px/1.5 system-ui,"Segoe UI",-apple-system,sans-serif;padding:32px}
+.mr-panel{position:static!important;max-height:none!important}
+.wrap{display:flex;flex-direction:column;gap:10px;align-items:center}
+.caption{color:var(--dsw-alias-label-secondary);font-size:12px;text-align:center;max-width:300px}
+.toggle{height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--dsw-alias-border-l1);
+  background:transparent;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer}
+.mr-trigger{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:13px;line-height:20px;cursor:pointer;transition:background .12s,color .12s}
+.mr-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-success-primary,#3fb950)}
+.mr-dot[data-yielded=true]{background:var(--dsw-alias-state-warn-label,#d29922)}
+.mr-panel{position:fixed;z-index:2147483000;width:352px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}
+.mr-panel::-webkit-scrollbar{width:8px}
+.mr-panel::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.3));border-radius:4px}
+.mr-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:4px 8px 6px;background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;letter-spacing:.02em}
+.mr-group{color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;font-weight:500;line-height:16px;padding:8px 8px 2px}
+.mr-row{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:4px 8px;border:0;border-radius:var(--dsw-radius-md,8px);background:0 0;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .12s}
+.mr-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
+.mr-row[data-static=true]{cursor:default}
+.mr-row[data-static=true]:hover{background:0 0}
+.mr-body{display:flex;flex-direction:column;gap:2px;padding:2px 8px 6px 34px}
+.mr-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-sub{color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-line{display:flex;align-items:center;gap:8px;padding:0 0 2px;color:var(--dsw-alias-label-secondary,#a2a8b0);font-size:11px}
+.mr-seg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-module-platform,rgba(127,127,127,.12))}
+.mr-seg button{border:0;border-radius:4px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;line-height:16px;padding:2px 7px;white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}
+.mr-seg button:hover:not(:disabled){color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-seg button[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.3));color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-seg button:disabled{opacity:.45;cursor:default}
+.mr-btn{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border:1px solid transparent;border-radius:var(--dsw-radius-sm,6px);background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:12px;text-align:left;cursor:pointer;transition:background .12s,color .12s}
+.mr-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-btn[data-primary=true]{background:var(--dsw-alias-state-business-primary,#3b82f6);color:#fff}
+.mr-btn[data-primary=true]:hover:not(:disabled){filter:brightness(1.1)}
+.mr-btn:disabled{opacity:.45;cursor:default}
+.mr-icon-btn{width:24px;height:24px;padding:0;justify-content:center;border-radius:var(--dsw-radius-sm,6px)}
+.mr-input{flex:1;min-width:0;height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-base,rgba(0,0,0,.18));color:inherit;font:inherit;font-size:12px;outline:none;transition:border-color .12s}
+.mr-input:focus{border-color:var(--dsw-alias-state-business-primary,#3b82f6)}
+.mr-input::placeholder{color:var(--dsw-alias-label-dimmed,#6b7076)}
+.mr-wrap{display:flex;flex-wrap:wrap;gap:6px;padding:4px 8px 6px 34px}
+.mr-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-radius:999px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;cursor:pointer;transition:background .12s,color .12s}
+.mr-chip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-chip[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.22));border-color:transparent;color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-actions{display:flex;justify-content:flex-end;gap:6px;padding:8px 8px 2px}
+.mr-div{height:1px;margin:6px 8px;background:var(--dsw-alias-border-l1,rgba(127,127,127,.18))}
+.mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}
+.mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
+.mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button class="mr-trigger" type="button">全授权 <span class="mr-dot" data-yielded="false"></span></button>
+  <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
+  <p class="caption">dsh-model-router 输入栏面板的静态预览：渲染的就是插件里那份 CSS，只把主题变量换成了近似值。</p>
+</div>
+<div class="mr-panel">
+  <div class="mr-head"><span class="mr-name">模型路由</span><button class="mr-btn mr-icon-btn"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
+  <div class="mr-line" style="padding:0 8px 6px"><span style="flex:1">控制范围</span><div class="mr-seg"><button data-active="true">全授权</button><button>思考</button><button>模型</button></div></div>
+  <button class="mr-row"><span class="mr-name">任务类型</span><span class="mr-sub">自动（按关键词规则）</span><span class="mr-check"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5l5 4.5-5 4.5"/></svg></span></button>
+  <div class="mr-div"></div>
+  <div class="mr-group">模型池</div>
+  <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">强</span></button>
+  <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-sub">档位</span><div class="mr-seg"><button>便宜</button><button data-active="true">强</button></div><span class="mr-sub">成本</span><div class="mr-seg"><button>1</button><button>4</button><button data-active="true">8</button></div><button class="mr-chip">视觉</button></div>
+  <button class="mr-row"><span class="mr-check"></span><span class="mr-name">DeepSeek Flash</span></button>
+  <button class="mr-row"><span class="mr-check"></span><span class="mr-name">DeepSeek V4 Flash</span></button>
+  <div class="mr-line" style="padding:2px 8px 4px 34px"><input class="mr-input" placeholder="手动填模型 ID"><button class="mr-btn">添加</button></div>
+  <div class="mr-div"></div>
+  <div class="mr-group">任务预设</div>
+  <div class="mr-row" data-static="true"><span class="mr-check"></span><button class="mr-btn" style="padding:0;flex:1;justify-content:flex-start;gap:8px"><span class="mr-name">小说续写</span><span class="mr-sub" style="flex:0 1 auto">续写 / 小说 / 文风</span></button><button class="mr-btn mr-icon-btn"><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
+  <div class="mr-row" data-static="true"><span class="mr-check"></span><button class="mr-btn" style="padding:0;flex:1;justify-content:flex-start;gap:8px"><span class="mr-name">代码重构</span><span class="mr-sub" style="flex:0 1 auto">重构 / 架构 / 接口</span></button><button class="mr-btn mr-icon-btn"><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
+  <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5v9M2.5 7h9"/></svg></span><span class="mr-name">新建预设</span></button>
+  <div class="mr-div"></div>
+  <div class="mr-group">更多</div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name">带图步骤</span><div class="mr-seg"><button data-active="true">不干预</button><button>用视觉模型</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name">任务识别</span><div class="mr-seg"><button data-active="true">关键词</button><button>语义</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name">上下文压力</span><div class="mr-seg"><button>关</button><button data-active="true">快满省</button></div></div>
+  <div class="mr-foot"><span class="mr-dot" data-yielded="false"></span><span>已接管</span><span class="mr-name" style="text-align:right">deepseek-v4-pro · high · engineering</span></div>
+</div>
+<script>if (location.hash === "#light") document.documentElement.dataset.theme = "light"</script>
+</body>
+</html>

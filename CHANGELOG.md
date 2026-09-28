@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.4
+
+**The panel now looks like part of the harness instead of a bolted-on form.**
+
+- Rewritten against the host's own menu language: the same theme tokens, a 28px
+  borderless trigger, a 352px popover on \`--dsw-specific-menu\` with
+  \`--dsw-elevation-prominent\`, a sticky header, 34px rows with an
+  \`--dsw-alias-interactive-bg-hover\` wash, 11px group titles and a caption footer.
+- Native \`select\`/\`checkbox\` widgets are gone: a model row carries a glyph check and
+  the whole row toggles; tier, cost, weight and the "more" settings are segmented
+  controls; keyword packs and keywords are chips.
+- The task type became a sub-view list (like the host's own menus) with a check on the
+  active entry, and the preset editor is its own view with a back button.
+- The panel CSS is injected once as a stylesheet, so hover, focus and scrollbar styling
+  is real CSS rather than inline attributes.
+- \`docs/ui-preview.html\` renders that same stylesheet for a quick look; 77 tests.
+
 ## 0.6.3
 
 **Fixes the two things you hit: unreadable text in dark mode, and an empty model pool.**

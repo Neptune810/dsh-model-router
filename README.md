@@ -67,6 +67,14 @@ A type pinned in the composer always wins; with nothing pinned the keyword rules
 provider what it supports, picks the nearest level, and sends no effort field when the model
 advertises none.
 
+## The panel matches the host (v0.6.4)
+
+The composer control is styled with the harness's own tokens — the same 34px rows,
+hover wash, glyph checks, segmented controls and popover elevation the built-in
+menus use. Open [`docs/ui-preview.html`](docs/ui-preview.html) in a browser (or see
+[`docs/preview-dark.png`](docs/preview-dark.png) / [`docs/preview-light.png`](docs/preview-light.png))
+to look at it without installing anything.
+
 ## Everything is a click (v0.6.2)
 
 The composer control is the whole configuration surface — no JSON or YAML:
