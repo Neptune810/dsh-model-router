@@ -28,16 +28,11 @@
 body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-content:center;
   background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
   font:14px/1.5 system-ui,"Segoe UI",-apple-system,sans-serif;padding:32px}
-.mr-panel{position:static!important;max-height:none!important}
-.wrap{display:flex;flex-direction:column;gap:10px;align-items:center}
-.caption{color:var(--dsw-alias-label-secondary);font-size:12px;text-align:center;max-width:300px}
-.toggle{height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--dsw-alias-border-l1);
-  background:transparent;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer}
 .mr-trigger{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:13px;line-height:20px;cursor:pointer;transition:background .12s,color .12s}
 .mr-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}
 .mr-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-success-primary,#3fb950)}
 .mr-dot[data-yielded=true]{background:var(--dsw-alias-state-warn-label,#d29922)}
-.mr-panel{position:fixed;z-index:2147483000;width:352px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}
+.mr-panel{position:fixed;z-index:2147483000;width:372px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}
 .mr-panel::-webkit-scrollbar{width:8px}
 .mr-panel::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.3));border-radius:4px}
 .mr-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:4px 8px 6px;background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;letter-spacing:.02em}
@@ -50,8 +45,9 @@ body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-
 .mr-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#e8e8ea)}
 .mr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mr-sub{color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mr-line{display:flex;align-items:center;gap:8px;padding:0 0 2px;color:var(--dsw-alias-label-secondary,#a2a8b0);font-size:11px}
-.mr-seg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-module-platform,rgba(127,127,127,.12))}
+.mr-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 0 2px;color:var(--dsw-alias-label-secondary,#a2a8b0);font-size:11px}
+.mr-tag{flex:none;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;white-space:nowrap}
+.mr-seg{display:inline-flex;flex:none;gap:2px;padding:2px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-module-platform,rgba(127,127,127,.12))}
 .mr-seg button{border:0;border-radius:4px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;line-height:16px;padding:2px 7px;white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}
 .mr-seg button:hover:not(:disabled){color:var(--dsw-alias-label-primary,#e8e8ea)}
 .mr-seg button[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.3));color:var(--dsw-alias-label-primary,#e8e8ea)}
@@ -66,7 +62,7 @@ body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-
 .mr-input:focus{border-color:var(--dsw-alias-state-business-primary,#3b82f6)}
 .mr-input::placeholder{color:var(--dsw-alias-label-dimmed,#6b7076)}
 .mr-wrap{display:flex;flex-wrap:wrap;gap:6px;padding:4px 8px 6px 34px}
-.mr-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-radius:999px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;cursor:pointer;transition:background .12s,color .12s}
+.mr-chip{display:inline-flex;flex:none;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-radius:999px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}
 .mr-chip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}
 .mr-chip[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.22));border-color:transparent;color:var(--dsw-alias-label-primary,#e8e8ea)}
 .mr-actions{display:flex;justify-content:flex-end;gap:6px;padding:8px 8px 2px}
@@ -74,22 +70,24 @@ body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-
 .mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}
 .mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
 .mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
+.mr-panel{position:static!important;max-height:none!important;overflow:visible!important;flex:none!important}
 </style>
 </head>
 <body>
 <div class="wrap">
   <button class="mr-trigger" type="button">全授权 <span class="mr-dot" data-yielded="false"></span></button>
   <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
-  <p class="caption">dsh-model-router 输入栏面板的静态预览：渲染的就是插件里那份 CSS，只把主题变量换成了近似值。</p>
+  <p class="caption">dsh-model-router 输入栏面板的静态预览：渲染的就是插件里那份 CSS，只把主题变量换成了近似值。鼠标停在任意控件上会显示解释。</p>
 </div>
 <div class="mr-panel">
   <div class="mr-head"><span class="mr-name">模型路由</span><button class="mr-btn mr-icon-btn"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
-  <div class="mr-line" style="padding:0 8px 6px"><span style="flex:1">控制范围</span><div class="mr-seg"><button data-active="true">全授权</button><button>思考</button><button>模型</button></div></div>
-  <button class="mr-row"><span class="mr-name">任务类型</span><span class="mr-sub">自动（按关键词规则）</span><span class="mr-check"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5l5 4.5-5 4.5"/></svg></span></button>
+  <div class="mr-line" style="padding:0 8px 6px"><span style="flex:1" title="插件能改什么">控制范围</span><div class="mr-seg" title="全授权 = 模型 + 思考等级；思考 = 只调思考等级；模型 = 只调模型"><button data-active="true" title="模型和思考等级都交给插件">全授权</button><button title="只让插件调思考等级，模型不动">思考</button><button title="只让插件换模型，思考等级不动">模型</button></div></div>
+  <button class="mr-row" title="自动 = 按关键词规则判断；也可以强制指定一个类型"><span class="mr-name">任务类型</span><span class="mr-sub">自动（按关键词规则）</span><span class="mr-check"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5l5 4.5-5 4.5"/></svg></span></button>
   <div class="mr-div"></div>
   <div class="mr-group">模型池</div>
-  <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">强</span></button>
-  <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-sub">档位</span><div class="mr-seg"><button>便宜</button><button data-active="true">强</button></div><span class="mr-sub">成本</span><div class="mr-seg"><button>1</button><button>4</button><button data-active="true">8</button></div><button class="mr-chip">视觉</button></div>
+  <div class="mr-note" style="padding:0 8px 2px">勾选可被路由的模型，只有勾选的会被选中</div>
+  <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">攻坚</span></button>
+  <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-tag" title="日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）">定位</span><div class="mr-seg" title="日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）"><button title="日常：平时优先用它，省钱">日常</button><button data-active="true" title="攻坚：任务变难、或工具报错等证据出现时才优先">攻坚</button></div><span class="mr-tag" title="相对价格，随你标">价格</span><div class="mr-seg" title="相对价格，随你标：越贵越要任务够硬才选得中（1/4/8 分别扣 0.4 / 1.6 / 3.2 分）"><button title="成本 1，扣 0.4 分">便宜</button><button title="成本 4，扣 1.6 分">中</button><button data-active="true" title="成本 8，扣 3.2 分">贵</button></div><button class="mr-chip" title="带图任务优先选它（+25 分）">视觉</button></div>
   <button class="mr-row"><span class="mr-check"></span><span class="mr-name">DeepSeek Flash</span></button>
   <button class="mr-row"><span class="mr-check"></span><span class="mr-name">DeepSeek V4 Flash</span></button>
   <div class="mr-line" style="padding:2px 8px 4px 34px"><input class="mr-input" placeholder="手动填模型 ID"><button class="mr-btn">添加</button></div>
@@ -100,9 +98,9 @@ body{margin:0;min-height:100vh;display:flex;gap:40px;align-items:center;justify-
   <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5v9M2.5 7h9"/></svg></span><span class="mr-name">新建预设</span></button>
   <div class="mr-div"></div>
   <div class="mr-group">更多</div>
-  <div class="mr-line" style="padding:2px 8px"><span class="mr-name">带图步骤</span><div class="mr-seg"><button data-active="true">不干预</button><button>用视觉模型</button></div></div>
-  <div class="mr-line" style="padding:2px 8px"><span class="mr-name">任务识别</span><div class="mr-seg"><button data-active="true">关键词</button><button>语义</button></div></div>
-  <div class="mr-line" style="padding:2px 8px"><span class="mr-name">上下文压力</span><div class="mr-seg"><button>关</button><button data-active="true">快满省</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="带图步骤：不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型">带图步骤</span><div class="mr-seg" title="不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型"><button data-active="true" title="按普通规则">不干预</button><button title="强制走带视觉标记的模型">用视觉模型</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断">任务识别</span><div class="mr-seg" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断"><button data-active="true" title="按预设里的 match 匹配">关键词</button><button title="每轮一次小模型判断">语义</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="上下文压力：快满时优先用便宜模型">上下文压力</span><div class="mr-seg" title="快满时优先用便宜模型"><button title="不参与判断">关</button><button data-active="true" title="上下文快满时优先便宜模型">快满省</button></div></div>
   <div class="mr-foot"><span class="mr-dot" data-yielded="false"></span><span>已接管</span><span class="mr-name" style="text-align:right">deepseek-v4-pro · high · engineering</span></div>
 </div>
 <script>if (location.hash === "#light") document.documentElement.dataset.theme = "light"</script>

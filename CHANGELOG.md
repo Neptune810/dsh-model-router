@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.5
+
+**Plain wording, hover explanations, and the preview ships with the package.**
+
+- 档位/成本 became **定位（日常 / 攻坚）** and **价格（便宜 / 中 / 贵）** — the same
+  \`tier\`/\`cost\` fields, only the labels changed, so existing configs keep working.
+- Every control now explains itself on hover: 定位, 价格, 视觉, 控制范围, 任务类型,
+  带图步骤, 任务识别, 上下文压力, plus a one-line hint under 模型池.
+- Fixed a layout bug the new labels exposed: shrinkable captions and chips wrapped into
+  vertical text. Captions/chips/segments no longer shrink and a crowded line wraps as a
+  whole; the panel widened to 372px.
+- The panel preview now ships with the package: \`docs/ui-preview.html\` plus
+  \`docs/preview-dark.png\` / \`docs/preview-light.png\`, embedded in the README.
+- 77 tests.
+
 ## 0.6.4
 
 **The panel now looks like part of the harness instead of a bolted-on form.**

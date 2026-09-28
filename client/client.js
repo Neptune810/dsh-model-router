@@ -28,7 +28,20 @@ window.__ModuleLoader__.load({
 				title: "模型路由", scope: "控制范围", full: "全授权", effort: "思考", model: "模型",
 				engaged: "已接管", yielded: "已让位，你手动选过", resume: "重新接管",
 				task: "任务类型", auto: "自动（按关键词规则）", pool: "模型池", poolHint: "只有勾选的模型会被选中",
-				tier: "档位", cheap: "便宜", strong: "强", cost: "成本", vision: "视觉",
+				tier: "定位", cheap: "日常", strong: "攻坚", cost: "价格", vision: "视觉",
+				tierHint: "日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）",
+				cheapHint: "日常：平时优先用它，省钱",
+				strongHint: "攻坚：任务变难、或工具报错等证据出现时才优先",
+				costHint: "相对价格，随你标：越贵越要任务够硬才选得中（1/4/8 分别扣 0.4 / 1.6 / 3.2 分）",
+				price1: "便宜", price4: "中", price8: "贵",
+				visionHint: "带图任务优先选它（+25 分）",
+				scopeHint: "插件能改什么：全授权 = 模型 + 思考等级；思考 = 只调思考等级；模型 = 只调模型",
+				taskHint: "自动 = 按你写的关键词规则判断；也可以强制指定一个类型",
+				poolHint2: "勾选可被路由的模型，只有勾选的会被选中",
+				imagesHint: "带图步骤：不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型",
+				classifierHint: "任务识别：关键词 = 按预设里的 match；语义 = 每轮一次小模型判断",
+				pressureHint: "上下文压力：快满时优先用便宜模型",
+				fullHint: "模型和思考等级都交给插件", effortHint: "只让插件调思考等级，模型不动", modelHint: "只让插件换模型，思考等级不动",
 				presets: "任务预设", newPreset: "新建预设", edit: "编辑", remove: "删除",
 				name: "名称", keywords: "关键词", add: "添加", custom: "自定义词，回车添加",
 				weights: "各模型权重", none: "不参与", save: "保存", cancel: "取消", back: "返回",
@@ -43,7 +56,20 @@ window.__ModuleLoader__.load({
 				title: "Model router", scope: "Scope", full: "Full", effort: "Effort", model: "Model",
 				engaged: "Controlling", yielded: "Yielded to your manual pick", resume: "Resume",
 				task: "Task type", auto: "Auto (keyword rules)", pool: "Model pool", poolHint: "only ticked models are selectable",
-				tier: "Tier", cheap: "cheap", strong: "strong", cost: "Cost", vision: "vision",
+				tier: "Role", cheap: "daily", strong: "heavy", cost: "Price", vision: "vision",
+				tierHint: "daily = use it all the time; heavy = prefer it for hard/engineering steps (hard +15, engineering +8)",
+				cheapHint: "daily: preferred by default, saves money",
+				strongHint: "heavy: preferred once a step turns hard or evidence of trouble appears",
+				costHint: "your own relative price: the dearer it is, the harder the step must be to pick it (1/4/8 deduct 0.4 / 1.6 / 3.2)",
+				price1: "low", price4: "mid", price8: "high",
+				visionHint: "image steps prefer this model (+25)",
+				scopeHint: "what the router may change: Full = model + effort; Effort = effort only; Model = model only",
+				taskHint: "auto = your keyword rules decide; or force one type",
+				poolHint2: "tick the models the router may use — only ticked ones are selectable",
+				imagesHint: "image steps: leave alone = normal rules; vision model = force a vision-tagged model",
+				classifierHint: "detection: keywords = the match list in your presets; semantic = one small model call per turn",
+				pressureHint: "context pressure: prefer the cheap model when the window is nearly full",
+				fullHint: "let the router change both model and effort", effortHint: "effort only, never the model", modelHint: "model only, never the effort",
 				presets: "Task presets", newPreset: "New preset", edit: "Edit", remove: "Delete",
 				name: "Name", keywords: "Keywords", add: "Add", custom: "custom word, press enter",
 				weights: "Weight per model", none: "off", save: "Save", cancel: "Cancel", back: "Back",
@@ -73,7 +99,7 @@ window.__ModuleLoader__.load({
 			".mr-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-success-primary,#3fb950)}",
 			".mr-dot[data-yielded=true]{background:var(--dsw-alias-state-warn-label,#d29922)}",
-			".mr-panel{position:fixed;z-index:2147483000;width:352px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}",
+			".mr-panel{position:fixed;z-index:2147483000;width:372px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}",
 			".mr-panel::-webkit-scrollbar{width:8px}",
 			".mr-panel::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.3));border-radius:4px}",
 			".mr-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:4px 8px 6px;background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-tertiary,#8b9096);font-size:11px;letter-spacing:.02em}",
@@ -86,8 +112,9 @@ window.__ModuleLoader__.load({
 			".mr-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 			".mr-sub{color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-			".mr-line{display:flex;align-items:center;gap:8px;padding:0 0 2px;color:var(--dsw-alias-label-secondary,#a2a8b0);font-size:11px}",
-			".mr-seg{display:inline-flex;gap:2px;padding:2px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-module-platform,rgba(127,127,127,.12))}",
+			".mr-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 0 2px;color:var(--dsw-alias-label-secondary,#a2a8b0);font-size:11px}",
+			".mr-tag{flex:none;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;white-space:nowrap}",
+			".mr-seg{display:inline-flex;flex:none;gap:2px;padding:2px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-module-platform,rgba(127,127,127,.12))}",
 			".mr-seg button{border:0;border-radius:4px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;line-height:16px;padding:2px 7px;white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}",
 			".mr-seg button:hover:not(:disabled){color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-seg button[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.3));color:var(--dsw-alias-label-primary,#e8e8ea)}",
@@ -102,7 +129,7 @@ window.__ModuleLoader__.load({
 			".mr-input:focus{border-color:var(--dsw-alias-state-business-primary,#3b82f6)}",
 			".mr-input::placeholder{color:var(--dsw-alias-label-dimmed,#6b7076)}",
 			".mr-wrap{display:flex;flex-wrap:wrap;gap:6px;padding:4px 8px 6px 34px}",
-			".mr-chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-radius:999px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;cursor:pointer;transition:background .12s,color .12s}",
+			".mr-chip{display:inline-flex;flex:none;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-radius:999px;background:0 0;color:var(--dsw-alias-label-secondary,#a2a8b0);font:inherit;font-size:11px;white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}",
 			".mr-chip:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-chip[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.22));border-color:transparent;color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-actions{display:flex;justify-content:flex-end;gap:6px;padding:8px 8px 2px}",
@@ -165,7 +192,7 @@ window.__ModuleLoader__.load({
 
 		/** Host-style segmented control: the pretty replacement for a native select. */
 		function Segmented(props) {
-			return h("div", { className: "mr-seg" },
+			return h("div", { className: "mr-seg", title: props.title || undefined },
 				props.options.map((option) => h("button", {
 					key: String(option.value), type: "button", disabled: props.disabled,
 					"data-active": String(option.value) === String(props.value),
@@ -437,18 +464,18 @@ window.__ModuleLoader__.load({
 						))
 					}
 					body.push(h("div", { key: "modes", className: "mr-line", style: { padding: "0 8px 6px" } },
-						h("span", { style: { flex: "1" } }, t.scope),
+						h("span", { style: { flex: "1" }, title: t.scopeHint }, t.scope),
 						h(Segmented, {
-							disabled: busy, value: mode, onChange: (value) => run("/control", { sessionId: sessionId, control: value }),
+							title: t.scopeHint, disabled: busy, value: mode, onChange: (value) => run("/control", { sessionId: sessionId, control: value }),
 							options: [
-								{ value: "full", label: t.full },
-								{ value: "effort", label: t.effort },
-								{ value: "model", label: t.model },
+								{ value: "full", label: t.full, title: t.fullHint },
+								{ value: "effort", label: t.effort, title: t.effortHint },
+								{ value: "model", label: t.model, title: t.modelHint },
 							],
 						})
 					))
 					body.push(h("button", {
-						key: "task", type: "button", className: "mr-row", disabled: busy, onClick: () => setView("task"),
+						key: "task", type: "button", className: "mr-row", disabled: busy, onClick: () => setView("task"), title: t.taskHint,
 					},
 						h("span", { className: "mr-name" }, t.task),
 						h("span", { className: "mr-sub" }, (state && state.pinnedTaskType) || t.auto),
@@ -457,6 +484,7 @@ window.__ModuleLoader__.load({
 					body.push(h("div", { key: "div1", className: "mr-div" }))
 
 					body.push(h("div", { key: "pool-title", className: "mr-group" }, t.pool))
+					body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 2px" } }, t.poolHint2))
 					if (rows.length === 0) body.push(h("div", { key: "pool-none", className: "mr-note" }, t.empty))
 					for (const model of rows) {
 						const entry = pool.find((candidate) => candidate.id === model.id)
@@ -470,18 +498,21 @@ window.__ModuleLoader__.load({
 						))
 						if (entry) {
 							body.push(h("div", { key: model.id + "-opts", className: "mr-line", style: { padding: "0 8px 4px 34px" } },
-								h("span", { className: "mr-sub" }, t.tier),
+								h("span", { className: "mr-tag", title: t.tierHint }, t.tier),
 								h(Segmented, {
-									disabled: busy, value: entry.tier, onChange: (value) => patchEntry(model.id, { tier: value }),
-									options: [{ value: "cheap", label: t.cheap }, { value: "strong", label: t.strong }],
+									title: t.tierHint, disabled: busy, value: entry.tier, onChange: (value) => patchEntry(model.id, { tier: value }),
+									options: [
+										{ value: "cheap", label: t.cheap, title: t.cheapHint },
+										{ value: "strong", label: t.strong, title: t.strongHint },
+									],
 								}),
-								h("span", { className: "mr-sub" }, t.cost),
+								h("span", { className: "mr-tag", title: t.costHint }, t.cost),
 								h(Segmented, {
-									disabled: busy, value: entry.cost, onChange: (value) => patchEntry(model.id, { cost: Number(value) }),
-									options: COSTS.map((value) => ({ value: value, label: String(value) })),
+									title: t.costHint, disabled: busy, value: entry.cost, onChange: (value) => patchEntry(model.id, { cost: Number(value) }),
+									options: COSTS.map((value) => ({ value: value, label: t["price" + value] || String(value) })),
 								}),
 								h("button", {
-									type: "button", className: "mr-chip", disabled: busy,
+									type: "button", className: "mr-chip", disabled: busy, title: t.visionHint,
 									"data-active": String((entry.tags || []).indexOf("vision") >= 0),
 									onClick: () => patchEntry(model.id, {
 										tags: (entry.tags || []).indexOf("vision") >= 0
@@ -526,23 +557,23 @@ window.__ModuleLoader__.load({
 					body.push(h("div", { key: "div3", className: "mr-div" }))
 					body.push(h("div", { key: "more-title", className: "mr-group" }, t.more))
 					body.push(h("div", { key: "images", className: "mr-line", style: { padding: "2px 8px" } },
-						h("span", { className: "mr-name" }, t.images),
+						h("span", { className: "mr-name", title: t.imagesHint }, t.images),
 						h(Segmented, {
-							disabled: busy, value: settings.imagePolicy || "keep", onChange: (value) => setSetting({ imagePolicy: value }),
+							title: t.imagesHint, disabled: busy, value: settings.imagePolicy || "keep", onChange: (value) => setSetting({ imagePolicy: value }),
 							options: [{ value: "keep", label: t.keepImages }, { value: "vision", label: t.toVision }],
 						})
 					))
 					body.push(h("div", { key: "classifier", className: "mr-line", style: { padding: "2px 8px" } },
-						h("span", { className: "mr-name" }, t.classifier),
+						h("span", { className: "mr-name", title: t.classifierHint }, t.classifier),
 						h(Segmented, {
-							disabled: busy, value: settings.classifier || "rules", onChange: (value) => setSetting({ classifier: value }),
+							title: t.classifierHint, disabled: busy, value: settings.classifier || "rules", onChange: (value) => setSetting({ classifier: value }),
 							options: [{ value: "rules", label: t.byRules }, { value: "llm", label: t.byLlm }],
 						})
 					))
 					body.push(h("div", { key: "pressure", className: "mr-line", style: { padding: "2px 8px" } },
-						h("span", { className: "mr-name" }, t.pressure),
+						h("span", { className: "mr-name", title: t.pressureHint }, t.pressure),
 						h(Segmented, {
-							disabled: busy,
+							title: t.pressureHint, disabled: busy,
 							value: settings.signals && Number(settings.signals.contextPressure) > 0 ? "on" : "off",
 							onChange: (value) => setSetting({ signals: { contextPressure: value === "on" ? 0.75 : 0 } }),
 							options: [{ value: "off", label: t.off }, { value: "on", label: t.on }],

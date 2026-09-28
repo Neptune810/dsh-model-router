@@ -67,6 +67,8 @@ A type pinned in the composer always wins; with nothing pinned the keyword rules
 provider what it supports, picks the nearest level, and sends no effort field when the model
 advertises none.
 
+![The composer panel in dark mode](docs/preview-dark.png)
+
 ## The panel matches the host (v0.6.4)
 
 The composer control is styled with the harness's own tokens — the same 34px rows,

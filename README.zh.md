@@ -63,6 +63,8 @@ presets:
 自己的 effort 词表：插件向 provider 查询它支持哪些档位，取最接近的，模型完全不支持思考时就不发
 effort 字段。
 
+![深色模式下的输入栏面板](docs/preview-dark.png)
+
 ## 全部点一点就能配（v0.6.2）
 
 输入栏那个控件就是完整的配置入口，不需要写 JSON/YAML：
