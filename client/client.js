@@ -19,6 +19,7 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" })
 
 		const react = require("react")
+		const reactDom = require("react-dom")
 		const h = react.createElement
 
 		const NS = "dsh-model-router"
@@ -72,6 +73,9 @@ window.__ModuleLoader__.load({
 			const [draft, setDraft] = react.useState("")
 			const [presetDraft, setPresetDraft] = react.useState("")
 			const rootRef = react.useRef(null)
+			const triggerRef = react.useRef(null)
+			const panelRef = react.useRef(null)
+			const [pos, setPos] = react.useState(null)
 			const t = dict()
 
 			const load = react.useCallback(() => {
@@ -83,9 +87,17 @@ window.__ModuleLoader__.load({
 
 			react.useEffect(() => { load() }, [load])
 			react.useEffect(() => {
+				// One line of evidence for "is the bundle loaded at all?".
+				if (typeof console !== "undefined" && console.info) {
+					console.info("[model-router] composer control ready (session " + (sessionId || "none") + ")")
+				}
+			}, [])
+			react.useEffect(() => {
 				if (!open) return undefined
 				const onDown = (event) => {
-					if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false)
+					const inside = (rootRef.current && rootRef.current.contains(event.target)) ||
+						(panelRef.current && panelRef.current.contains(event.target))
+					if (!inside) setOpen(false)
 				}
 				document.addEventListener("mousedown", onDown)
 				return () => document.removeEventListener("mousedown", onDown)
@@ -106,8 +118,22 @@ window.__ModuleLoader__.load({
 
 			const parts = [
 				h("button", {
-					key: "trigger", type: "button", title: t.title, style: chip(yielded), disabled: !sessionId,
-					onClick: () => { setOpen(!open); if (!open) load() },
+					key: "trigger", type: "button", title: t.title, style: chip(yielded), ref: triggerRef,
+					onClick: () => {
+						const next = !open
+						if (next) {
+							const rect = triggerRef.current && triggerRef.current.getBoundingClientRect()
+							setPos(rect && window !== undefined
+								? {
+									bottom: Math.max(8, window.innerHeight - rect.top + 8),
+									right: Math.max(8, window.innerWidth - rect.right),
+									maxHeight: Math.max(240, rect.top - 16),
+								}
+								: null)
+							load()
+						}
+						setOpen(next)
+					},
 				},
 					h("span", null, t[mode] || mode),
 					h("span", { style: { width: "6px", height: "6px", borderRadius: "999px", background: yielded ? "var(--dsw-warning, #d29922)" : "var(--dsw-success, #3fb950)", display: "inline-block" } })
@@ -116,6 +142,7 @@ window.__ModuleLoader__.load({
 
 			if (open) {
 				const sections = []
+				sections.push(h("div", { key: "session", style: labelStyle }, "session: " + (sessionId || "none")))
 				sections.push(h("div", { key: "status", style: labelStyle }, yielded ? t.yielded : t.engaged))
 				if (yielded) {
 					sections.push(h("div", { key: "resume", style: rowStyle },
@@ -193,7 +220,20 @@ window.__ModuleLoader__.load({
 				}
 				if (error) sections.push(h("div", { key: "error", style: { color: "var(--dsw-danger, #f85149)", marginTop: "6px" } }, error))
 
-				parts.push(h("div", { key: "panel", style: panelStyle }, sections))
+				// Portal to <body> with fixed coordinates, like the host's own model menu:
+				// an ancestor of the composer may clip an absolutely positioned panel.
+				const panel = h("div", {
+					key: "panel", ref: panelRef,
+					style: Object.assign({}, panelStyle, {
+						position: "fixed",
+						bottom: pos ? pos.bottom : 96,
+						right: pos ? pos.right : 24,
+						maxHeight: pos ? pos.maxHeight : "60vh",
+						zIndex: 2147483000,
+					}),
+					onMouseDown: (event) => event.stopPropagation(),
+				}, sections)
+				parts.push(reactDom.createPortal(panel, document.body))
 			}
 
 			return h("div", { ref: rootRef, style: { position: "relative", display: "inline-flex", alignItems: "center" } }, parts)

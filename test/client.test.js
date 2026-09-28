@@ -23,8 +23,10 @@ function loadBundle() {
   runInNewContext(SOURCE, { window, console, Symbol })
   assert.ok(registered, 'the bundle must register through window.__ModuleLoader__.load')
   const react = reactStub()
+  const reactDom = { createPortal: (children) => children }
   const exports = registered.factory((spec) => {
     if (spec === 'react') return react
+    if (spec === 'react-dom') return reactDom
     throw new Error('unexpected require: ' + spec)
   })
   return { id: registered.id, exports, react }

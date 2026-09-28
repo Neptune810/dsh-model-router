@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.1
+
+**Composer control fix — the panel now opens where you can see it.**
+
+- The panel is rendered through a **portal to `document.body` with fixed coordinates** measured from
+  the trigger, the same approach the host's own model menu uses. An ancestor of the composer can
+  clip an absolutely positioned panel, which made a click look like it did nothing.
+- The trigger is never disabled: it opens even before a session id is known, the panel shows the
+  session it resolved, and a fetch failure is reported inside the panel instead of silently.
+- The trigger logs one line (`[model-router] composer control ready (session …)`) so a loaded bundle
+  is distinguishable from a bundle that never arrived.
+
 ## 0.6.0
 
 **Complete routing: images, session signals, subagents, an LLM classifier and a /router command.**
