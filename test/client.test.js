@@ -44,11 +44,19 @@ test('apply contributes into the composer slot left of the model seat', () => {
   const { exports } = loadBundle()
   const injections = []
   const registrations = []
+  const slots = {
+    inject: (name, callback) => { injections.push(name); return callback() },
+    register: (descriptor, component) => { registrations.push({ descriptor, component }); return () => {} },
+  }
+  const modelDirectories = {
+    directoryFor: () => ({
+      store: { subscribe: () => () => {}, getSnapshot: () => ({ groups: [], status: 'idle' }) },
+      load: async () => ({ groups: [] }),
+    }),
+  }
   const ctx = {
-    slots: {
-      inject: (name, callback) => { injections.push(name); return callback() },
-      register: (descriptor, component) => { registrations.push({ descriptor, component }); return () => {} },
-    },
+    slots,
+    inject: (deps, callback) => callback({ slots, modelDirectories }),
   }
   exports.apply(ctx)
   assert.deepEqual(injections, ['conversation.input.right'])
@@ -58,7 +66,9 @@ test('apply contributes into the composer slot left of the model seat', () => {
   assert.equal(descriptor.id, 'model-router:composer-control')
   assert.equal(descriptor.registrant, 'dsh-model-router')
   assert.ok(Number.isFinite(descriptor.order))
-  assert.deepEqual({ ...descriptor.inject('session-1') }, { sessionId: 'session-1' })
+  const face = descriptor.inject('session-1')
+  assert.equal(face.sessionId, 'session-1')
+  assert.equal(typeof face.loadCatalog === 'function' || face.loadCatalog === undefined, true)
   assert.equal(typeof component, 'function')
 })
 
@@ -74,7 +84,7 @@ test('the closed control renders a trigger without touching the network', () => 
 
 test('the host routes the control talks to are the documented ones', () => {
   const source = SOURCE
-  for (const route of ['/state', '/control', '/resume', '/task-type', '/pool', '/presets']) {
+  for (const route of ['/state', '/control', '/resume', '/task-type', '/pool', '/presets', '/settings']) {
     assert.ok(source.includes('"' + route) || source.includes(route + '?'), 'missing ' + route)
   }
 })

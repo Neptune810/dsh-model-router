@@ -368,3 +368,19 @@ test('classifier llm classifies once per turn and falls back to the rules', asyn
   const fallback = await request(broken, { agent: agent2, turn: 1, step: 0 }, seed())
   assert.equal(fallback.model, 'deepseek-flash')
 })
+
+test('the settings route drives images, classifier and pressure from the UI', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const path = '/model-router/settings'
+  const posted = await call(host.routes.get(path), {
+    method: 'POST', url: path, headers: { origin: 'http://localhost', host: 'localhost' },
+    body: { settings: { imagePolicy: 'vision', classifier: 'llm', signals: { contextPressure: 0 } } },
+  })
+  assert.equal(posted.status, 200)
+  const state = JSON.parse((await call(host.routes.get('/model-router/state'), {
+    method: 'GET', url: '/model-router/state?sessionId=s1',
+  })).payload)
+  assert.equal(state.settings.imagePolicy, 'vision')
+  assert.equal(state.settings.classifier, 'llm')
+  assert.equal(state.settings.signals.contextPressure, 0)
+})

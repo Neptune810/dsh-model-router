@@ -67,6 +67,21 @@ A type pinned in the composer always wins; with nothing pinned the keyword rules
 provider what it supports, picks the nearest level, and sends no effort field when the model
 advertises none.
 
+## Everything is a click (v0.6.2)
+
+The composer control is the whole configuration surface — no JSON or YAML:
+
+| Section | What you do |
+| --- | --- |
+| mode | click 全授权 / 思考等级 / 模型模式; a manual pick adds a **resume** button |
+| task type | pick *auto* (keyword rules) or one of your presets |
+| model pool | **tick models from the live catalog**, then set tier / cost / vision with dropdowns |
+| task presets | **+ 新建预设** → click a keyword pack (写作 / 代码 / 翻译 / 分析) or add a word → choose each pooled model's weight |
+| more | image steps, task detection (rules / semantic), context pressure |
+
+Everything persists in `<profile>/.model-router/state.json` through the same-origin
+`/model-router/*` routes, so the profile row config stays optional.
+
 ## Images, session signals, subagents and the classifier (v0.6.0)
 
 **Images.** `imagePolicy: vision` sends a task that carries an image to a vision model: the pool

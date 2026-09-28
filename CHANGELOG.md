@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.2
+
+**The whole configuration is clickable — no JSON, no YAML to hand-edit.**
+
+- The composer panel is now a real editor. **Model pool**: tick models from the live
+  catalog (the same list the host's model selector shows) and set each one's
+  tier / cost / vision with dropdowns, instead of typing `provider/model` ids.
+- **Task presets are built with buttons**: click a keyword pack (写作 / 代码 / 翻译 /
+  分析) or type a word and press enter, then choose each pooled model's weight from a
+  dropdown (不参与 / 低 / 中 / 高). The JSON textarea is gone.
+- **More settings** in the same panel: image steps (leave alone / vision model), task
+  detection (keyword rules / semantic), context pressure (off / prefer cheap when
+  nearly full) — all selects, persisted through `POST /model-router/settings`.
+- The client half reads its model list from the host's model directory service
+  (`modelDirectories`, provided by ui-model-selection) and declares that plugin as a
+  client dependency.
+- 76 tests.
+
 ## 0.6.1
 
 **Composer control fix — the panel now opens where you can see it.**
