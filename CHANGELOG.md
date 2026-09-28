@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.0
+
+**Thinking stays on — "off" is no longer an automatic route.**
+
+- **Fixed: one cheap step could fail the whole turn.** DeepSeek's Messages API rejects a
+  thinking-enabled request whose history contains an assistant tool call produced while thinking was
+  disabled:
+
+  ```
+  400 The `content[].thinking` in the thinking mode must be passed back to the API.
+  ```
+
+  The old table routed `trivial` -> `off`, but a "trivial" step can still call a tool, and the next
+  step of the same task is classified `engineering` -> `high`. One `off` step followed by a `high`
+  step therefore failed the turn. Reproduced against the live API: with `thinking: disabled` the
+  model returned `stop_reason: tool_use` and no thinking block, and replaying that history with
+  thinking enabled returned 400.
+- **`trivial` now routes to `low`.** Automatic routing never emits `off`; a configured route or a
+  manually selected `off` on a managed model is raised to `low`.
+- **New `allowThinkingOff` (default `false`).** Escape hatch for an operator whose whole session
+  stays non-thinking; when set, `off` routes and manual `off` are honoured again.
+- **A poisoned conversation recovers instead of failing forever.** A session that already contains an
+  assistant tool call with no thinking block (the state 0.3.0 created) is detected from the session
+  projection and pinned to `off` — the only mode the API accepts for that history — with a single
+  warning. The flag is re-derived whenever the projection shrinks, so compaction brings thinking
+  back, and a new session starts clean.
+- Routing table, config sample, config table and both READMEs updated; the test suite covers the new
+  clamp, the escape hatch, the poisoned-history detector and the recovery path — 44 cases, up from 36.
+
 ## 0.3.0
 
 First public release.

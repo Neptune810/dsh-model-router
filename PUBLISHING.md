@@ -27,8 +27,8 @@ url: https://github.com/Neptune810/dsh-model-router
 name: Neptune810/dsh-model-router
 category: model
 description:
-  en: Sets the DeepSeek flash model's reasoning effort per step — thinking off for short cheap prompts, low for a plain request, high for engineering work — and raises it only on repeated tool failures. The model itself never changes; effort max is opt-in.
-  zh: 按步骤设置 DeepSeek flash 模型的思考等级：短小的廉价请求关闭思考，普通请求用 low，工程类工作用 high，只有反复出现工具失败才继续升档。模型本身不会改变，max 档需要手动开启。
+  en: Sets the DeepSeek flash model's reasoning effort per step — low for a cheap or plain request, high for engineering work and agent tool loops — and raises it only on repeated tool failures. Thinking stays on, because DeepSeek rejects a thinking-enabled request whose history contains a tool call made with thinking off. The model itself never changes; effort max is opt-in.
+  zh: 按步骤设置 DeepSeek flash 模型的思考等级：廉价或普通请求用 low，工程类工作与 agent 工具循环用 high，只有反复出现工具失败才继续升档。思考始终保持开启——DeepSeek 会拒绝「历史里存在关闭思考时产生的工具调用」的思考模式请求。模型本身不会改变，max 档需手动开启。
 ```
 
 `description.zh` is optional — a maintainer will add it if you leave it out. `description.en` is
@@ -51,7 +51,8 @@ over there are regenerated on `main` after merge and must not be edited by hand.
 
 ## npm
 
-Published: **`@neptune810/dsh-model-router@0.3.0`** (2026-09-15). Listing does not depend on it —
+Published: **`@neptune810/dsh-model-router@0.4.0`** (2026-09-29), previously 0.3.0 (2026-09-15).
+Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
 and lets people install without the `github:` spec.
 
@@ -93,6 +94,14 @@ are done with.
 Bump `version` in `package.json`, add the CHANGELOG section, commit, then `npm publish`. The
 `repository` field already points back at this repo, so the market picks up a new version on its own
 — nothing to change in the entry.
+
+### Refreshing the catalog description
+
+A version bump never needs a catalog change: the market reads this repository (and the registry
+package) on its own. The *description* does need one when the behaviour it describes changes — 0.4.0
+stopped disabling thinking for cheap steps, so the entry's `description.en` / `description.zh` are
+refreshed in a follow-up PR to `awesome-dsh-plugin`. Copy the block above into
+`data/plugins/Neptune810__dsh-model-router.yml`.
 
 One wrinkle worth knowing: right after a *first* publish the packument can keep returning 404 for a
 few minutes, because the CDN cached the earlier not-found lookup — the availability check you ran

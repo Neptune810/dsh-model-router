@@ -12,7 +12,7 @@ Host-only: no browser UI, no client bundle. It runs silently in the background.
 
 | Step class | Decided by | Reasoning effort | Internal point |
 | --- | --- | --- | --- |
-| `trivial` | a clearly cheap intent (translate, rename, reformat) in a short step | `off` | thinking disabled |
+| `trivial` | a clearly cheap intent (translate, rename, reformat) in a short step | `low` | ~50 |
 | `standard` | a plain short request with no engineering cue | `low` | ~50 |
 | `engineering` | engineering cues, code/diff/XML structure, or an agent tool loop | `high` | ~75 |
 | `hard` | a dense engineering brief, or failures earned inside the task | `high` (`max` when `allowMax`) | ~75 / 100 |
@@ -21,7 +21,7 @@ Host-only: no browser UI, no client bundle. It runs silently in the background.
 three preset names; `high` corresponds to roughly 75, which is where the published effort curve is
 still steep. Pushing past it costs about 1.6–1.8x the output tokens for a marginal gain.
 
-## The four rules
+## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
    calls are counted per task, so a long agent run does not drift toward the most expensive effort.
@@ -33,6 +33,15 @@ still steep. Pushing past it costs about 1.6–1.8x the output tokens for a marg
    enforced at the effort level, so even a hand-written route table asking for `max` is clamped.
 4. **A manually selected `max` is demoted too** (`demoteManualMax`), but only for models this plugin
    manages. Other models are left alone. Enabling `allowMax` turns both clamps off.
+5. **Thinking stays on.** `off` is not an automatic route. DeepSeek's Messages API rejects a
+   thinking-enabled request whose history contains an assistant tool call produced while thinking was
+   disabled (`The content[].thinking in the thinking mode must be passed back to the API`). A cheap
+   step can still call a tool, and the next step of the same task is an engineering tool loop, so one
+   `off` step followed by a `high` step failed the turn. `trivial` now routes to `low`, and any
+   configured or manually selected `off` is raised to `low` unless `allowThinkingOff` is set.
+   **Recovery:** if a conversation already contains such a turn (from an earlier version, or from a
+   hand-selected `off`), the router detects it and keeps that session at `off` instead of failing
+   every step, and logs one warning. Compact the session or start a new one to get thinking back.
 
 Task boundaries come from `agent/inbox/claimed`, which is what actually opens a new piece of work.
 When a task ends on an unresolved failure, the next one inherits a single hesitant step up — and only
@@ -49,12 +58,13 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
     model: deepseek-flash
     allowMax: false       # true enables max for auto routing and manual selection alike
     maxFallback: high     # where max collapses when allowMax is false
+    allowThinkingOff: false # true re-enables effort "off" (see rule 5: it breaks tool loops)
     escalateOnErrors: 2   # failed tool results needed to step up
     escalateOnRepeats: 3  # identical retries needed to step up
     scoring:
       turnPerPoint: 0     # raise this to let long sessions weigh more (not recommended)
     routes:
-      trivial:     { effort: off }
+      trivial:     { effort: low }   # "off" here is raised to low unless allowThinkingOff
       standard:    { effort: low }
       engineering: { effort: high }
       hard:        { effort: max }
@@ -71,6 +81,7 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `allowMax` | `false` | whether `max` is reachable at all |
 | `maxFallback` | `high` | what `max` collapses to |
 | `demoteManualMax` | `true` | also demote a manually selected `max` |
+| `allowThinkingOff` | `false` | allow effort `off` again; only for sessions that stay non-thinking |
 | `leaveImageSteps` | `true` | steps carrying images keep the caller's model |
 | `imagePolicy` | `keep` | set to `flash` to route image steps too (the flash model has native vision) |
 | `escalateOnErrors` | `2` | failure-evidence threshold |
@@ -98,7 +109,7 @@ enough.
 ## Requirements
 
 - Node 20 or newer.
-- Verified against `@deepseek-ai/dsh` 0.1.5-rc.2. The plugin uses `agent/request`,
+- Verified against `@deepseek-ai/dsh` 0.1.7-rc.2. The plugin uses `agent/request`,
   `agent/inbox/claimed`, and `session.deriveMessages()`. No `engines.dsh` range is declared, so the
   plugin market keeps this entry visible rather than guessing it incompatible.
 
@@ -116,11 +127,13 @@ enough.
 node --test
 ```
 
-36 tests. `test/policy.test.js` (26) covers classification, the absence of a ratchet, the
-unreachable `max`, evidence escalation, effort clamping, and tool-result error parsing;
-`test/plugin.test.js` (10) drives the host wiring with ctx/agent doubles — registering listeners,
-claiming messages, routing each step, pulling a pro conversation back to flash, and demoting a
-manually selected `max`.
+44 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
+unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
+detector, and tool-result error parsing; `test/plugin.test.js` (14) drives the host wiring with
+ctx/agent doubles — registering listeners, claiming messages, routing each step, raising a
+hand-written `off`, honouring `allowThinkingOff`, pinning a poisoned session to `off`, recovering
+when compaction drops it, pulling a pro conversation back to flash, and demoting a manually selected
+`max`.
 
 ## License
 

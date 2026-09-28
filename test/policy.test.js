@@ -14,6 +14,7 @@ import {
   normalizeConfig,
   scoreOf,
   textOfContent,
+  toolCallWithoutReasoning,
   toolCallsOf,
   toolErrorsOf,
 } from '../lib/policy.js'
@@ -32,11 +33,54 @@ function sig(over) {
 
 const BRIEF = '重构 架构 设计 规划 迁移 优化 性能 并发 并行 调试 诊断'
 
-test('trivial: a short cheap-intent step disables thinking', () => {
+test('trivial: a short cheap-intent step stays cheap without disabling thinking', () => {
   const d = decideRoute(cfg, resolved, sig({ text: '翻译这句话：hello world' }))
   assert.equal(d.stepClass, 'trivial')
-  assert.equal(d.effort, 'off')
+  assert.equal(d.effort, 'low')
   assert.equal(d.model, 'deepseek-flash')
+  // Nothing was refused: the shipped table never asks for off in the first place.
+  assert.ok(!d.reason.some((r) => r.includes('thinking stays on')))
+})
+
+test('thinking stays on: a hand-written off route is raised to low', () => {
+  const offCfg = normalizeConfig({ routes: { trivial: { effort: 'off' } } })
+  const d = decideRoute(offCfg, resolved, sig({ text: '翻译这句话：hello world' }))
+  assert.equal(d.stepClass, 'trivial')
+  assert.equal(d.effort, 'low')
+  assert.ok(d.reason.some((r) => r.includes('thinking stays on')))
+})
+
+test('allowThinkingOff is the escape hatch for a non-thinking session', () => {
+  const offCfg = normalizeConfig({ allowThinkingOff: true, routes: { trivial: { effort: 'off' } } })
+  assert.equal(decideRoute(offCfg, resolved, sig({ text: '翻译这句话' })).effort, 'off')
+  // The shipped table no longer asks for off at all, so the flag alone changes nothing.
+  assert.equal(
+    decideRoute(normalizeConfig({ allowThinkingOff: true }), resolved, sig({ text: '翻译这句话' })).effort,
+    'low'
+  )
+})
+
+test('auto routing never disables thinking across a signal sweep', () => {
+  const corpus = ['翻译 hello', '总结一下', 'continue', BRIEF, 'refactor the parser and add tests']
+  for (const text of corpus) {
+    for (const toolCalls of [0, 3, 50]) {
+      for (const escalations of [0, 1, 2]) {
+        for (const carry of [0, 1]) {
+          const d = decideRoute(cfg, resolved, sig({ text, toolCalls, escalations, carry, turn: 7 }))
+          assert.notEqual(d.effort, 'off')
+        }
+      }
+    }
+  }
+})
+
+test('toolCallWithoutReasoning flags the history DeepSeek rejects', () => {
+  const call = { type: 'tool-call', id: 'c', name: 'read', arguments: '{}' }
+  assert.equal(toolCallWithoutReasoning([call]), true)
+  assert.equal(toolCallWithoutReasoning([{ type: 'text', text: 'hi' }, call]), true)
+  assert.equal(toolCallWithoutReasoning([{ type: 'reasoning', text: 'think' }, call]), false)
+  assert.equal(toolCallWithoutReasoning([{ type: 'text', text: 'hi' }]), false)
+  assert.equal(toolCallWithoutReasoning(undefined), false)
 })
 
 test('standard: a plain short request runs at low', () => {
@@ -242,6 +286,8 @@ test('documented presets and shipped routes', () => {
   assert.equal(AUTO_CEILING, 'hard')
   assert.equal(DEFAULT_ROUTES.hard.effort, 'max')
   assert.equal(DEFAULT_ROUTES.engineering.effort, 'high')
+  assert.equal(DEFAULT_ROUTES.trivial.effort, 'low')
+  assert.equal(normalizeConfig({}).allowThinkingOff, false)
 })
 
 test('classifyStep only ever returns a known class', () => {

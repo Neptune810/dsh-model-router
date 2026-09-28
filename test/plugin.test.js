@@ -27,7 +27,15 @@ function makeAgent() {
 }
 
 const userText = (text) => ({ role: 'user', content: [{ type: 'text', text }] })
-const toolCall = (id, name, args) => ({ role: 'assistant', content: [{ type: 'tool-call', id, name, arguments: args }] })
+// A thinking-enabled provider emits a reasoning block before its tool call. Pass
+// { thinkingOff: true } to build the poisoned turn that DeepSeek's API rejects.
+const toolCall = (id, name, args, opts = {}) => ({
+  role: 'assistant',
+  content: [
+    ...(opts.thinkingOff ? [] : [{ type: 'reasoning', text: 'planning' }]),
+    { type: 'tool-call', id, name, arguments: args },
+  ],
+})
 const toolResult = (id, text, isError) => ({
   role: 'user',
   content: [{ type: 'tool-result', toolCallId: id, isError, content: [{ type: 'text', text }] }],
@@ -45,7 +53,7 @@ test('apply registers both listeners and logs readiness', () => {
   assert.ok(logs.some((l) => l[1].includes('flash-only')))
 })
 
-test('a cheap step runs with thinking disabled', async () => {
+test('a cheap step stays cheap without disabling thinking', async () => {
   const { ctx, handlers } = makeCtx()
   apply(ctx, {})
   const { agent, state } = makeAgent()
@@ -55,7 +63,69 @@ test('a cheap step runs with thinking disabled', async () => {
 
   const out = await handlers.get('agent/request')({ agent, turn: 1, step: 0 }, async () => resolved())
   assert.equal(out.model, 'deepseek-flash')
+  assert.equal(out.reasoningEffort, 'low')
+})
+
+test('a hand-written off route cannot disable thinking for a tool loop', async () => {
+  const { ctx, handlers } = makeCtx()
+  apply(ctx, { routes: { trivial: { effort: 'off' } } })
+  const { agent, state } = makeAgent()
+
+  handlers.get('agent/inbox/claimed')({ agent, turn: 1, message: { content: '翻译这句话：hello world' } })
+  state.messages = [userText('翻译这句话：hello world')]
+
+  const out = await handlers.get('agent/request')({ agent, turn: 1, step: 0 }, async () => resolved())
+  assert.equal(out.reasoningEffort, 'low')
+})
+
+test('allowThinkingOff keeps a non-thinking session on off', async () => {
+  const { ctx, handlers } = makeCtx()
+  apply(ctx, { allowThinkingOff: true, routes: { trivial: { effort: 'off' } } })
+  const { agent, state } = makeAgent()
+
+  handlers.get('agent/inbox/claimed')({ agent, turn: 1, message: { content: '翻译这句话：hello world' } })
+  state.messages = [userText('翻译这句话：hello world')]
+
+  const out = await handlers.get('agent/request')({ agent, turn: 1, step: 0 }, async () => resolved())
   assert.equal(out.reasoningEffort, 'off')
+})
+
+test('a history poisoned by a thinking-off tool call is pinned to off, and warns once', async () => {
+  const { ctx, handlers, logs } = makeCtx()
+  apply(ctx, {})
+  const { agent, state } = makeAgent()
+
+  handlers.get('agent/inbox/claimed')({ agent, turn: 2, message: { content: 'refactor the parser' } })
+  state.messages = [
+    userText('summarize this'),
+    toolCall('c1', 'read', '{"file_path":"a"}', { thinkingOff: true }),
+    toolResult('c1', 'ok', undefined),
+  ]
+
+  const first = await handlers.get('agent/request')({ agent, turn: 2, step: 0 }, async () => resolved())
+  assert.equal(first.reasoningEffort, 'off')
+  const second = await handlers.get('agent/request')({ agent, turn: 2, step: 1 }, async () => resolved())
+  assert.equal(second.reasoningEffort, 'off')
+  assert.equal(logs.filter((l) => l[1].includes('without a thinking block')).length, 1)
+})
+
+test('compaction that drops the poisoned turn restores thinking', async () => {
+  const { ctx, handlers } = makeCtx()
+  apply(ctx, {})
+  const { agent, state } = makeAgent()
+
+  handlers.get('agent/inbox/claimed')({ agent, turn: 2, message: { content: 'refactor the parser' } })
+  state.messages = [
+    userText('summarize this'),
+    toolCall('c1', 'read', '{"file_path":"a"}', { thinkingOff: true }),
+    toolResult('c1', 'ok', undefined),
+  ]
+  const pinned = await handlers.get('agent/request')({ agent, turn: 2, step: 0 }, async () => resolved())
+  assert.equal(pinned.reasoningEffort, 'off')
+
+  state.messages = [userText('[summary of earlier work]')]
+  const recovered = await handlers.get('agent/request')({ agent, turn: 2, step: 1 }, async () => resolved())
+  assert.notEqual(recovered.reasoningEffort, 'off')
 })
 
 test('repeated failing tool calls escalate within the task, and the next task resets', async () => {
@@ -79,7 +149,7 @@ test('repeated failing tool calls escalate within the task, and the next task re
   handlers.get('agent/inbox/claimed')({ agent, turn: 2, message: { content: '翻译 hi' } })
   state.messages = state.messages.concat([userText('翻译 hi')])
   const fresh = await handlers.get('agent/request')({ agent, turn: 2, step: 5 }, async () => resolved())
-  assert.equal(fresh.reasoningEffort, 'off')
+  assert.equal(fresh.reasoningEffort, 'low')
 })
 
 test('a long quiet tool loop stays at high, never at max', async () => {
