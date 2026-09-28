@@ -67,6 +67,30 @@ A type pinned in the composer always wins; with nothing pinned the keyword rules
 provider what it supports, picks the nearest level, and sends no effort field when the model
 advertises none.
 
+## Images, session signals, subagents and the classifier (v0.6.0)
+
+**Images.** `imagePolicy: vision` sends a task that carries an image to a vision model: the pool
+entry tagged `vision`, or `visionModel` when set explicitly. The image is task-scoped — the next
+command without one goes back to the normal tier.
+
+**Session signals.** The router reads core session projections and lets them sharpen the choice:
+
+| Signal | Effect |
+| --- | --- |
+| active todo (`todos`) | feeds task-type matching — a todo list states the work better than the prompt |
+| context pressure | above `signals.contextPressure` (0–1) the cheap tier is preferred |
+| token total | above `signals.sessionTokens` (0 = off) the cheap tier is preferred |
+| `delegationDepth` | subagents prefer the cheap tier (`subagent.preferCheap`) |
+
+Every decision records the signals it saw, so `/router` and the composer control can explain it.
+
+**`/router`** prints the scope, engagement, pool, task type, the recent decisions and the task's
+strong-tier spend.
+
+**Classifier.** `classifier: llm` makes one small call per turn to pick a preset
+(`classifierModel`, effort off, `classifierTimeoutMs`), caches it for the turn and falls back to the
+keyword rules on any failure. The default stays `rules`.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -115,6 +139,16 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
       costPenalty: 0.4    # how strongly relative cost subtracts from a pool score
     hysteresis:
       downAfter: 2        # quiet steps required before the effort steps down
+    imagePolicy: keep     # keep | vision — route image tasks to a vision model
+    visionModel: null     # explicit vision model; the pool's `vision` tag is used otherwise
+    signals:
+      todos: true         # let the active todo feed task-type matching
+      contextPressure: 0.75  # above this occupancy, prefer the cheap tier (0 disables)
+      sessionTokens: 0    # above this token total, prefer the cheap tier (0 disables)
+    subagent:
+      preferCheap: true   # delegated work stays cheap unless a preset says otherwise
+    classifier: rules     # rules | llm — llm makes one small call per turn
+    classifierModel: null # model used by the llm classifier (defaults to the first pool entry)
     escalateOnErrors: 2   # failed tool results needed to step up
     escalateOnRepeats: 3  # identical retries needed to step up
     scoring:
@@ -145,7 +179,14 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `presets` | `{}` | task types with `match` rules and per-model `weights` |
 | `scoring.costPenalty` | `0.4` | relative-cost weight in the pool score |
 | `hysteresis.downAfter` | `2` | quiet steps before a downgrade applies |
-| `classifier` | `rules` | task-type detection: user rules (a pinned type wins first) |
+| `classifier` | `rules` | `rules` or `llm` (one small call per turn, rules as fallback) |
+| `classifierModel` | first pool entry | model the LLM classifier uses |
+| `imagePolicy` | `keep` | `vision` routes a task carrying an image to a vision model |
+| `visionModel` | `null` | explicit vision model id |
+| `signals.todos` | `true` | let the active todo feed task-type matching |
+| `signals.contextPressure` | `0.75` | occupancy above which the cheap tier is preferred |
+| `signals.sessionTokens` | `0` | token total above which the cheap tier is preferred |
+| `subagent.preferCheap` | `true` | delegated work prefers the cheap tier |
 | `leaveImageSteps` | `true` | steps carrying images keep the caller's model |
 | `imagePolicy` | `keep` | set to `flash` to route image steps too (the flash model has native vision) |
 | `escalateOnErrors` | `2` | failure-evidence threshold |
@@ -191,13 +232,14 @@ enough.
 node --test
 ```
 
-68 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
+75 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, and tool-result error parsing; `test/routing.test.js` (12) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
-`test/plugin.test.js` (14) drives the host wiring with ctx/agent doubles; `test/modes.test.js` (8)
+`test/plugin.test.js` (14) drives the host wiring with ctx/agent doubles; `test/modes.test.js` (14)
 covers the three scopes, manual yield + resume, same-origin route guards, pool/preset editing, a
-pinned task type and a third-party effort vocabulary; `test/client.test.js` (4) loads the shipped
+pinned task type, a third-party effort vocabulary, vision routing, subagent frugality, todo-driven
+task types, context pressure, the `/router` command and the LLM classifier; `test/client.test.js` (4) loads the shipped
 browser bundle in a VM and asserts the composer contribution.
 
 ## License

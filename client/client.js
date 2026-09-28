@@ -182,6 +182,15 @@ window.__ModuleLoader__.load({
 				if (state && state.current) {
 					sections.push(h("div", { key: "current", style: labelStyle }, state.current.provider + "/" + state.current.model + " · " + (state.current.effort || "default") + " · " + state.current.stepClass))
 				}
+				if (state && state.signals) {
+					const signals = state.signals
+					sections.push(h("div", { key: "signals", style: labelStyle },
+						"pressure " + (signals.pressure === null || signals.pressure === undefined ? "–" : signals.pressure) +
+						" · tokens " + (signals.sessionTokens || 0) +
+						" · depth " + (signals.delegationDepth || 0) +
+						(signals.todo ? " · todo " + signals.todo : "")
+					))
+				}
 				if (error) sections.push(h("div", { key: "error", style: { color: "var(--dsw-danger, #f85149)", marginTop: "6px" } }, error))
 
 				parts.push(h("div", { key: "panel", style: panelStyle }, sections))

@@ -63,6 +63,27 @@ presets:
 自己的 effort 词表：插件向 provider 查询它支持哪些档位，取最接近的，模型完全不支持思考时就不发
 effort 字段。
 
+## 图片、会话信号、子 agent 与语义分类（v0.6.0）
+
+**图片**：`imagePolicy: vision` 会把「带图任务」路由到视觉模型——池里带 `vision` 标签的模型，或
+`visionModel` 显式指定的那个。图片是**任务级**的：下一条不带图的命令会回到普通档位。
+
+**会话信号**：插件读取 DSH 的核心投影来细化判断。
+
+| 信号 | 作用 |
+| --- | --- |
+| 当前 todo（`todos`） | 参与任务类型匹配——计划项比用户那句话更能说明这一步在做什么 |
+| 上下文压力 | 超过 `signals.contextPressure`（0–1）时偏向廉价档 |
+| token 总量 | 超过 `signals.sessionTokens`（0=关闭）时偏向廉价档 |
+| `delegationDepth` | 子 agent 默认走廉价档（`subagent.preferCheap`） |
+
+每个决策都会记录它看到的信号，所以 `/router` 和输入栏控件都能解释「为什么这么选」。
+
+**`/router`**：打印当前授权模式、是否接管、模型池、任务类型、最近若干次决策以及本任务强档花费。
+
+**语义分类**：`classifier: llm` 每轮做一次很小的模型调用挑预设（`classifierModel`、effort off、
+`classifierTimeoutMs`），当轮缓存，任何失败都静默回落到关键词规则；默认仍是 `rules`。
+
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -109,6 +130,16 @@ effort 字段。
       costPenalty: 0.4    # 成本在评分里的扣分权重
     hysteresis:
       downAfter: 2        # 降档前需要连续几步没有证据
+    imagePolicy: keep     # keep | vision —— 带图任务是否路由到视觉模型
+    visionModel: null     # 显式视觉模型；不填则用池里带 vision 标签的
+    signals:
+      todos: true         # 当前 todo 参与任务类型匹配
+      contextPressure: 0.75  # 上下文占用超过此比例时偏向廉价档（0 关闭）
+      sessionTokens: 0    # 会话 token 超过此值时偏向廉价档（0 关闭）
+    subagent:
+      preferCheap: true   # 子 agent 默认走廉价档，除非预设权重更高
+    classifier: rules     # rules | llm —— llm 每轮做一次小调用
+    classifierModel: null # llm 分类用的模型（默认池里第一个）
     escalateOnErrors: 2   # 多少个失败工具结果升一档
     escalateOnRepeats: 3  # 同一工具同参数重试多少次升一档
     scoring:
@@ -139,7 +170,14 @@ effort 字段。
 | `presets` | `{}` | 任务类型：`match` 规则 + 每模型 `weights` |
 | `scoring.costPenalty` | `0.4` | 成本扣分权重 |
 | `hysteresis.downAfter` | `2` | 降档前的安静步数 |
-| `classifier` | `rules` | 任务类型识别方式（手动选定的类型优先） |
+| `classifier` | `rules` | `rules` 或 `llm`（每轮一次小调用，失败回落规则） |
+| `classifierModel` | 池中第一个 | LLM 分类使用的模型 |
+| `imagePolicy` | `keep` | `vision` 时带图任务路由到视觉模型 |
+| `visionModel` | `null` | 显式视觉模型 id |
+| `signals.todos` | `true` | 当前 todo 是否参与任务类型匹配 |
+| `signals.contextPressure` | `0.75` | 超过该占用比例偏向廉价档 |
+| `signals.sessionTokens` | `0` | 超过该 token 总量偏向廉价档 |
+| `subagent.preferCheap` | `true` | 子 agent 是否优先廉价档 |
 | `leaveImageSteps` | `true` | 带图步骤保持调用方模型 |
 | `imagePolicy` | `keep` | 改成 `flash` 则带图步骤也路由（flash 有原生视觉） |
 | `escalateOnErrors` | `2` | 失败证据阈值 |
@@ -183,11 +221,12 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 node --test
 ```
 
-68 个用例。`test/policy.test.js`（30 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
-证据升级、effort 钳制、中毒历史检测、tool-result 错误解析；`test/routing.test.js`（12 个）覆盖模型池、
+75 个用例。`test/policy.test.js`（30 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+证据升级、effort 钳制、中毒历史检测与 tool-result 错误解析；`test/routing.test.js`（12 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（14 个）用 ctx/agent 替身
-驱动宿主接线；`test/modes.test.js`（8 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
-任务类型与第三方 effort 词表；`test/client.test.js`（4 个）在 VM 里加载浏览器 bundle 并断言输入栏贡献。
+驱动宿主接线；`test/modes.test.js`（14 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
+任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令
+与 LLM 语义分类；`test/client.test.js`（4 个）在 VM 里加载浏览器 bundle 并断言输入栏贡献。
 
 ## 许可证
 

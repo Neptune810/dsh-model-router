@@ -20,6 +20,7 @@ const POOL = [
 
 /** Host double: listeners, services, routes, logs. */
 function makeHost(config = {}, services = {}) {
+  process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'model-router-modes-'))
   const handlers = new Map()
   const routes = new Map()
   const logs = []
@@ -35,15 +36,23 @@ function makeHost(config = {}, services = {}) {
     get: (name) => registry.get(name),
     inject: (deps, callback) => {
       const scope = { effect: (fn) => { fn(); return () => {} } }
-      for (const dep of deps) scope[dep] = registry.get(dep)
-      callback(scope)
+      let ready = true
+      for (const dep of deps) {
+        scope[dep] = registry.get(dep)
+        if (scope[dep] === undefined) ready = false
+      }
+      if (ready) callback(scope)
     },
   }
   registry.set('webServer', {
     register: ({ path, handler }) => { routes.set(path, handler); return () => routes.delete(path) },
   })
+  const commands = []
+  registry.set('commands', {
+    register: (definition) => { commands.push(definition); return () => {} },
+  })
   apply(ctx, config)
-  return { handlers, routes, logs, registry }
+  return { handlers, routes, logs, registry, commands }
 }
 
 const agentWith = (messages = []) => ({ session: { id: 's1', deriveMessages: () => messages } })
@@ -269,4 +278,93 @@ test('the routes behave the same on a real HTTP server', async () => {
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
+})
+
+test('image routing sends image steps to the vision model and text steps back', async () => {
+  const host = makeHost({
+    pool: POOL.concat([{ id: 'deepseek-official/deepseek-v4-flash-vision-exp', cost: 1, tags: ['vision'] }]),
+    routes: ROUTES,
+    imagePolicy: 'vision',
+  })
+  const agent = agentWith([{ role: 'user', content: [{ type: 'text', text: '看这张图' }, { type: 'image' }] }])
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('看这张图') })
+
+  const image = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(image.model, 'deepseek-v4-flash-vision-exp')
+
+  // The image stays task-scoped: a new task without one returns to the normal tier.
+  emit(host, 'agent/inbox/claimed', { agent, turn: 2, message: { content: '改个变量名' } })
+  const text = await request(host, { agent, turn: 2, step: 0 }, seed())
+  assert.notEqual(text.model, 'deepseek-v4-flash-vision-exp')
+})
+
+test('a subagent spends the cheap tier even on hard work', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const lead = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent: lead, ...claimed(HARD_BRIEF) })
+  const leadOut = await request(host, { agent: lead, turn: 1, step: 0 }, seed())
+  assert.equal(leadOut.model, 'deepseek-v4-pro')
+
+  const sub = agentWith()
+  sub.session.header = { delegationDepth: 1 }
+  emit(host, 'agent/inbox/claimed', { agent: sub, ...claimed(HARD_BRIEF) })
+  const subOut = await request(host, { agent: sub, turn: 1, step: 0 }, seed())
+  assert.equal(subOut.model, 'deepseek-flash')
+})
+
+test('the active todo feeds task-type matching', async () => {
+  const presets = { novel: { match: ['续写'], weights: { 'deepseek-official/deepseek-v4-pro': 95 } } }
+  const projections = {
+    stateOf: (session, key) => (key === 'todos' ? [{ content: '续写第三章', status: 'in_progress' }] : undefined),
+  }
+  const host = makeHost({ pool: POOL, routes: ROUTES, presets }, { sessionProjections: projections })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('继续') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(out.model, 'deepseek-v4-pro', 'the todo text matched the preset, not the prompt')
+})
+
+test('context pressure biases toward the cheap tier', async () => {
+  const projections = {
+    stateOf: (session, key) => (key === 'contextPressure' ? { contextWindow: 1000, pressureTokens: 950, surfaceTokens: 950 } : undefined),
+  }
+  const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(out.model, 'deepseek-flash', 'a nearly full context prefers the cheap model')
+})
+
+test('/router reports the live routing state', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(host.commands.length, 1)
+  assert.equal(host.commands[0].name, 'router')
+  const result = host.commands[0].handler({}, { agent })
+  assert.equal(result.kind, 'success')
+  assert.match(result.text, /model-router/)
+  assert.match(result.text, /deepseek-v4-pro/)
+  assert.match(result.text, /scope:/)
+})
+
+test('classifier llm classifies once per turn and falls back to the rules', async () => {
+  let calls = 0
+  const llm = { stream: async function* stream() { calls += 1; yield { type: 'text-delta', index: 0, text: 'novel' } } }
+  const presets = { novel: { match: ['绝不出现的词'], weights: { 'deepseek-official/deepseek-v4-pro': 99 } } }
+  const host = makeHost({ pool: POOL, routes: ROUTES, presets, classifier: 'llm' }, { llm })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('写点东西') })
+  const first = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(first.model, 'deepseek-v4-pro')
+  assert.equal(calls, 1)
+  await request(host, { agent, turn: 1, step: 1 }, seed())
+  assert.equal(calls, 1, 'the classification is cached for the turn')
+
+  const broken = makeHost({ pool: POOL, routes: ROUTES, presets, classifier: 'llm' }, { llm: { stream: () => { throw new Error('no classifier model') } } })
+  const agent2 = agentWith()
+  emit(broken, 'agent/inbox/claimed', { agent: agent2, ...claimed('翻译一句话') })
+  const fallback = await request(broken, { agent: agent2, turn: 1, step: 0 }, seed())
+  assert.equal(fallback.model, 'deepseek-flash')
 })

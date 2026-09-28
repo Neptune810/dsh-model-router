@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.0
+
+**Complete routing: images, session signals, subagents, an LLM classifier and a /router command.**
+
+- **Vision routing.** `imagePolicy: vision` routes a task that carries an image to a vision model —
+  `visionModel` picks one explicitly, otherwise the pool entry tagged `vision` is used. The image
+  stays task-scoped: the next command without one returns to the normal tier.
+- **Session signals.** The router now reads core session projections and lets them sharpen the
+  decision: the **active todo** feeds task-type matching (a todo list states the work better than
+  the prompt), **context pressure** above `signals.contextPressure` and a **token total** above
+  `signals.sessionTokens` both prefer the cheap tier, and every decision records the signals it saw.
+- **Subagent policy.** Delegated work (`delegationDepth > 0`) prefers the cheap tier even for hard
+  steps unless a preset weight overrides it (`subagent.preferCheap`).
+- **`/router` command.** Prints the current scope, engagement, pool, task type, the last decisions
+  and the task's strong-tier spend — the same picture the composer control shows.
+- **Optional LLM task classifier.** `classifier: llm` makes one small call per turn
+  (`classifierModel`, `reasoningEffort: off`, `classifierTimeoutMs`) to pick a preset, caches the
+  answer for that turn, and silently falls back to the keyword rules on any failure.
+- Composer control shows the live signals; 75 tests (was 69).
+
 ## 0.5.0
 
 **The router now steers a model pool, not just one model's effort — with a composer UI.**
