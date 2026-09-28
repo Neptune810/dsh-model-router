@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.3
+
+**Fixes the two things you hit: unreadable text in dark mode, and an empty model pool.**
+
+- **Dark mode.** The panel is portaled onto \`document.body\`, so \`color: inherit\`
+  resolved to the document default (black) — invisible on a dark panel. Every colour now
+  comes from the harness tokens (\`--dsw-alias-label-primary\`, \`--dsw-specific-input-major\`,
+  \`--dsw-alias-border-l2\`, …), so both themes read correctly.
+- **Model pool.** Rows now come from the **host's own catalog**
+  (\`GET /model-router/catalog\`, built from \`llm.listProviders()\` + \`llm.listModels()\` —
+  the same source the host's model selector uses), merged with the current pool and the
+  client directory. The section is never empty once you have models, and a fallback
+  "add a model id" box covers the rest.
+- Ticking a model updates the checkbox immediately (optimistic) and a failed call is
+  reported inside the panel and logged as \`[model-router] request failed …\`; requests
+  time out after 10s so the panel can never freeze on a pending call.
+- The panel logs its sources on open: \`[model-router] panel open: client … + host …\`.
+- 77 tests.
+
 ## 0.6.2
 
 **The whole configuration is clickable — no JSON, no YAML to hand-edit.**

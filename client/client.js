@@ -37,6 +37,7 @@ window.__ModuleLoader__.load({
 				classifier: "任务识别", byRules: "关键词规则", byLlm: "语义判断（LLM）",
 				pressure: "上下文压力", pressureOff: "关", pressureOn: "快满时用便宜档",
 				session: "会话", noPresets: "还没有预设，点下面的「新建预设」开始",
+				poolAdd: "手动添加模型 ID（目录取不到时的备选）",
 				needName: "请先给这个任务类型起个名字", loadFailed: "读取失败",
 				low: "低", mid: "中", high: "高",
 			},
@@ -53,11 +54,15 @@ window.__ModuleLoader__.load({
 				classifier: "Task detection", byRules: "keyword rules", byLlm: "semantic (LLM)",
 				pressure: "Context pressure", pressureOff: "off", pressureOn: "prefer cheap when nearly full",
 				session: "session", noPresets: "no presets yet — click New preset below",
+				poolAdd: "add a model id by hand (fallback when the catalog is unavailable)",
 				needName: "give this task type a name first", loadFailed: "load failed",
 				low: "low", mid: "mid", high: "high",
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
+
+		/** Stand-in store while the model directory service is unavailable. */
+		const EMPTY_CATALOG = { subscribe: () => () => {}, getSnapshot: () => null }
 
 		const PACKS = [
 			{ key: "写作", words: ["续写", "小说", "情节", "文风", "人物", "章节"] },
@@ -70,58 +75,87 @@ window.__ModuleLoader__.load({
 		const WEIGHTS = [[0, "none"], [40, "low"], [70, "mid"], [95, "high"]]
 
 		async function api(path, options) {
-			const response = await fetch(BASE + path, {
-				method: (options && options.method) || "GET",
-				cache: "no-store",
-				headers: options && options.body ? { "content-type": "application/json" } : undefined,
-				body: options && options.body ? JSON.stringify(options.body) : undefined,
-			})
-			let json = null
-			try { json = await response.json() } catch (_noBody) { /* tolerate an empty body */ }
-			if (!response.ok) throw new Error((json && json.error) || ("HTTP " + response.status))
-			return json
+			const controller = typeof AbortController !== "undefined" ? new AbortController() : undefined
+			const timer = controller ? setTimeout(() => controller.abort(), 10000) : undefined
+			try {
+				const request = {
+					method: (options && options.method) || "GET",
+					cache: "no-store",
+					headers: options && options.body ? { "content-type": "application/json" } : undefined,
+					body: options && options.body ? JSON.stringify(options.body) : undefined,
+				}
+				if (controller) request.signal = controller.signal
+				const response = await fetch(BASE + path, request)
+				let json = null
+				try { json = await response.json() } catch (_noBody) { /* tolerate an empty body */ }
+				if (!response.ok) throw new Error((json && json.error) || ("HTTP " + response.status))
+				return json
+			} catch (error) {
+				if (typeof console !== "undefined" && console.warn) console.warn("[model-router] request failed", path, String((error && error.message) || error))
+				throw error
+			} finally {
+				if (timer) clearTimeout(timer)
+			}
 		}
 
+		// The panel is portaled onto <body>, so theme colours must come from the
+		// harness tokens instead of inheriting the document default (which is black
+		// and unreadable on a dark panel).
+		const TOKEN = {
+			text: "var(--dsw-alias-label-primary, #e8e8ea)",
+			muted: "var(--dsw-alias-label-secondary, #a2a8b0)",
+			surface: "var(--dsw-specific-input-major, var(--dsw-alias-bg-base, #1f2023))",
+			border: "var(--dsw-alias-border-l2, rgba(127,127,127,0.4))",
+			danger: "var(--dsw-alias-state-error-primary, #f85149)",
+		}
 		const chipStyle = (active) => ({
 			display: "inline-flex", alignItems: "center", gap: "4px",
 			padding: "2px 8px", borderRadius: "999px", cursor: "pointer",
 			font: "inherit", fontSize: "12px", lineHeight: "18px",
-			color: "inherit", background: active ? "rgba(127,127,127,0.22)" : "transparent",
-			border: "1px solid " + (active ? "rgba(127,127,127,0.55)" : "rgba(127,127,127,0.3)"),
-			opacity: active ? 1 : 0.85,
+			color: active ? TOKEN.text : TOKEN.muted,
+			background: active ? "rgba(127,127,127,0.22)" : "transparent",
+			border: "1px solid " + (active ? "rgba(127,127,127,0.55)" : TOKEN.border),
 		})
-		const selectStyle = { padding: "2px 4px", borderRadius: "6px", border: "1px solid rgba(127,127,127,0.35)", background: "transparent", color: "inherit", font: "inherit", fontSize: "12px" }
+		const selectStyle = { padding: "2px 4px", borderRadius: "6px", border: "1px solid " + TOKEN.border, background: TOKEN.surface, color: TOKEN.text, font: "inherit", fontSize: "12px" }
 		const inputStyle = Object.assign({}, selectStyle, { flex: "1 1 auto", minWidth: 0, padding: "3px 6px" })
 		const panelStyle = {
 			position: "fixed", zIndex: 2147483000,
-			width: "360px", overflowY: "auto",
-			padding: "10px 12px", borderRadius: "10px",
-			background: "var(--dsh-surface, rgba(28,28,30,0.98))",
-			color: "inherit", border: "1px solid rgba(127,127,127,0.35)",
-			boxShadow: "0 12px 32px rgba(0,0,0,0.3)", fontSize: "12px", lineHeight: "1.5",
+			width: "380px", overflowY: "auto",
+			padding: "10px 12px", borderRadius: "var(--dsw-radius-panel, 10px)",
+			background: TOKEN.surface, color: TOKEN.text,
+			border: "1px solid " + TOKEN.border,
+			boxShadow: "var(--dsw-elevation-soft, 0 12px 32px rgba(0,0,0,0.35))",
+			fontSize: "12px", lineHeight: "1.5",
 		}
-		const labelStyle = { opacity: 0.6, fontSize: "11px", marginTop: "8px" }
+		const labelStyle = { color: TOKEN.muted, fontSize: "11px", marginTop: "8px" }
 		const rowStyle = { display: "flex", flexWrap: "wrap", gap: "6px", margin: "4px 0" }
 		const modelRowStyle = { display: "flex", alignItems: "center", gap: "6px", margin: "2px 0" }
 
 		function ModelRouterControl(props) {
 			const sessionId = props && props.sessionId
-			const catalogStore = props && props.catalog
 			const t = dict()
+			const [catalogStore, setCatalogStore] = react.useState(props && props.resolveCatalog ? props.resolveCatalog() : undefined)
 			const [open, setOpen] = react.useState(false)
 			const [pos, setPos] = react.useState(null)
 			const [state, setState] = react.useState(null)
 			const [error, setError] = react.useState("")
 			const [busy, setBusy] = react.useState(false)
 			const [editing, setEditing] = react.useState(null)
+			const [poolOverride, setPoolOverride] = react.useState(null)
+			const [customModel, setCustomModel] = react.useState("")
+			const [hostGroups, setHostGroups] = react.useState([])
 			const [customWord, setCustomWord] = react.useState("")
 			const triggerRef = react.useRef(null)
 			const panelRef = react.useRef(null)
 			const rootRef = react.useRef(null)
 
-			const catalogSnapshot = catalogStore
-				? react.useSyncExternalStore((fn) => catalogStore.subscribe(fn), () => catalogStore.getSnapshot())
-				: null
+			react.useEffect(() => {
+				if (!props || !props.resolveCatalog) return
+				const found = props.resolveCatalog()
+				if (found) setCatalogStore(found)
+			}, [props])
+			const store = catalogStore || EMPTY_CATALOG
+			const catalogSnapshot = react.useSyncExternalStore((fn) => store.subscribe(fn), () => store.getSnapshot())
 			const groups = (catalogSnapshot && catalogSnapshot.groups) || []
 
 			const load = react.useCallback(() => {
@@ -168,24 +202,47 @@ window.__ModuleLoader__.load({
 						}
 						: null)
 					load()
+					if (props && props.resolveCatalog) {
+						const found = props.resolveCatalog()
+						if (found) setCatalogStore(found)
+					}
 					if (props && props.loadCatalog) props.loadCatalog()
+					api("/catalog")
+						.then((result) => setHostGroups((result && result.groups) || []))
+						.catch(() => setHostGroups([]))
 				}
 				setOpen(next)
 			}
 
 			const mode = state ? state.effectiveControl : "full"
 			const yielded = state ? state.engaged === false : false
-			const pool = (state && state.pool) || []
+			// Show the click immediately; the host refresh confirms it.
+			const pool = poolOverride || ((state && state.pool) || [])
 			const presets = (state && state.presets) || {}
 			const settings = (state && state.settings) || {}
 			const packed = pool.map((entry) => entry.id)
+			react.useEffect(() => {
+				if (!open) return undefined
+				const timer = setTimeout(() => {
+					if (typeof console !== "undefined" && console.info) {
+						console.info("[model-router] panel open: client " + groups.length + " + host " + hostGroups.length + " group(s), pool " + pool.length)
+					}
+				}, 1200)
+				return () => clearTimeout(timer)
+			}, [open, groups.length, hostGroups.length, pool.length])
 
-			const savePool = (next) => run("/pool", { pool: next })
+			const savePool = (next) => { setPoolOverride(next); run("/pool", { pool: next }, () => setPoolOverride(null)) }
 			const toggleModel = (id) => {
 				if (packed.indexOf(id) >= 0) savePool(pool.filter((entry) => entry.id !== id))
 				else savePool(pool.concat([{ id: id, tier: "cheap", cost: 1, tags: [] }]))
 			}
 			const patchEntry = (id, patch) => savePool(pool.map((entry) => (entry.id === id ? Object.assign({}, entry, patch) : entry)))
+			const addModel = () => {
+				const id = customModel.trim()
+				setCustomModel("")
+				if (!id || packed.indexOf(id) >= 0) return
+				savePool(pool.concat([{ id: id, tier: "cheap", cost: 1, tags: [] }]))
+			}
 
 			const savePresets = (next, after) => run("/presets", { presets: next }, after)
 			const beginNew = () => { setEditing({ original: null, name: "", match: [], weights: {} }); setCustomWord("") }
@@ -262,17 +319,28 @@ window.__ModuleLoader__.load({
 				))
 
 				sections.push(h("div", { key: "pool-label", style: labelStyle }, t.pool + " · " + t.poolHint))
-				const models = []
-				for (const group of groups) {
+				// Rows come from the pool AND the live catalog, so the section still works
+				// when the model directory has not loaded or is unavailable.
+				const rows = []
+				const seen = {}
+				for (const entry of pool) {
+					if (seen[entry.id]) continue
+					seen[entry.id] = true
+					rows.push({ id: entry.id, label: entry.id })
+				}
+				for (const group of groups.concat(hostGroups)) {
 					for (const model of (group.models || [])) {
-						models.push({ id: group.id + "/" + model.id, label: model.name ? model.name : model.id })
+						const id = group.id + "/" + model.id
+						if (seen[id]) continue
+						seen[id] = true
+						rows.push({ id: id, label: model.name ? model.name : model.id })
 					}
 				}
-				if (models.length === 0) {
-					sections.push(h("div", { key: "pool-empty", style: { opacity: 0.6 } }, "..."))
+				if (rows.length === 0) {
+					sections.push(h("div", { key: "pool-empty", style: { opacity: 0.6 } }, "-"))
 				}
 				sections.push(h("div", { key: "pool", style: { margin: "4px 0 6px" } },
-					models.map((model) => {
+					rows.map((model) => {
 						const entry = pool.find((candidate) => candidate.id === model.id)
 						const children = [
 							h("input", { key: "tick", type: "checkbox", checked: Boolean(entry), disabled: busy, onChange: () => toggleModel(model.id) }),
@@ -301,6 +369,14 @@ window.__ModuleLoader__.load({
 						}
 						return h("div", { key: model.id, style: modelRowStyle }, children)
 					})
+				))
+				sections.push(h("div", { key: "pool-add", style: rowStyle },
+					h("input", {
+						style: inputStyle, value: customModel, placeholder: t.poolAdd, disabled: busy,
+						onChange: (event) => setCustomModel(event.target.value),
+						onKeyDown: (event) => { if (event.key === "Enter") addModel() },
+					}),
+					h("button", { type: "button", style: chipStyle(false), disabled: busy || customModel.trim().length === 0, onClick: () => addModel() }, t.add)
 				))
 
 				sections.push(h("div", { key: "presets-label", style: labelStyle }, t.presets))

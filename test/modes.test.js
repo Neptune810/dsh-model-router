@@ -384,3 +384,21 @@ test('the settings route drives images, classifier and pressure from the UI', as
   assert.equal(state.settings.classifier, 'llm')
   assert.equal(state.settings.signals.contextPressure, 0)
 })
+
+test('the catalog route lists provider models for the pool UI', async () => {
+  const llm = {
+    listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek' }],
+    listModels: async (provider) => (provider === 'deepseek-official'
+      ? [{ id: 'deepseek-flash', name: 'Flash' }, { id: 'deepseek-v4-pro', name: 'Pro' }]
+      : []),
+  }
+  const host = makeHost({ pool: POOL, routes: ROUTES }, { llm })
+  const response = await call(host.routes.get('/model-router/catalog'), { method: 'GET', url: '/model-router/catalog' })
+  const body = JSON.parse(response.payload)
+  assert.equal(response.status, 200)
+  assert.deepEqual(body.groups, [{
+    id: 'deepseek-official',
+    name: 'DeepSeek',
+    models: [{ id: 'deepseek-flash', name: 'Flash' }, { id: 'deepseek-v4-pro', name: 'Pro' }],
+  }])
+})
