@@ -27,6 +27,8 @@ window.__ModuleLoader__.load({
 			zh: {
 				title: "模型路由", scope: "控制范围", full: "全授权", effort: "思考", model: "模型",
 				engaged: "已接管", yielded: "已让位，你手动选过", resume: "重新接管",
+				engagedHint: "绿点 = 正在自动接管：按需要换模型、调思考等级；点开可调整",
+				yieldedHint: "黄点 = 已让位：你手动选过模型，插件暂时不插手；点开可点「重新接管」",
 				task: "任务类型", auto: "自动（按关键词规则）", pool: "模型池", poolHint: "只有勾选的模型会被选中",
 				tier: "定位", cheap: "日常", strong: "攻坚", cost: "价格", vision: "视觉",
 				tierHint: "日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）",
@@ -59,6 +61,8 @@ window.__ModuleLoader__.load({
 			en: {
 				title: "Model router", scope: "Scope", full: "Full", effort: "Effort", model: "Model",
 				engaged: "Controlling", yielded: "Yielded to your manual pick", resume: "Resume",
+				engagedHint: "green dot = the router is controlling: it changes the model / effort as needed; click to adjust",
+				yieldedHint: "amber dot = stood down: you picked a model by hand, so the router holds back; click to resume",
 				task: "Task type", auto: "Auto (keyword rules)", pool: "Model pool", poolHint: "only ticked models are selectable",
 				tier: "Role", cheap: "daily", strong: "heavy", cost: "Price", vision: "vision",
 				tierHint: "daily = use it all the time; heavy = prefer it for hard/engineering steps (hard +15, engineering +8)",
@@ -407,7 +411,7 @@ window.__ModuleLoader__.load({
 			const parts = [
 				h("button", {
 					key: "trigger", type: "button", className: "mr-trigger", ref: triggerRef,
-					title: t.title, onClick: openPanel,
+					title: t.title + " · " + (yielded ? t.yieldedHint : t.engagedHint), onClick: openPanel,
 				},
 					h("span", null, t[mode] || mode),
 					h("span", { className: "mr-dot", "data-yielded": String(yielded) })
@@ -501,6 +505,8 @@ window.__ModuleLoader__.load({
 				} else {
 					body.push(h("div", { key: "head", className: "mr-head" },
 						h("span", { className: "mr-name" }, t.title),
+						h("span", { className: "mr-dot", "data-yielded": String(yielded), title: yielded ? t.yieldedHint : t.engagedHint }),
+						h("span", { title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
 					if (yielded) {

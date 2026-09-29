@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.8
+
+**The status dot explains itself.**
+
+- The trigger's green/amber dot now carries a tooltip: green = the router is
+  controlling (it changes model / effort as needed), amber = it stood down because you
+  picked a model by hand (click to resume).
+- The panel header repeats the dot with its state in words, so the colour never has to
+  be guessed from a screenshot.
+- 77 tests.
+
 ## 0.6.7
 
 **The package metadata finally describes what the plugin does now.**
