@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.10
+
+**The routed model and its effort are visible again, for every step.**
+
+- The composer chip now carries the live choice next to the scope — `全授权 · v4-pro · high` —
+  and refreshes every 2.5s while a task runs (hidden tabs skip the poll), so each round's
+  model and reasoning effort are visible without opening the panel. The tooltip has the full
+  `provider/model`, the effort and the step class.
+- The panel gained **最近决策**: the last five routed steps as
+  `T<turn>.<step> · model · effort · class`, so the per-step story is readable after the fact.
+- 80 tests; `docs/ui-preview.html` and the captures were refreshed.
+
 ## 0.6.9
 
 **Two bugs the composer UI showed: a dead scope control in a new conversation, and an

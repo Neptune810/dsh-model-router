@@ -56,6 +56,7 @@ window.__ModuleLoader__.load({
 				pressure: "上下文压力", on: "快满省", off: "关",
 				noPresets: "还没有预设", current: "当前", loading: "读取中…", empty: "没有可选项",
 				noSession: "新会话还没建立：这里的选择会成为默认值，发出第一条消息后按会话生效",
+				recent: "最近决策", turnShort: "轮",
 				needName: "先给任务类型起个名字", session: "会话",
 				poolAdd: "手动填模型 ID", delete: "删",
 			},
@@ -91,6 +92,7 @@ window.__ModuleLoader__.load({
 				pressure: "Context pressure", on: "cheap", off: "off",
 				noPresets: "no presets yet", current: "now", loading: "loading…", empty: "nothing to show",
 				noSession: "no session yet — your pick becomes the default and applies once this conversation starts",
+				recent: "Recent routing", turnShort: "turn",
 				needName: "name the task type first", session: "session",
 				poolAdd: "add a model id", delete: "del",
 			},
@@ -290,6 +292,16 @@ window.__ModuleLoader__.load({
 
 			react.useEffect(() => { load() }, [load])
 			react.useEffect(() => {
+				// The host records every routed step; poll so the badge and the panel show
+				// the model and effort of the current step while a task is running.
+				if (!sessionId || typeof setInterval !== "function") return undefined
+				const timer = setInterval(() => {
+					if (typeof document !== "undefined" && document.hidden) return
+					load()
+				}, 2500)
+				return () => clearInterval(timer)
+			}, [sessionId, load])
+			react.useEffect(() => {
 				if (typeof console !== "undefined" && console.info) {
 					console.info("[model-router] composer control ready (session " + (sessionId || "none") + ")")
 				}
@@ -341,6 +353,9 @@ window.__ModuleLoader__.load({
 
 			const mode = state ? state.effectiveControl : "full"
 			const yielded = state ? state.engaged === false : false
+			const current = state && state.current ? state.current : null
+			const currentModel = current ? String(current.model || "").split("/").pop() : ""
+			const currentEffort = current ? (current.effort || "default") : ""
 			const pool = poolOverride || ((state && state.pool) || [])
 			const presets = (state && state.presets) || {}
 			const settings = (state && state.settings) || {}
@@ -415,9 +430,14 @@ window.__ModuleLoader__.load({
 			const parts = [
 				h("button", {
 					key: "trigger", type: "button", className: "mr-trigger", ref: triggerRef,
-					title: t.title + " · " + (yielded ? t.yieldedHint : t.engagedHint), onClick: openPanel,
+					title: t.title + " · " + (yielded ? t.yieldedHint : t.engagedHint) +
+						(current ? " — " + current.provider + "/" + current.model + " · " + currentEffort + " · " + (current.stepClass || "") : ""),
+					onClick: openPanel,
 				},
 					h("span", null, t[mode] || mode),
+					current
+						? h("span", { className: "mr-sub", title: current.provider + "/" + current.model }, currentModel + " · " + currentEffort)
+						: null,
 					h("span", { className: "mr-dot", "data-yielded": String(yielded) })
 				),
 			]
@@ -650,6 +670,18 @@ window.__ModuleLoader__.load({
 						})
 					))
 
+					if (state && state.decisions && state.decisions.length > 0) {
+						body.push(h("div", { key: "recent-title", className: "mr-group" }, t.recent))
+						body.push(h("div", { key: "recent" },
+							state.decisions.slice(-5).reverse().map((decision, index) => h("div", {
+								key: String(index), className: "mr-line", style: { padding: "0 8px" },
+							},
+								h("span", { className: "mr-tag" }, "T" + (decision.turn === undefined ? "?" : decision.turn) + "." + (decision.step === undefined ? "?" : decision.step)),
+								h("span", { className: "mr-name", title: (decision.provider || "") + "/" + (decision.model || "") }, (decision.model || "") + " · " + (decision.effort || "default")),
+								h("span", { className: "mr-sub" }, decision.stepClass || "")
+							))
+						))
+					}
 					body.push(h("div", { key: "foot", className: "mr-foot" },
 						h("span", { className: "mr-dot", "data-yielded": String(yielded) }),
 						h("span", null, yielded ? t.yielded : t.engaged),

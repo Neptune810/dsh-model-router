@@ -77,7 +77,7 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
 <body>
 <div class="main">
 <div class="wrap">
-  <button class="mr-trigger" type="button">全授权 <span class="mr-dot" data-yielded="false"></span></button>
+  <button class="mr-trigger" type="button">全授权 <span class="mr-sub" title="deepseek-official/deepseek-v4-pro">deepseek-v4-pro · high</span> <span class="mr-dot" data-yielded="false"></span></button>
   <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
   <p class="caption">dsh-model-router 输入栏面板的静态预览：渲染的就是插件里那份 CSS，只把主题变量换成了近似值。鼠标停在任意控件上会显示解释。</p>
 </div>
@@ -104,6 +104,12 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断">任务识别</span><div class="mr-seg" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断"><button data-active="true" title="按预设里的 match 匹配">关键词</button><button title="每轮一次小模型判断">语义</button></div></div>
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="上下文压力：快满时优先用便宜模型">上下文压力</span><div class="mr-seg" title="快满时优先用便宜模型"><button title="不参与判断">关</button><button data-active="true" title="上下文快满时优先便宜模型">快满省</button></div></div>
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="半透明的主题菜单色会让背后的聊天内容透上来">面板背景</span><div class="mr-seg" title="选「不透明」最好读；选「跟随主题」会加毛玻璃模糊"><button data-active="true" title="用主题底色算出不透明色，文字最清楚">不透明</button><button title="沿用主题的半透明菜单色，再加背景模糊">跟随主题</button></div></div>
+  <div class="mr-group">最近决策</div>
+  <div>
+    <div class="mr-line" style="padding:0 8px"><span class="mr-tag">T3.4</span><span class="mr-name" title="deepseek-official/deepseek-v4-pro">deepseek-v4-pro · high</span><span class="mr-sub">hard</span></div>
+    <div class="mr-line" style="padding:0 8px"><span class="mr-tag">T3.3</span><span class="mr-name" title="deepseek-official/deepseek-flash">deepseek-flash · low</span><span class="mr-sub">standard</span></div>
+    <div class="mr-line" style="padding:0 8px"><span class="mr-tag">T3.2</span><span class="mr-name" title="deepseek-official/deepseek-flash">deepseek-flash · default</span><span class="mr-sub">trivial</span></div>
+  </div>
   <div class="mr-foot"><span class="mr-dot" data-yielded="false"></span><span>已接管</span><span class="mr-name" style="text-align:right">deepseek-v4-pro · high · engineering</span></div>
 </div>
 <script>if (location.hash === "#light") document.documentElement.dataset.theme = "light"</script>
