@@ -133,16 +133,23 @@ test('effort scope never changes the model, model scope never changes the effort
 })
 
 test('a manual pick makes the router stand down until the next command', async () => {
-  let selection = { provider: 'deepseek-official', model: 'deepseek-flash' }
+  // The real projection state is { lastUsed, pending } (see the host projection).
+  let selection = { lastUsed: null, pending: null }
   const projections = { stateOf: (session, key) => (key === 'modelSelection' ? selection : undefined) }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
   const agent = agentWith()
   emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
 
-  // Baseline observation, then the user picks pro by hand.
+  // No pending pick: the router routes.
   const first = await request(host, { agent, turn: 1, step: 0 }, seed())
   assert.equal(first.model, 'deepseek-v4-pro')
-  selection = { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' }
+  assert.ok(!host.logs.some((line) => line.includes('manual model selection detected')), 'routing alone is not a manual pick')
+
+  // The user picks flash in the model seat; the host records it as pending.
+  selection = {
+    lastUsed: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' },
+    pending: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' },
+  }
   const afterManual = await request(host, { agent, turn: 1, step: 1 }, seed({ model: 'deepseek-flash', reasoningEffort: 'low' }))
   assert.equal(afterManual.model, 'deepseek-flash', 'the manual pick stands while the router is stood down')
   assert.equal(afterManual.reasoningEffort, 'low')
@@ -155,13 +162,16 @@ test('a manual pick makes the router stand down until the next command', async (
 })
 
 test('the UI resume route re-engages without waiting for a command', async () => {
-  let selection = { model: 'a' }
+  let selection = { lastUsed: null, pending: null }
   const projections = { stateOf: () => selection }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
   const agent = agentWith()
   emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
   await request(host, { agent, turn: 1, step: 0 }, seed())
-  selection = { model: 'b' }
+  selection = {
+    lastUsed: { provider: 'deepseek-official', model: 'deepseek-flash' },
+    pending: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' },
+  }
   await request(host, { agent, turn: 1, step: 1 }, seed({ model: 'deepseek-flash' }))
 
   const resumed = await call(host.routes.get('/model-router/resume'), {
@@ -412,4 +422,67 @@ test('the catalog route lists provider models for the pool UI', async () => {
     name: 'DeepSeek',
     models: [{ id: 'deepseek-flash', name: 'Flash' }, { id: 'deepseek-v4-pro', name: 'Pro' }],
   }])
+})
+
+test("the router's own model change is not mistaken for a manual pick", async () => {
+  // The host writes what was actually used into lastUsed; pending stays null.
+  const selection = { lastUsed: null, pending: null }
+  const projections = { stateOf: (session, key) => (key === 'modelSelection' ? selection : undefined) }
+  const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
+
+  const first = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(first.model, 'deepseek-v4-pro')
+  selection.lastUsed = { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
+
+  const second = await request(host, { agent, turn: 1, step: 1 }, seed({ model: 'deepseek-v4-pro', reasoningEffort: 'high' }))
+  assert.equal(second.model, 'deepseek-v4-pro', 'the router keeps routing after logging its own model')
+  assert.ok(
+    !host.logs.some((line) => line.includes('manual model selection detected')),
+    'a router-chosen model recorded as lastUsed must never stand the router down',
+  )
+})
+
+test('a scope pick before the session exists becomes the default', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const path = '/model-router/control'
+  const posted = await call(host.routes.get(path), {
+    method: 'POST', url: path, headers: { origin: 'http://localhost', host: 'localhost' },
+    body: { control: 'model' },
+  })
+  assert.equal(posted.status, 200)
+  const body = JSON.parse(posted.payload)
+  assert.equal(body.defaultScope, true, 'the host reports that it set the default')
+  assert.equal(body.effectiveControl, 'model')
+
+  const state = JSON.parse((await call(host.routes.get('/model-router/state'), {
+    method: 'GET', url: '/model-router/state',
+  })).payload)
+  assert.equal(state.effectiveControl, 'model', 'a session-less state read shows the default')
+  assert.equal(state.settings.control, 'model')
+
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
+  const routed = await request(host, { agent, turn: 1, step: 0 }, seed({ model: 'deepseek-flash', reasoningEffort: 'high' }))
+  assert.equal(routed.model, 'deepseek-v4-pro', 'a new session inherits the default scope')
+  assert.equal(routed.reasoningEffort, 'high', 'model scope leaves the effort alone')
+})
+
+test('a pick for a session that has not run yet is reflected by /state', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES, presets: { novel: { match: ['续写'], weights: {} } } })
+  const headers = { origin: 'http://localhost', host: 'localhost' }
+  await call(host.routes.get('/model-router/control'), {
+    method: 'POST', url: '/model-router/control', headers, body: { sessionId: 'fresh-session', control: 'effort' },
+  })
+  await call(host.routes.get('/model-router/task-type'), {
+    method: 'POST', url: '/model-router/task-type', headers, body: { sessionId: 'fresh-session', preset: 'novel' },
+  })
+
+  const state = JSON.parse((await call(host.routes.get('/model-router/state'), {
+    method: 'GET', url: '/model-router/state?sessionId=fresh-session',
+  })).payload)
+  assert.equal(state.control, 'effort', 'the scope shows before the first request')
+  assert.equal(state.effectiveControl, 'effort')
+  assert.equal(state.pinnedTaskType, 'novel', 'the pinned task type shows before the first request')
 })

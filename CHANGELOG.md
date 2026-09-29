@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.9
+
+**Two bugs the composer UI showed: a dead scope control in a new conversation, and an
+amber dot without a manual pick.**
+
+- **控制范围 in a brand-new conversation.** The panel refused to load without a session id,
+  and `/state` ignored a per-session pick that was saved before the session's first
+  request — so the segmented control snapped back and looked dead. The host now answers
+  session-less reads with the deployment default, stores a pick made before the session
+  exists **as** that default, and reads the saved per-session value for the scope and the
+  pinned task type. The panel also keeps refreshing without a session and explains why.
+- **Amber dot without a manual pick.** The `modelSelection` projection is
+  `{ lastUsed, pending }`: `lastUsed` is the header of the last request — i.e. the model
+  this router itself just chose — while only `pending` is a user pick. Comparing the whole
+  projection made the router's own routing look like a hand pick and stood it down. It
+  watches `pending` only now, so the amber dot means exactly what it says.
+- 80 tests (new: lastUsed is not a pick, a pre-session scope pick becomes the default,
+  persisted picks show before the first request).
+
 ## 0.6.8
 
 **The status dot explains itself.**

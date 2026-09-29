@@ -55,6 +55,7 @@ window.__ModuleLoader__.load({
 				classifier: "任务识别", byRules: "关键词", byLlm: "语义",
 				pressure: "上下文压力", on: "快满省", off: "关",
 				noPresets: "还没有预设", current: "当前", loading: "读取中…", empty: "没有可选项",
+				noSession: "新会话还没建立：这里的选择会成为默认值，发出第一条消息后按会话生效",
 				needName: "先给任务类型起个名字", session: "会话",
 				poolAdd: "手动填模型 ID", delete: "删",
 			},
@@ -89,6 +90,7 @@ window.__ModuleLoader__.load({
 				classifier: "Detection", byRules: "keywords", byLlm: "semantic",
 				pressure: "Context pressure", on: "cheap", off: "off",
 				noPresets: "no presets yet", current: "now", loading: "loading…", empty: "nothing to show",
+				noSession: "no session yet — your pick becomes the default and applies once this conversation starts",
 				needName: "name the task type first", session: "session",
 				poolAdd: "add a model id", delete: "del",
 			},
@@ -278,8 +280,10 @@ window.__ModuleLoader__.load({
 			const clientGroups = (catalogSnapshot && catalogSnapshot.groups) || []
 
 			const load = react.useCallback(() => {
-				if (!sessionId) return
-				api("/state?sessionId=" + encodeURIComponent(sessionId))
+				// A brand-new conversation has no session id yet. The host still answers
+				// with the deployment-level state, so the panel must not freeze here.
+				const query = sessionId ? "?sessionId=" + encodeURIComponent(sessionId) : ""
+				api("/state" + query)
 					.then((next) => { setState(next); setError("") })
 					.catch((reason) => setError(String((reason && reason.message) || reason)))
 			}, [sessionId])
@@ -509,6 +513,9 @@ window.__ModuleLoader__.load({
 						h("span", { title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
+					if (!sessionId) {
+						body.push(h("div", { key: "nosession", className: "mr-note", style: { padding: "0 8px 4px" } }, t.noSession))
+					}
 					if (yielded) {
 						body.push(h("div", { key: "resume", className: "mr-actions", style: { justifyContent: "flex-start" } },
 							h("button", { type: "button", className: "mr-btn", "data-primary": "true", disabled: busy, onClick: () => run("/resume", { sessionId: sessionId }) }, t.resume)
