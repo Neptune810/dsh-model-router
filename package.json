@@ -1,10 +1,10 @@
 {
   "name": "@neptune810/dsh-model-router",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Flash-only reasoning-effort routing for DeepSeek Harness: classifies each step by its shape and sets the DeepSeek flash model's reasoning effort to match. The model never changes; effort max is opt-in.",
+  "description": "Model router for DeepSeek Harness: keep a pool of models and every step is routed to one of them with its reasoning effort set — a click-only composer panel, three authorization scopes (where a manual pick always wins), task presets with per-model weights, vision routing for image steps, session signals (todo, context pressure, token budget, subagents) and an optional semantic task classifier. Thinking stays on, because DeepSeek rejects a tool call made with thinking off.",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -55,7 +55,10 @@
     "flash",
     "routing",
     "model-pool",
-    "task-presets"
+    "task-presets",
+    "vision-routing",
+    "composer-ui",
+    "task-classifier"
   ],
   "author": "Neptune810",
   "license": "MIT",

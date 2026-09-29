@@ -72,7 +72,7 @@ model seat.
 
 ## npm
 
-Published: **`@neptune810/dsh-model-router@0.6.6`** (2026-09-29). Earlier releases: 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15).
+Published: **`@neptune810/dsh-model-router@0.6.7`** (2026-09-29). Earlier releases: 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15).
 Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
 and lets people install without the `github:` spec.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.7
+
+**The package metadata finally describes what the plugin does now.**
+
+- The npm \`description\` (shown on the npm page, and used by marketplaces that read npm
+  metadata) still described the 0.3.0 flash-only effort knob — it now names the model
+  pool, the composer panel, the three authorization scopes, task presets with per-model
+  weights, vision routing, session signals and the optional semantic classifier.
+- Keywords refreshed (vision-routing, composer-ui, task-classifier).
+- No behaviour changes; 77 tests.
+
 ## 0.6.6
 
 **The panel is readable now: opaque by default, with a background switch.**
