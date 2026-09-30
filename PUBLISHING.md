@@ -72,7 +72,7 @@ model seat.
 
 ## npm
 
-Published: **`@neptune810/dsh-model-router@0.6.10`** (2026-09-29). Earlier releases: 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15).
+Published: **`@neptune810/dsh-model-router@0.6.11`** (2026-10-01). Earlier releases: 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15).
 Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
 and lets people install without the `github:` spec.
@@ -84,14 +84,43 @@ registry package's own `repository` field to point back at this repo — the oth
 declares no `repository`, so it is ignored rather than mis-attributed. Being listed is unaffected
 either way.
 
+### Releasing: push a tag, trusted publishing does the rest
+
+Releases run in GitHub Actions through **npm trusted publishing (OIDC)**
+([`.github/workflows/publish.yml`](.github/workflows/publish.yml)). The runner asks GitHub for an
+OIDC token and npm exchanges it for a short-lived publish credential, so no token sits on disk, no
+2FA prompt appears, and npm attaches a provenance attestation to the tarball. That matters here:
+this account is set to auth-and-writes and its only second factor is a passkey that lives on another
+machine — which is what makes a hand-run `npm publish` awkward.
+
+One-time setup — npmjs.com → the package → **Settings → Trusted Publishing**:
+
+| field | value |
+| --- | --- |
+| Provider | GitHub Actions |
+| Organization or user | `Neptune810` |
+| Repository | `dsh-model-router` |
+| Workflow filename | `publish.yml` |
+| Environment name | *(leave empty)* |
+| Allowed actions | `npm publish` |
+
+Then every release is:
+
 ```sh
-npm login     # the scope has to be yours on npm
-npm publish   # publishConfig.access: public is already set in package.json
+# 1. bump "version" in package.json and add the CHANGELOG section
+# 2. push the commit
+ git push origin main
+# 3. tag it — that tag is what publishes
+ git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
-### The publish needs a 2FA-capable credential
+The workflow refuses to publish when the tag and `package.json` disagree, and it runs `npm test`
+before the upload. The `repository` field already points back at this repo, so the market picks up a
+new version on its own — nothing to change in the entry.
 
-This account is set to auth-and-writes, so a plain `npm login` session is not enough — the PUT is
+### Fallback: a bypass-2FA access token
+
+Only when the workflow is unavailable. A plain `npm login` session is not enough — the PUT is
 refused with
 
 ```
@@ -105,16 +134,20 @@ non-interactive, create an **Access Token** on npmjs.com with *Packages and scop
 
 ```sh
 npm config set //registry.npmjs.org/:_authToken=<token>
+npm publish --access public
 ```
 
-That stores the token in plaintext in `~/.npmrc`: treat that file as a secret, and revoke tokens you
-are done with.
+Three traps. That stores the token in plaintext in `~/.npmrc` — treat the file as a secret and revoke
+the token when you are done. PowerShell reports `exit 1` even on success, because npm writes its
+notices to stderr. And the registry takes a couple of minutes to move `dist-tags.latest`, so a
+`latest` that still shows the old version right after the PUT is not a failure. npm has said
+bypass-2FA tokens lose the ability to publish in January 2027, which is why the workflow above is the
+primary path.
 
-### Releasing
-
-Bump `version` in `package.json`, add the CHANGELOG section, commit, then `npm publish`. The
-`repository` field already points back at this repo, so the market picks up a new version on its own
-— nothing to change in the entry.
+Note on `npm login --auth-type=web`: the CLI opens `www.npmjs.com/login?next=/login/cli/<uuid>`,
+which asks for an **email one-time password** on an account whose device is not recognised — useless
+here, because npm mail does not reach this account's inbox. Log in through the browser instead, and
+create tokens from the Access Tokens page.
 
 ### Refreshing the catalog description
 

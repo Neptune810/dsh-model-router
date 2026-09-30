@@ -1,0 +1,53 @@
+# Publish @neptune810/dsh-model-router with npm Trusted Publishing (OIDC).
+#
+# One-time setup on npmjs.com — the package -> Settings -> Trusted Publishing:
+#   Provider             GitHub Actions
+#   Organization or user Neptune810
+#   Repository           dsh-model-router
+#   Workflow filename    publish.yml
+#   Environment name     (leave empty)
+#   Allowed actions      npm publish
+#
+# After that, pushing a vX.Y.Z tag publishes that version with a provenance
+# attestation — no token on disk, no 2FA prompt. The tag must equal the
+# version in package.json, which the second step below enforces.
+
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write # the OIDC token npm exchanges for a short-lived publish credential
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 ships npm 11, the first line able to exchange the GitHub OIDC
+      # token for a publish credential (trusted publishing needs npm >= 11.5.1).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Tag must match package.json
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          echo "tag=v$tag package=$pkg"
+          [ "$tag" = "$pkg" ] || { echo "::error::tag v$tag does not match package.json version $pkg"; exit 1; }
+
+      - name: Test
+        run: npm test
+
+      # No registry-url and no NODE_AUTH_TOKEN on purpose: with id-token: write,
+      # npm finds the OIDC identity by itself.
+      - name: Publish
+        run: npm publish --access public
