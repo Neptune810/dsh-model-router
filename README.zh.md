@@ -2,10 +2,9 @@
 
 [English](README.md) | 中文
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件：按每个步骤的形态设置
-DeepSeek flash 模型的思考等级。模型本身从不改变——它只决定这一步该想多深。
-
-host-only：没有前端 UI，不带客户端 bundle，后台静默生效。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件：维护一组模型池，
+把每一步路由到其中之一并设定该步的思考等级。思考始终开启——DeepSeek 会拒绝历史中含有
+「关闭思考时产生的工具调用」的思考请求。
 
 ## 路由表
 
@@ -228,7 +227,6 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 
 ## 已知限制
 
-- **host-only。** 没有客户端 bundle，浏览器界面里不会出现任何入口。
 - **没有配置 schema。** 配置直接读 profile 补丁层（见上），不会在设置界面渲染成表单。这是有意
   为之：声明 schema 需要 import `@deepseek-ai/*` 包，而安装在 profile 旁的插件解析不到它们。
 - 只处理 `deepseek-official` provider 与匹配 `familyPattern` 的模型。

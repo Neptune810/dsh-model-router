@@ -2,11 +2,10 @@
 
 English | [中文](README.zh.md)
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that sets the reasoning
-effort of the DeepSeek flash model per step. The model never changes — this plugin only decides how
-hard a step should think.
-
-Host-only: no browser UI, no client bundle. It runs silently in the background.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that keeps a pool of
+models and routes every step to one of them with its reasoning effort set. Thinking stays on —
+DeepSeek rejects a thinking-enabled request whose history contains a tool call made with thinking
+off.
 
 ## Routing table
 
@@ -248,7 +247,6 @@ enough.
 
 ## Limitations
 
-- **Host-only.** There is no client bundle, so nothing appears in the browser UI.
 - **No config schema.** Settings are read from the profile patch layer shown above and do not render
   as a form in the settings UI. This is deliberate: a schema would require importing
   `@deepseek-ai/*` packages, which a plugin installed beside the profile cannot resolve.
