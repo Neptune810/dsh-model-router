@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.12
+
+**Releases now publish themselves: push a tag, GitHub Actions does the rest over OIDC.**
+
+- New `.github/workflows/publish.yml`: a `v*` tag push checks that the tag matches the
+  `package.json` version, runs the test suite, then publishes with `npm publish` through npm
+  trusted publishing — `id-token: write`, and deliberately no `registry-url` and no
+  `NODE_AUTH_TOKEN`, so npm authenticates with the workflow's identity instead of a secret.
+- `PUBLISHING.md` now leads with that flow and keeps the bypass-2FA access token as the
+  fallback, with the three traps met while publishing 0.6.11 by hand: a plaintext token sitting in
+  `.npmrc`, PowerShell reporting a false failure because npm writes its notices to stderr, and the
+  two-to-three minutes the registry needs before the new version shows up.
+- No code change: the tarball is 0.6.11 plus these two files. 81 tests.
+
 ## 0.6.11
 
 **The panel works under the DeepSeek desktop app again — every control in it was dead there.**
