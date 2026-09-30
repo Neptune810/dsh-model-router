@@ -258,12 +258,13 @@ enough.
 node --test
 ```
 
-75 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
+81 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, and tool-result error parsing; `test/routing.test.js` (12) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
 `test/plugin.test.js` (14) drives the host wiring with ctx/agent doubles; `test/modes.test.js` (14)
-covers the three scopes, manual yield + resume, same-origin route guards, pool/preset editing, a
+covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
+Desktop proxy stripped, and one carrying `Origin: null`), pool/preset editing, a
 pinned task type, a third-party effort vocabulary, vision routing, subagent frugality, todo-driven
 task types, context pressure, the `/router` command and the LLM classifier; `test/client.test.js` (4) loads the shipped
 browser bundle in a VM and asserts the composer contribution.

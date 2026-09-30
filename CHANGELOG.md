@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.11
+
+**The panel works under the DeepSeek desktop app again — every control in it was dead there.**
+
+- Every mutation was answered `403 same-origin only` in the desktop build, so the panel
+  opened and painted correctly but nothing inside it did anything. That build's own proxy strips
+  `origin`, `host`, `cookie` and `sec-fetch-site` before it forwards a request to the in-process host
+  server and injects a signed cookie of its own, so the route guard saw a POST with no Origin at
+  all and ruled it foreign. An absent Origin is now accepted: browsers send it on every POST,
+  same-origin ones included, so its absence means the caller is not a page — the same correction
+  dsh-market shipped for the same trap (its issue #648).
+- The guard is otherwise unchanged: a caller stating `sec-fetch-site: cross-site` is still
+  refused, and a present Origin must still equal the request's Host, which also refuses
+  `Origin: null` and an empty Origin — present but unusable is not the same as absent.
+- 81 tests (new: a request with the stripped headers passes; `Origin: null` does not).
+
 ## 0.6.10
 
 **The routed model and its effort are visible again, for every step.**

@@ -196,8 +196,29 @@ test('mutations require a same-origin request', async () => {
     body: { sessionId: 's1', control: 'effort' },
   })
   assert.equal(crossSite.status, 403)
+  const nullOrigin = await call(host.routes.get(path), {
+    method: 'POST', url: path, headers: { origin: 'null', host: 'localhost' },
+    body: { sessionId: 's1', control: 'effort' },
+  })
+  assert.equal(nullOrigin.status, 403, 'a present but unparseable origin is not an absent one')
   const wrongMethod = await call(host.routes.get(path), { method: 'GET', url: path })
   assert.equal(wrongMethod.status, 405)
+})
+
+test('the Desktop proxy strips the origin headers, so its mutations must pass', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const path = '/model-router/control'
+  const stripped = await call(host.routes.get(path), {
+    method: 'POST', url: path, headers: {},
+    body: { sessionId: 's1', control: 'effort' },
+  })
+  assert.equal(stripped.status, 200)
+  assert.equal(JSON.parse(stripped.payload).ok, true)
+  const forwarded = await call(host.routes.get(path), {
+    method: 'POST', url: path, headers: { 'content-type': 'application/json', cookie: 'dsh=signed' },
+    body: { sessionId: 's1', control: 'full' },
+  })
+  assert.equal(forwarded.status, 200)
 })
 
 test('the pool editor and preset editor round-trip through the routes', async () => {
