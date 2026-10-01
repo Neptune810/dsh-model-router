@@ -86,7 +86,7 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
   <p class="caption">dsh-model-router 已并入官方输入栏的「模型」格（就是原来选模型/思考等级的那个位置）：点开是同一个弹窗，上半部分是官方的本会话模型 + 推理等级，下半部分是插件自己的路由设置。渲染的就是插件里那份 CSS，只把主题变量换成了近似值；鼠标停在任意控件上会显示解释。<br>官方那格没被声明时（老版本 / 别的宿主），插件会退回输入栏右侧的小胶囊，两者不会同时出现。</p>
 </div>
 <div class="mr-panel">
-  <div class="mr-head"><span class="mr-name">模型路由</span><span class="mr-dot" data-yielded="false" title="绿点 = 正在自动接管：按需要换模型、调思考等级"></span><span title="绿点 = 正在自动接管">已接管</span><button class="mr-btn mr-icon-btn"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
+  <div class="mr-head"><span class="mr-name">模型路由</span><span class="mr-dot" data-yielded="false" title="绿点 = 正在自动接管：按需要换模型、调思考等级"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="绿点 = 正在自动接管">已接管</span><button class="mr-chip" data-active="true" style="margin-left:auto" title="模型池就在这个按钮里：点开才在下面展开模型列表，再点一次收起；思考模式还没绑定时会强制展开">模型池<span class="mr-tag">3</span></button><button class="mr-btn mr-icon-btn"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
   <!-- 上半部分 = 官方那半：本会话模型 + 推理等级（渲染顺序与 client.js 一致） -->
   <div class="mr-group" title="官方那半：这里改的是本会话真正用的模型和推理等级，和插件接管无关">本会话模型</div>
   <div class="mr-group" title="按官方顺序分组：DeepSeek 账号 → DeepSeek 官方 → 其它供应商">DeepSeek 账号</div>
@@ -102,6 +102,7 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
   <div class="mr-line" style="padding:0 8px 6px"><span style="flex:1" title="插件能改什么">控制范围</span><div class="mr-seg" title="插件能改什么：模型+思考 = 模型 + 思考等级；思考 = 只调选中的那一个模型的思考等级；模型 = 只调模型"><button data-active="true" title="模型和思考等级都交给插件">模型+思考</button><button title="只调你在下面选中的那一个模型的思考等级；没选之前不接管">思考</button><button title="只让插件换模型，思考等级不动">模型</button></div></div>
   <button class="mr-row" title="自动 = 按关键词规则判断；也可以强制指定一个类型"><span class="mr-name">任务类型</span><span class="mr-sub">自动（按关键词规则）</span><span class="mr-check"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5l5 4.5-5 4.5"/></svg></span></button>
   <div class="mr-div"></div>
+  <!-- 展开状态：模型池默认收起，由标题行右侧那个「模型池」按钮点开，菜单因此变短 -->
   <div class="mr-group">模型池</div>
   <div class="mr-note" style="padding:0 8px 2px" title="思考模式下这行会变成「先选一个模型」，而且下面改成只能选唯一一个">勾选可被路由的模型，只有勾选的会被选中；思考模式下改为只选唯一一个</div>
   <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">攻坚</span></button>

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.1
+
+**The model pool now lives behind a control on the router row, so the panel opens short and the list appears only when you ask for it.**
+
+- The panel header carries a 模型池 / Model pool chip at the right of the router row, with the count of
+  selectable models. It opens and closes the pool list in place; the list starts collapsed, so 控制范围
+  and 任务类型 lead straight to 任务预设 instead of every model with its tier / cost / vision rows.
+- Effort scope still forces the list open while no model is bound, because the one-model pick comes
+  first; once the binding clears `effortModelPending`, the list collapses on its own again.
+- The header's status text now truncates with an ellipsis instead of pushing the pool chip and the
+  close button. `docs/ui-preview.html` shows the chip and the expanded list.
+- 131 tests (`test/client.test.js` 26: one new case for the collapse / reopen toggle).
+
 ## 0.11.0
 
 **The router now owns the composer model cell: one control that keeps the official model + reasoning-effort sections and the router's own, and takes precedence over the shipped model picker.**

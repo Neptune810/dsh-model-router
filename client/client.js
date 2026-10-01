@@ -304,6 +304,7 @@ window.__ModuleLoader__.load({
 			const [customModel, setCustomModel] = react.useState("")
 			const [solidBg, setSolidBg] = react.useState(null)
 			const [poolOverride, setPoolOverride] = react.useState(null)
+			const [poolOpen, setPoolOpen] = react.useState(false)
 			const [hostGroups, setHostGroups] = react.useState([])
 			const [catalogStore, setCatalogStore] = react.useState(props && props.resolveCatalog ? props.resolveCatalog() : undefined)
 			const triggerRef = react.useRef(null)
@@ -422,6 +423,13 @@ window.__ModuleLoader__.load({
 			const effortPending = !!(state && state.effortModelPending)
 			const effortBoundId = (state && state.effectiveEffortModel) || null
 			const pool = poolOverride || ((state && state.pool) || [])
+			/**
+			 * The pool list is collapsed by default: the router row carries a pool control, so the
+			 * menu body does not have to hold every model all the time. Effort scope forces it open
+			 * while nothing is bound, because picking the one model comes first.
+			 */
+			const poolCount = effortMode ? (effortBoundId ? 1 : 0) : pool.length
+			const showPool = poolOpen || (effortMode && effortPending)
 			const presets = (state && state.presets) || {}
 			const settings = (state && state.settings) || {}
 			const packed = pool.map((entry) => entry.id)
@@ -692,8 +700,17 @@ window.__ModuleLoader__.load({
 					body.push(h("div", { key: "head", className: "mr-head" },
 						h("span", { className: "mr-name" }, t.title),
 						h("span", { className: "mr-dot", "data-yielded": String(yielded), title: yielded ? t.yieldedHint : t.engagedHint }),
-						h("span", { title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
-						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
+						h("span", { style: { flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
+						// The pool control sits at the right of the router row: it opens the list on
+						// demand instead of the menu carrying every model all the time.
+						h("button", {
+							type: "button", className: "mr-chip", style: { marginLeft: "auto" }, disabled: busy,
+							title: effortMode ? t.effortModelHint : t.poolHint2,
+							"data-mr-pool-entry": "true", "data-active": String(showPool),
+							"aria-expanded": String(showPool),
+							onClick: () => setPoolOpen(!showPool),
+						}, t.pool, h("span", { className: "mr-tag" }, String(poolCount))),
+						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "4px" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
 					// --- Official half, on top: the session model and its reasoning effort ---
 					if (seated) {
@@ -785,80 +802,82 @@ window.__ModuleLoader__.load({
 						h("span", { className: "mr-check" }, h(Icon, { name: "chevron", size: 12 }))
 					))
 					body.push(h("div", { key: "div1", className: "mr-div" }))
+					if (showPool) {
 
-					body.push(h("div", { key: "pool-title", className: "mr-group" }, effortMode ? t.effortModelTitle : t.pool))
-					if (effortMode) {
-						if (effortPending) {
-							body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 4px" } },
-								h("div", { style: { color: "var(--dsw-alias-state-warn-label,#d29922)" } }, t.pickModel),
-								h("div", null, t.effortModelHint)
-							))
-						}
-					} else {
-						body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 2px" } }, t.poolHint2))
-					}
-					if (rows.length === 0) body.push(h("div", { key: "pool-none", className: "mr-note" }, t.empty))
-					for (const model of rows) {
-						const entry = pool.find((candidate) => candidate.id === model.id)
+						body.push(h("div", { key: "pool-title", className: "mr-group" }, effortMode ? t.effortModelTitle : t.pool))
 						if (effortMode) {
-							const bound = effortBoundId === model.id
+							if (effortPending) {
+								body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 4px" } },
+									h("div", { style: { color: "var(--dsw-alias-state-warn-label,#d29922)" } }, t.pickModel),
+									h("div", null, t.effortModelHint)
+								))
+							}
+						} else {
+							body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 2px" } }, t.poolHint2))
+						}
+						if (rows.length === 0) body.push(h("div", { key: "pool-none", className: "mr-note" }, t.empty))
+						for (const model of rows) {
+							const entry = pool.find((candidate) => candidate.id === model.id)
+							if (effortMode) {
+								const bound = effortBoundId === model.id
+								body.push(h("button", {
+									key: model.id, type: "button", className: "mr-row", disabled: busy,
+									title: model.id, "data-static": bound ? "true" : undefined,
+									onClick: () => { if (!bound) run("/effort-model", { sessionId: sessionId, model: model.id }) },
+								},
+									h("span", { className: "mr-check" }, bound ? h(Icon, { name: "check" }) : null),
+									h("span", { className: "mr-name" }, model.label),
+									bound ? h("span", { className: "mr-sub" }, t.effortBound) : null
+								))
+								continue
+							}
 							body.push(h("button", {
 								key: model.id, type: "button", className: "mr-row", disabled: busy,
-								title: model.id, "data-static": bound ? "true" : undefined,
-								onClick: () => { if (!bound) run("/effort-model", { sessionId: sessionId, model: model.id }) },
+								title: model.id, onClick: () => toggleModel(model.id),
 							},
-								h("span", { className: "mr-check" }, bound ? h(Icon, { name: "check" }) : null),
+								h("span", { className: "mr-check" }, entry ? h(Icon, { name: "check" }) : null),
 								h("span", { className: "mr-name" }, model.label),
-								bound ? h("span", { className: "mr-sub" }, t.effortBound) : null
+								entry && entry.tier === "strong" ? h("span", { className: "mr-sub" }, t.strong) : null
 							))
-							continue
-						}
-						body.push(h("button", {
-							key: model.id, type: "button", className: "mr-row", disabled: busy,
-							title: model.id, onClick: () => toggleModel(model.id),
-						},
-							h("span", { className: "mr-check" }, entry ? h(Icon, { name: "check" }) : null),
-							h("span", { className: "mr-name" }, model.label),
-							entry && entry.tier === "strong" ? h("span", { className: "mr-sub" }, t.strong) : null
-						))
-						if (entry) {
-							body.push(h("div", { key: model.id + "-opts", className: "mr-line", style: { padding: "0 8px 4px 34px" } },
-								h("span", { className: "mr-tag", title: t.tierHint }, t.tier),
-								h(Segmented, {
-									title: t.tierHint, disabled: busy, value: entry.tier, onChange: (value) => patchEntry(model.id, { tier: value }),
-									options: [
-										{ value: "cheap", label: t.cheap, title: t.cheapHint },
-										{ value: "strong", label: t.strong, title: t.strongHint },
-									],
-								}),
-								h("span", { className: "mr-tag", title: t.costHint }, t.cost),
-								h(Segmented, {
-									title: t.costHint, disabled: busy, value: entry.cost, onChange: (value) => patchEntry(model.id, { cost: Number(value) }),
-									options: COSTS.map((value) => ({ value: value, label: t["price" + value] || String(value) })),
-								}),
-								h("button", {
-									type: "button", className: "mr-chip", disabled: busy, title: t.visionHint,
-									"data-active": String((entry.tags || []).indexOf("vision") >= 0),
-									onClick: () => patchEntry(model.id, {
-										tags: (entry.tags || []).indexOf("vision") >= 0
-											? (entry.tags || []).filter((tag) => tag !== "vision")
-											: (entry.tags || []).concat(["vision"]),
+							if (entry) {
+								body.push(h("div", { key: model.id + "-opts", className: "mr-line", style: { padding: "0 8px 4px 34px" } },
+									h("span", { className: "mr-tag", title: t.tierHint }, t.tier),
+									h(Segmented, {
+										title: t.tierHint, disabled: busy, value: entry.tier, onChange: (value) => patchEntry(model.id, { tier: value }),
+										options: [
+											{ value: "cheap", label: t.cheap, title: t.cheapHint },
+											{ value: "strong", label: t.strong, title: t.strongHint },
+										],
 									}),
-								}, t.vision)
+									h("span", { className: "mr-tag", title: t.costHint }, t.cost),
+									h(Segmented, {
+										title: t.costHint, disabled: busy, value: entry.cost, onChange: (value) => patchEntry(model.id, { cost: Number(value) }),
+										options: COSTS.map((value) => ({ value: value, label: t["price" + value] || String(value) })),
+									}),
+									h("button", {
+										type: "button", className: "mr-chip", disabled: busy, title: t.visionHint,
+										"data-active": String((entry.tags || []).indexOf("vision") >= 0),
+										onClick: () => patchEntry(model.id, {
+											tags: (entry.tags || []).indexOf("vision") >= 0
+												? (entry.tags || []).filter((tag) => tag !== "vision")
+												: (entry.tags || []).concat(["vision"]),
+										}),
+									}, t.vision)
+								))
+							}
+						}
+						if (!effortMode) {
+							body.push(h("div", { key: "pool-add", className: "mr-line", style: { padding: "2px 8px 4px 34px" } },
+								h("input", {
+									className: "mr-input", value: customModel, placeholder: t.poolAdd, disabled: busy,
+									onChange: (event) => setCustomModel(event.target.value),
+									onKeyDown: (event) => { if (event.key === "Enter") addModel() },
+								}),
+								h("button", { type: "button", className: "mr-btn", disabled: busy || !customModel.trim(), onClick: addModel }, t.add)
 							))
 						}
-					}
-					if (!effortMode) {
-						body.push(h("div", { key: "pool-add", className: "mr-line", style: { padding: "2px 8px 4px 34px" } },
-							h("input", {
-								className: "mr-input", value: customModel, placeholder: t.poolAdd, disabled: busy,
-								onChange: (event) => setCustomModel(event.target.value),
-								onKeyDown: (event) => { if (event.key === "Enter") addModel() },
-							}),
-							h("button", { type: "button", className: "mr-btn", disabled: busy || !customModel.trim(), onClick: addModel }, t.add)
-						))
-					}
 
+					}
 					body.push(h("div", { key: "div2", className: "mr-div" }))
 					body.push(h("div", { key: "preset-title", className: "mr-group" }, t.presets))
 					const names = Object.keys(presets)

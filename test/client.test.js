@@ -785,6 +785,13 @@ test('the router half still posts the control, pool and settings payloads it alw
   await app.rt.flush()
   assert.deepEqual(plain(app.net.posts('/model-router/control').pop().body), { sessionId: 'session-1', control: 'effort' })
 
+  // The pool list starts collapsed behind the control on the router row: open it first.
+  const poolEntry = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry'])[0]
+  assert.ok(poolEntry, 'the router row carries the pool control')
+  assert.equal(poolEntry.props['data-active'], 'false')
+  poolEntry.props.onClick()
+  await app.rt.flush()
+
   const poolRow = findAll(app.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])[0]
   poolRow.props.onClick()
   await app.rt.flush()
@@ -819,10 +826,42 @@ test('effort mode binds exactly one model through /effort-model and never edits 
   const bound = await openControl({ state: boundState, snapshot: officialSnapshot({ groups: [], current: null }) })
   openPanel(bound.holder)
   await bound.rt.flush()
+  // Nothing is pending here, so the pool is collapsed and has to be opened first.
+  const boundEntry = findAll(bound.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry'])[0]
+  assert.equal(boundEntry.props['data-active'], 'false')
+  boundEntry.props.onClick()
+  await bound.rt.flush()
   const boundRow = findAll(bound.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])[0]
   assert.equal(boundRow.props['data-static'], 'true')
   assert.equal(textOf(byClass(boundRow, 'mr-sub')[0]), '已绑定')
   boundRow.props.onClick()
   await bound.rt.flush()
   assert.equal(bound.net.posts('/model-router/effort-model').length, 0, 'a bound row is a no-op')
+})
+
+test('the pool control on the router row collapses the list and toggles it back', async () => {
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'cheap', cost: 1, tags: [] }],
+    presets: {}, settings: {}, decisions: [],
+  }
+  const app = await openControl({ state })
+  openPanel(app.holder)
+  await app.rt.flush()
+  const rows = () => findAll(app.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])
+  const chips = () => findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry'])
+  assert.equal(rows().length, 0, 'the pool list is not in the menu until asked for')
+  assert.equal(chips().length, 1)
+  assert.match(textOf(chips()[0]), /模型池/)
+  assert.match(textOf(chips()[0]), /1/)
+  assert.equal(chips()[0].props['aria-expanded'], 'false')
+  chips()[0].props.onClick()
+  await app.rt.flush()
+  assert.equal(rows().length, 1, 'the control reveals the pool list in place')
+  assert.equal(chips()[0].props['aria-expanded'], 'true')
+  assert.equal(chips()[0].props['data-active'], 'true')
+  chips()[0].props.onClick()
+  await app.rt.flush()
+  assert.equal(rows().length, 0, 'the same control collapses it again')
 })

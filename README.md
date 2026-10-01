@@ -91,7 +91,8 @@ Reasoning effort, driven by the real ModelDirectory through `props.directory.sto
 `props.load()` and `props.select({ provider, model, reasoningEffort })`: provider/model groups, the
 current row's check, the pending spinner, the provider-default row, catalog loading / error / retry, and
 the official "model · effort" trigger label. Below it sit the router's own groups: the 接管 status,
-控制范围 (模型+思考 / 思考 / 模型), 任务类型, 模型池, 任务预设 and 更多. Every mutation goes to the host
+控制范围 (模型+思考 / 思考 / 模型), 任务类型, the 模型池 control on the right of that row (the model list opens
+from it and starts collapsed, so the menu stays short), 任务预设 and 更多. Every mutation goes to the host
 over same-origin `/model-router/*` routes, and the per-call route row in the conversation is unchanged.
 
 The old `conversation.input.right` chip (`model-router:composer-control`, order 20) is still registered,
@@ -355,7 +356,7 @@ enough.
 node --test
 ```
 
-130 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
+131 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
@@ -374,7 +375,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (25)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (26)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -382,8 +383,9 @@ Definition's match/anchor and its defensive read of the folded projection, the l
 the seat face delegating to the session directory, the official selection semantics (model rows without
 `reasoningEffort`, effort rows with it, the provider default, the current-row no-op, a locked session, an
 unavailable subagent cell, a failed pick keeping its message, catalog errors offering a retry, and group
-order), the router half's control/pool/settings payloads and the `/effort-model` binding, and the
-declared `ui-chat` seat and `uiConversation` service.
+order), the router half's control/pool/settings payloads and the `/effort-model` binding, the pool
+control that collapses the list and reopens it, and the declared `ui-chat` seat and `uiConversation`
+service.
 
 ## License
 
