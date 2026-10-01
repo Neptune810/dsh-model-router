@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
 				pickModel: "先选一个模型",
 				effortModelTitle: "思考模式只作用于一个模型",
 				effortModelHint: "在下面选中唯一一个模型，插件只调它的思考等级；没选之前不接管",
-				effortBound: "已绑定",
+				effortBound: "已绑定", effortBind: "接管", poolOther: "其他模型",
 				effortDefault: "默认",
 				officialModel: "本会话模型", officialEffort: "推理等级",
 				officialFallback: "请选择模型", officialLoading: "正在加载模型…",
@@ -89,7 +89,7 @@ window.__ModuleLoader__.load({
 				pickModel: "pick a model first",
 				effortModelTitle: "Effort mode works on one model",
 				effortModelHint: "pick exactly one model below — the router only adjusts its thinking level and stays out until you do",
-				effortBound: "bound",
+				effortBound: "bound", effortBind: "take over", poolOther: "Other models",
 				effortDefault: "default",
 				officialModel: "Session model", officialEffort: "Reasoning effort",
 				officialFallback: "Select model", officialLoading: "Loading models…",
@@ -151,6 +151,11 @@ window.__ModuleLoader__.load({
 			".mr-body{display:flex;flex-direction:column;gap:2px;padding:2px 8px 6px 34px}",
 			".mr-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			// The left half of a merged model row picks the session model; the trailing chip
+			// ticks the router pool. The row itself is only a container, so it must not
+			// swallow the click.
+			".mr-pick{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border:0;background:0 0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}",
+			".mr-pick:disabled{cursor:default;opacity:.6}",
 			".mr-sub{color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 			".mr-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 0 2px;color:var(--dsw-alias-label-secondary,#a2a8b0);font-size:11px}",
 			".mr-tag{flex:none;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;white-space:nowrap}",
@@ -463,6 +468,55 @@ window.__ModuleLoader__.load({
 				if (!id || packed.indexOf(id) >= 0) return
 				savePool(pool.concat([{ id: id, tier: "cheap", cost: 1, tags: [] }]))
 			}
+			/**
+			 * The trailing control of a merged model row: tick the model into the router pool,
+			 * or — in effort scope — bind it as the single model the router may touch.
+			 */
+			const poolToggle = (id) => {
+				if (effortMode) {
+					const bound = effortBoundId === id
+					return h("button", {
+						type: "button", className: "mr-chip", disabled: busy,
+						title: t.effortModelHint, "data-effort-bind": id, "data-active": String(bound),
+						onClick: () => { if (!bound) run("/effort-model", { sessionId: sessionId, model: id }) },
+					}, bound ? t.effortBound : t.effortBind)
+				}
+				const entry = pool.find((candidate) => candidate.id === id)
+				return h("button", {
+					type: "button", className: "mr-chip", disabled: busy,
+					title: t.poolHint2, "data-pool-toggle": id, "data-active": String(!!entry),
+					onClick: () => toggleModel(id),
+				}, t.pool)
+			}
+			/** The tier/cost/vision line under a row, shown once the model is in the pool. */
+			const poolOptions = (id) => {
+				const entry = pool.find((candidate) => candidate.id === id)
+				if (!entry) return null
+				return h("div", { key: id + "-opts", className: "mr-line", style: { padding: "0 8px 4px 34px" } },
+					h("span", { className: "mr-tag", title: t.tierHint }, t.tier),
+					h(Segmented, {
+						title: t.tierHint, disabled: busy, value: entry.tier, onChange: (value) => patchEntry(id, { tier: value }),
+						options: [
+							{ value: "cheap", label: t.cheap, title: t.cheapHint },
+							{ value: "strong", label: t.strong, title: t.strongHint },
+						],
+					}),
+					h("span", { className: "mr-tag", title: t.costHint }, t.cost),
+					h(Segmented, {
+						title: t.costHint, disabled: busy, value: entry.cost, onChange: (value) => patchEntry(id, { cost: Number(value) }),
+						options: COSTS.map((value) => ({ value: value, label: t["price" + value] || String(value) })),
+					}),
+					h("button", {
+						type: "button", className: "mr-chip", disabled: busy, title: t.visionHint,
+						"data-active": String((entry.tags || []).indexOf("vision") >= 0),
+						onClick: () => patchEntry(id, {
+							tags: (entry.tags || []).indexOf("vision") >= 0
+								? (entry.tags || []).filter((tag) => tag !== "vision")
+								: (entry.tags || []).concat(["vision"]),
+						}),
+					}, t.vision)
+				)
+			}
 			const savePresets = (next, after) => run("/presets", { presets: next }, after)
 			const beginNew = () => { setEditing({ original: null, name: "", match: [], weights: {} }); setCustomWord(""); setView("preset") }
 			const beginEdit = (name) => {
@@ -701,21 +755,28 @@ window.__ModuleLoader__.load({
 						h("span", { className: "mr-name" }, t.title),
 						h("span", { className: "mr-dot", "data-yielded": String(yielded), title: yielded ? t.yieldedHint : t.engagedHint }),
 						h("span", { style: { flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
-						// The pool control sits at the right of the router row: it opens the list on
-						// demand instead of the menu carrying every model all the time.
-						h("button", {
+						// With the seat the pool is merged into the model rows, so a header control
+						// would only repeat it. Without the seat (the .right chip fallback) this is
+						// the only way to reach the pool list.
+						seated ? null : h("button", {
 							type: "button", className: "mr-chip", style: { marginLeft: "auto" }, disabled: busy,
 							title: effortMode ? t.effortModelHint : t.poolHint2,
 							"data-mr-pool-entry": "true", "data-active": String(showPool),
 							"aria-expanded": String(showPool),
 							onClick: () => setPoolOpen(!showPool),
 						}, t.pool, h("span", { className: "mr-tag" }, String(poolCount))),
-						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "4px" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
+						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
 					// --- Official half, on top: the session model and its reasoning effort ---
 					if (seated) {
 						const officialBody = []
-						officialBody.push(h("div", { key: "official-model-title", className: "mr-group" }, t.officialModel))
+						officialBody.push(h("div", { key: "official-model-title", className: "mr-group" }, effortMode ? t.effortModelTitle : t.officialModel))
+						if (effortMode && effortPending) {
+							officialBody.push(h("div", { key: "effort-pick", className: "mr-note", style: { padding: "0 8px 4px" } },
+								h("div", { style: { color: "var(--dsw-alias-state-warn-label,#d29922)" } }, t.pickModel),
+								h("div", null, t.effortModelHint)
+							))
+						}
 						if (official && official.status === "loading") {
 							officialBody.push(h("div", { key: "official-refreshing", className: "mr-note", style: { padding: "0 8px 2px" } }, t.officialRefreshing))
 						}
@@ -732,22 +793,69 @@ window.__ModuleLoader__.load({
 								h("button", { type: "button", className: "mr-btn", disabled: officialBusy, onClick: () => { if (props.load) props.load() } }, t.officialRetry)
 							))
 						}
+						// One merged list: the official radio picks the session model, the trailing
+						// chip ticks the router pool (or, in effort scope, binds the single model).
+						// The separate pool menu below only survives for the no-seat fallback.
+						const officialIds = {}
+						const officialBare = {}
 						for (const group of officialGroups) {
 							officialBody.push(h("div", { key: "official-group:" + group.id, className: "mr-group" }, group.id === "deepseek-account" ? t.officialAccount : (group.name || group.id)))
 							for (const model of (group.models || [])) {
+								const id = group.id + "/" + model.id
+								officialIds[id] = true
+								officialBare[model.id] = true
 								const isCurrent = !!(officialCurrent && officialCurrent.provider === group.id && officialCurrent.model === model.id)
 								const isPending = !!(officialPending && officialPending.provider === group.id && officialPending.model === model.id)
-								officialBody.push(h("button", {
-									key: "official-model:" + group.id + "/" + model.id, type: "button", className: "mr-row",
-									role: "menuitemradio", "aria-checked": isCurrent ? "true" : "false",
-									disabled: officialBusy, "data-official-model": group.id + "/" + model.id,
-									title: model.name || model.id,
-									onClick: () => chooseOfficialModel(group.id, model.id),
-								},
-									h("span", { className: "mr-check" }, isPending ? h("span", { className: "mr-spin" }) : (isCurrent ? h(Icon, { name: "check" }) : null)),
-									h("span", { className: "mr-name" }, model.name || model.id)
+								officialBody.push(h("div", { key: "official-model:" + id, className: "mr-row", style: { paddingRight: "8px" } },
+									h("button", {
+										type: "button", className: "mr-pick", role: "menuitemradio",
+										"aria-checked": isCurrent ? "true" : "false",
+										disabled: officialBusy, "data-official-model": id,
+										title: model.name || model.id,
+										onClick: () => chooseOfficialModel(group.id, model.id),
+									},
+										h("span", { className: "mr-check" }, isPending ? h("span", { className: "mr-spin" }) : (isCurrent ? h(Icon, { name: "check" }) : null)),
+										h("span", { className: "mr-name" }, model.name || model.id)
+									),
+									poolToggle(id)
 								))
+								if (!effortMode && packed.indexOf(id) >= 0) officialBody.push(poolOptions(id))
 							}
+						}
+						// Pool and catalog models the official directory does not cover stay in the
+						// same list, so nothing the router can use is hidden from the user.
+						const extraModels = []
+						for (const model of rows) {
+							if (officialIds[model.id]) continue
+							const bare = String(model.id).split("/").pop()
+							if (officialBare[bare]) continue
+							officialIds[model.id] = true
+							extraModels.push(model)
+						}
+						for (const entry of pool) {
+							if (officialIds[entry.id]) continue
+							officialIds[entry.id] = true
+							extraModels.push({ id: entry.id, label: entry.id })
+						}
+						if (extraModels.length > 0) {
+							officialBody.push(h("div", { key: "official-group:other", className: "mr-group" }, t.poolOther))
+							for (const model of extraModels) {
+								officialBody.push(h("div", { key: "pool-model:" + model.id, className: "mr-row", style: { paddingRight: "8px" } },
+									h("span", { className: "mr-pick" }, h("span", { className: "mr-name", title: model.id }, model.label)),
+									poolToggle(model.id)
+								))
+								if (!effortMode && packed.indexOf(model.id) >= 0) officialBody.push(poolOptions(model.id))
+							}
+						}
+						if (!effortMode) {
+							officialBody.push(h("div", { key: "pool-add", className: "mr-line", style: { padding: "2px 8px 4px 34px" } },
+								h("input", {
+									className: "mr-input", value: customModel, placeholder: t.poolAdd, disabled: busy,
+									onChange: (event) => setCustomModel(event.target.value),
+									onKeyDown: (event) => { if (event.key === "Enter") addModel() },
+								}),
+								h("button", { type: "button", className: "mr-btn", disabled: busy || !customModel.trim(), onClick: addModel }, t.add)
+							))
 						}
 						if (official && official.status === "ready" && officialGroups.length === 0) {
 							officialBody.push(h("div", { key: "official-empty", className: "mr-note" }, t.officialEmpty))
@@ -802,7 +910,7 @@ window.__ModuleLoader__.load({
 						h("span", { className: "mr-check" }, h(Icon, { name: "chevron", size: 12 }))
 					))
 					body.push(h("div", { key: "div1", className: "mr-div" }))
-					if (showPool) {
+					if (!seated && showPool) {
 
 						body.push(h("div", { key: "pool-title", className: "mr-group" }, effortMode ? t.effortModelTitle : t.pool))
 						if (effortMode) {

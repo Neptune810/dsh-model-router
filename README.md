@@ -91,9 +91,12 @@ Reasoning effort, driven by the real ModelDirectory through `props.directory.sto
 `props.load()` and `props.select({ provider, model, reasoningEffort })`: provider/model groups, the
 current row's check, the pending spinner, the provider-default row, catalog loading / error / retry, and
 the official "model · effort" trigger label. Below it sit the router's own groups: the 接管 status,
-控制范围 (模型+思考 / 思考 / 模型), 任务类型, the 模型池 control on the right of that row (the model list opens
-from it and starts collapsed, so the menu stays short), 任务预设 and 更多. Every mutation goes to the host
-over same-origin `/model-router/*` routes, and the per-call route row in the conversation is unchanged.
+控制范围 (模型+思考 / 思考 / 模型) and 任务类型, then the model list itself — **the pool is folded into the
+model rows**: every session-model row carries a 模型池 / Model pool chip on its right, tapping it pools or
+unpools that model, a pooled row expands its 定位 / 价格 / 视觉 controls underneath, and pool entries
+whose provider group is not in the directory gather under 其他模型 / Other models with the manual
+"type a model id" row. Then 任务预设 and 更多. Every mutation goes to the host over same-origin
+`/model-router/*` routes, and the per-call route row in the conversation is unchanged.
 
 The old `conversation.input.right` chip (`model-router:composer-control`, order 20) is still registered,
 but it **self-retracts** — it disposes itself as soon as the seat registration lands — so a normal host

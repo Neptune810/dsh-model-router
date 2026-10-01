@@ -785,15 +785,12 @@ test('the router half still posts the control, pool and settings payloads it alw
   await app.rt.flush()
   assert.deepEqual(plain(app.net.posts('/model-router/control').pop().body), { sessionId: 'session-1', control: 'effort' })
 
-  // The pool list starts collapsed behind the control on the router row: open it first.
-  const poolEntry = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry'])[0]
-  assert.ok(poolEntry, 'the router row carries the pool control')
-  assert.equal(poolEntry.props['data-active'], 'false')
-  poolEntry.props.onClick()
-  await app.rt.flush()
-
-  const poolRow = findAll(app.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])[0]
-  poolRow.props.onClick()
+  // The pool now rides on the model rows: the tick on this row removes it again.
+  assert.equal(findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry']).length, 0, 'the seated control shows no second pool list')
+  const poolTick = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-pool-toggle'] === 'deepseek-official/deepseek-v4-pro')[0]
+  assert.ok(poolTick, 'the model row carries the pool tick')
+  assert.equal(poolTick.props['data-active'], 'true')
+  poolTick.props.onClick()
   await app.rt.flush()
   assert.deepEqual(plain(app.net.posts('/model-router/pool').pop().body), { pool: [] })
 
@@ -814,32 +811,28 @@ test('effort mode binds exactly one model through /effort-model and never edits 
   await app.rt.flush()
   assert.ok(byClass(app.holder.tree, 'mr-group').map(textOf).includes('思考模式只作用于一个模型'))
   assert.ok(byClass(app.holder.tree, 'mr-note').map(textOf).some((text) => text.includes('先选一个模型')))
-  const rows = findAll(app.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])
-  assert.equal(rows.length, 1, 'effort mode lists the pool entry as the one pickable model')
-  rows[0].props.onClick()
+  const chips = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-effort-bind'] === 'deepseek-official/deepseek-v4-pro')
+  assert.equal(chips.length, 1, 'effort mode offers one bind control on the model row')
+  assert.equal(chips[0].props['data-active'], 'false')
+  chips[0].props.onClick()
   await app.rt.flush()
   assert.deepEqual(plain(app.net.posts('/model-router/effort-model').pop().body), { sessionId: 'session-1', model: 'deepseek-official/deepseek-v4-pro' })
   assert.equal(app.net.posts('/model-router/pool').length, 0, 'an effort pick is not a pool edit')
 
-  // Already bound: the row is static, shows the bound note and posts nothing.
+  // Already bound: the control reports the state and posts nothing.
   const boundState = Object.assign({}, state, { effortModelPending: false, effectiveEffortModel: 'deepseek-official/deepseek-v4-pro' })
   const bound = await openControl({ state: boundState, snapshot: officialSnapshot({ groups: [], current: null }) })
   openPanel(bound.holder)
   await bound.rt.flush()
-  // Nothing is pending here, so the pool is collapsed and has to be opened first.
-  const boundEntry = findAll(bound.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry'])[0]
-  assert.equal(boundEntry.props['data-active'], 'false')
-  boundEntry.props.onClick()
+  const boundChip = findAll(bound.holder.tree, (node) => node.type === 'button' && node.props['data-effort-bind'] === 'deepseek-official/deepseek-v4-pro')[0]
+  assert.equal(boundChip.props['data-active'], 'true')
+  assert.equal(textOf(boundChip), '已绑定')
+  boundChip.props.onClick()
   await bound.rt.flush()
-  const boundRow = findAll(bound.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])[0]
-  assert.equal(boundRow.props['data-static'], 'true')
-  assert.equal(textOf(byClass(boundRow, 'mr-sub')[0]), '已绑定')
-  boundRow.props.onClick()
-  await bound.rt.flush()
-  assert.equal(bound.net.posts('/model-router/effort-model').length, 0, 'a bound row is a no-op')
+  assert.equal(bound.net.posts('/model-router/effort-model').length, 0, 'a bound control is a no-op')
 })
 
-test('the pool control on the router row collapses the list and toggles it back', async () => {
+test('the seated panel folds the pool into the model rows instead of a second list', async () => {
   const state = {
     effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
     current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
@@ -849,19 +842,22 @@ test('the pool control on the router row collapses the list and toggles it back'
   const app = await openControl({ state })
   openPanel(app.holder)
   await app.rt.flush()
-  const rows = () => findAll(app.holder.tree, (node) => node.type === 'button' && node.props.title === 'deepseek-official/deepseek-v4-pro' && !node.props['data-official-model'])
-  const chips = () => findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry'])
-  assert.equal(rows().length, 0, 'the pool list is not in the menu until asked for')
-  assert.equal(chips().length, 1)
-  assert.match(textOf(chips()[0]), /模型池/)
-  assert.match(textOf(chips()[0]), /1/)
-  assert.equal(chips()[0].props['aria-expanded'], 'false')
-  chips()[0].props.onClick()
+  // The header no longer repeats the pool: the tick rides on the model row itself.
+  assert.equal(findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-pool-entry']).length, 0)
+  const picks = byProp(app.holder.tree, 'data-official-model', 'deepseek-official/deepseek-v4-pro')
+  assert.equal(picks.length, 1, 'the pooled model appears once, as the session-model radio')
+  const ticks = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-pool-toggle'] === 'deepseek-official/deepseek-v4-pro')
+  assert.equal(ticks.length, 1, 'the same row carries the pool tick')
+  assert.equal(ticks[0].props['data-active'], 'true')
+  assert.match(textOf(ticks[0]), /模型池/)
+  // A pooled model also opens its tier/cost/vision line inline.
+  assert.equal(byClass(app.holder.tree, 'mr-line').filter((node) => textOf(node).includes('定位')).length, 1)
+  // The radio still picks the session model: choosing the other model selects it.
+  byProp(app.holder.tree, 'data-official-model', 'deepseek-official/deepseek-flash')[0].props.onClick()
   await app.rt.flush()
-  assert.equal(rows().length, 1, 'the control reveals the pool list in place')
-  assert.equal(chips()[0].props['aria-expanded'], 'true')
-  assert.equal(chips()[0].props['data-active'], 'true')
-  chips()[0].props.onClick()
+  assert.equal(app.dir.calls.select.length, 1)
+  assert.equal(app.dir.calls.select[0].model, 'deepseek-flash')
+  ticks[0].props.onClick()
   await app.rt.flush()
-  assert.equal(rows().length, 0, 'the same control collapses it again')
+  assert.deepEqual(plain(app.net.posts('/model-router/pool').pop().body), { pool: [] })
 })

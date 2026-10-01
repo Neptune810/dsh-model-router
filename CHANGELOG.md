@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.0
+
+**The model pool is no longer a second list: it lives on the model rows themselves, so the panel is one list instead of two near-identical ones.**
+
+- Every row in the session-model list now carries a 模型池 / Model pool chip on its right. Tapping it pools
+  or unpools that model; a pooled row expands its 定位 / 价格 / 视觉 controls directly underneath, and pool
+  entries that have no provider group in the directory render under 其他模型 / Other models together with
+  the manual "type a model id" row, so a stale entry can always still be unticked. The standalone 模型池
+  section, its heading and its note are gone.
+- In 思考 / effort scope the same chip becomes 接管 / 已绑定 and binds the one model that scope needs; the
+  先选一个模型 hint stays at the top of the list.
+- The panel header keeps a pool chip only when the router falls back to the `.right` capsule (a host
+  without the seat); with the seat there is no second pool control.
+- `docs/ui-preview.html` renders the folded list.
+- 131 tests (`test/client.test.js` 26: the folded-list case replaces the header-toggle case).
+
 ## 0.11.1
 
 **The model pool now lives behind a control on the router row, so the panel opens short and the list appears only when you ask for it.**
