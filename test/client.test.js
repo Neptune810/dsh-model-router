@@ -388,8 +388,8 @@ test('package.json declares the ui-chat seat and the uiConversation service', ()
   ])
   // Coherence: the declared uiConversation service is the one apply() reads, and
   // ui-chat owns the conversation.chat.node seat the row registers on.
-  // The docs task owns the version: just require a real semver (0.10.1 after the
-  // seat-shadow rollback).
+  // The docs task owns the version: just require a real semver (0.11.0 is the
+  // release that takes over the composer model cell).
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/)
   assert.ok(SOURCE.includes('ctx.uiConversation'), 'apply() must read the declared uiConversation service')
   assert.ok(SOURCE.includes('"conversation.chat.node"'), 'the row must register on the ui-chat seat')
