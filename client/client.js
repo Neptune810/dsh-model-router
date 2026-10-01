@@ -23,9 +23,10 @@ window.__ModuleLoader__.load({
 		const BASE = "/model-router"
 		const STYLE_ID = "model-router-styles"
 
+
 		const TEXT = {
 			zh: {
-				title: "模型路由", scope: "控制范围", full: "全授权", effort: "思考", model: "模型",
+				title: "模型路由", scope: "控制范围", full: "模型+思考", effort: "思考", model: "模型",
 				engaged: "已接管", yielded: "已让位，你手动选过", resume: "重新接管",
 				engagedHint: "绿点 = 正在自动接管：按需要换模型、调思考等级；点开可调整",
 				yieldedHint: "黄点 = 已让位：你手动选过模型，插件暂时不插手；点开可点「重新接管」",
@@ -37,9 +38,20 @@ window.__ModuleLoader__.load({
 				costHint: "相对价格，随你标：越贵越要任务够硬才选得中（1/4/8 分别扣 0.4 / 1.6 / 3.2 分）",
 				price1: "便宜", price4: "中", price8: "贵",
 				visionHint: "带图任务优先选它（+25 分）",
-				scopeHint: "插件能改什么：全授权 = 模型 + 思考等级；思考 = 只调思考等级；模型 = 只调模型",
+				scopeHint: "插件能改什么：模型+思考 = 模型 + 思考等级；思考 = 只调选中的那一个模型的思考等级；模型 = 只调模型",
+				pickModel: "先选一个模型",
+				effortModelTitle: "思考模式只作用于一个模型",
+				effortModelHint: "在下面选中唯一一个模型，插件只调它的思考等级；没选之前不接管",
+				effortBound: "已绑定",
+				effortDefault: "默认",
+				officialModel: "本会话模型", officialEffort: "推理等级",
+				officialFallback: "请选择模型", officialLoading: "正在加载模型…",
+				officialRefreshing: "正在刷新模型列表…", officialRetry: "重新加载",
+				officialDefault: "默认（供应商）", officialAccount: "DeepSeek 账号",
+				officialEmpty: "没有可用的模型", officialEmptyEfforts: "该模型没有推理等级",
+				officialError: "模型操作失败", officialFailure: "供应商目录加载失败",
 				taskHint: "自动 = 按你写的关键词规则判断；也可以强制指定一个类型",
-				poolHint2: "勾选可被路由的模型，只有勾选的会被选中",
+				poolHint2: "勾选可被路由的模型，只有勾选的会被选中；思考模式下改为只选唯一一个",
 				imagesHint: "带图步骤：不干预 = 按普通规则；用视觉模型 = 强制走带视觉标记的模型",
 				classifierHint: "任务识别：关键词 = 按预设里的 match；语义 = 每轮一次小模型判断",
 				pressureHint: "上下文压力：快满时优先用便宜模型",
@@ -47,7 +59,7 @@ window.__ModuleLoader__.load({
 				bgHint: "半透明的主题菜单色会让背后的聊天内容透上来；选「不透明」最好读，选「跟随主题」会加毛玻璃模糊",
 				bgSolidHint: "用主题底色算出不透明色，文字最清楚",
 				bgThemeHint: "沿用主题的半透明菜单色，再加背景模糊",
-				fullHint: "模型和思考等级都交给插件", effortHint: "只让插件调思考等级，模型不动", modelHint: "只让插件换模型，思考等级不动",
+				fullHint: "模型和思考等级都交给插件", effortHint: "只调你在下面选中的那一个模型的思考等级；没选之前不接管", modelHint: "只让插件换模型，思考等级不动",
 				presets: "任务预设", newPreset: "新建预设", edit: "编辑", remove: "删除",
 				name: "名称", keywords: "关键词", add: "添加", custom: "自定义词，回车添加",
 				weights: "各模型权重", none: "不参与", save: "保存", cancel: "取消", back: "返回",
@@ -61,7 +73,7 @@ window.__ModuleLoader__.load({
 				poolAdd: "手动填模型 ID", delete: "删",
 			},
 			en: {
-				title: "Model router", scope: "Scope", full: "Full", effort: "Effort", model: "Model",
+				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
 				engaged: "Controlling", yielded: "Yielded to your manual pick", resume: "Resume",
 				engagedHint: "green dot = the router is controlling: it changes the model / effort as needed; click to adjust",
 				yieldedHint: "amber dot = stood down: you picked a model by hand, so the router holds back; click to resume",
@@ -73,9 +85,20 @@ window.__ModuleLoader__.load({
 				costHint: "your own relative price: the dearer it is, the harder the step must be to pick it (1/4/8 deduct 0.4 / 1.6 / 3.2)",
 				price1: "low", price4: "mid", price8: "high",
 				visionHint: "image steps prefer this model (+25)",
-				scopeHint: "what the router may change: Full = model + effort; Effort = effort only; Model = model only",
+				scopeHint: "what the router may change: Model+Effort = model + effort; Effort = only the thinking level of the one model you pick; Model = model only",
+				pickModel: "pick a model first",
+				effortModelTitle: "Effort mode works on one model",
+				effortModelHint: "pick exactly one model below — the router only adjusts its thinking level and stays out until you do",
+				effortBound: "bound",
+				effortDefault: "default",
+				officialModel: "Session model", officialEffort: "Reasoning effort",
+				officialFallback: "Select model", officialLoading: "Loading models…",
+				officialRefreshing: "Refreshing model list…", officialRetry: "Reload",
+				officialDefault: "Default", officialAccount: "DeepSeek Account",
+				officialEmpty: "No models available", officialEmptyEfforts: "This model provides no reasoning effort levels",
+				officialError: "Model operation failed", officialFailure: "provider catalog failed to load",
 				taskHint: "auto = your keyword rules decide; or force one type",
-				poolHint2: "tick the models the router may use — only ticked ones are selectable",
+				poolHint2: "tick the models the router may use — only ticked ones are selectable; effort mode picks exactly one",
 				imagesHint: "image steps: leave alone = normal rules; vision model = force a vision-tagged model",
 				classifierHint: "detection: keywords = the match list in your presets; semantic = one small model call per turn",
 				pressureHint: "context pressure: prefer the cheap model when the window is nearly full",
@@ -83,7 +106,7 @@ window.__ModuleLoader__.load({
 				bgHint: "the theme's menu colour is translucent, so the conversation shows through; opaque is the most readable, theme adds a backdrop blur",
 				bgSolidHint: "compute an opaque colour from the theme base — most readable",
 				bgThemeHint: "keep the translucent menu colour and blur what is behind it",
-				fullHint: "let the router change both model and effort", effortHint: "effort only, never the model", modelHint: "model only, never the effort",
+				fullHint: "let the router change both model and effort", effortHint: "only the thinking level of the one model you pick below — out until you do", modelHint: "model only, never the effort",
 				presets: "Task presets", newPreset: "New preset", edit: "Edit", remove: "Delete",
 				name: "Name", keywords: "Keywords", add: "Add", custom: "custom word, press enter",
 				weights: "Weight per model", none: "off", save: "Save", cancel: "Cancel", back: "Back",
@@ -154,6 +177,12 @@ window.__ModuleLoader__.load({
 			".mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}",
 			".mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
 			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
+			".mr-trigger:disabled{opacity:.55;cursor:default}",
+			".mr-spin{width:10px;height:10px;flex:none;border-radius:50%;border:1.6px solid var(--dsw-alias-border-l1,rgba(127,127,127,.45));border-top-color:var(--dsw-alias-label-primary,#e8e8ea);animation:mr-spin .7s linear infinite}",
+			"@keyframes mr-spin{to{transform:rotate(360deg)}}",
+			".mr-call{display:flex;align-items:center;gap:4px;max-width:100%;padding:0 2px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+			".mr-call-model{min-width:0;color:var(--dsw-alias-label-secondary,#a2a8b0);overflow:hidden;text-overflow:ellipsis}",
+			".mr-call-eff{flex:none}",
 		].join("")
 
 		function ensureStyles() {
@@ -166,6 +195,15 @@ window.__ModuleLoader__.load({
 		}
 
 		const EMPTY_CATALOG = { subscribe: () => () => {}, getSnapshot: () => null }
+
+		/**
+		 * Which composer model cell this control occupies, if any. The official
+		 * model selector registers the same cell at priority 0; we register at -1 so
+		 * ours is the visible one, and the ".right" chip then stands down.
+		 */
+
+		/** Official composer order: the account first, then the official gateway, then the rest. */
+		const officialRank = (group) => (group && group.id === "deepseek-account" ? 0 : group && group.id === "deepseek-official" ? 1 : 2)
 
 		/**
 		 * The theme's menu colour is usually translucent, which lets the conversation
@@ -281,6 +319,22 @@ window.__ModuleLoader__.load({
 			const catalogSnapshot = react.useSyncExternalStore((fn) => store.subscribe(fn), () => store.getSnapshot())
 			const clientGroups = (catalogSnapshot && catalogSnapshot.groups) || []
 
+			// The official composer cell is one popup now: its own model / effort list
+			// comes from the ModelDirectory store the seat face hands in. Without that
+			// face (the ".right" chip, or a host that never declared the seat) the
+			// official half is simply left out and the router panel shows as before.
+			const officialStore = (props && props.directory) || null
+			const officialSubscribe = react.useCallback((listen) => {
+				if (!officialStore || typeof officialStore.subscribe !== "function") return () => {}
+				const off = officialStore.subscribe(listen)
+				return typeof off === "function" ? off : () => {}
+			}, [officialStore])
+			const officialRead = react.useCallback(() => {
+				if (!officialStore || typeof officialStore.getSnapshot !== "function") return null
+				try { return officialStore.getSnapshot() } catch (_noSnapshot) { return null }
+			}, [officialStore])
+			const official = react.useSyncExternalStore(officialSubscribe, officialRead)
+
 			const load = react.useCallback(() => {
 				// A brand-new conversation has no session id yet. The host still answers
 				// with the deployment-level state, so the panel must not freeze here.
@@ -317,6 +371,11 @@ window.__ModuleLoader__.load({
 				return () => document.removeEventListener("mousedown", onDown)
 			}, [open])
 
+			// Mirror the official cell: a locked session shows a disabled trigger and
+			// never opens, and an unavailable (subagent-addressed) one renders nothing.
+			const locked = !!(props && props.locked)
+			if (props && props.available === false) return null
+
 			const run = (path, body, after) => {
 				setBusy(true)
 				api(path, { method: "POST", body })
@@ -326,6 +385,7 @@ window.__ModuleLoader__.load({
 			}
 
 			const openPanel = () => {
+				if (locked) return
 				const next = !open
 				if (next) {
 					setView("main")
@@ -338,6 +398,8 @@ window.__ModuleLoader__.load({
 						}
 						: null)
 					load()
+					// Opening the merged popup refreshes the official catalog too.
+					if (props && typeof props.load === "function") props.load()
 					setSolidBg(resolveSolid())
 					if (props && props.resolveCatalog) {
 						const found = props.resolveCatalog()
@@ -356,6 +418,9 @@ window.__ModuleLoader__.load({
 			const current = state && state.current ? state.current : null
 			const currentModel = current ? String(current.model || "").split("/").pop() : ""
 			const currentEffort = current ? (current.effort || "default") : ""
+			const effortMode = mode === "effort"
+			const effortPending = !!(state && state.effortModelPending)
+			const effortBoundId = (state && state.effectiveEffortModel) || null
 			const pool = poolOverride || ((state && state.pool) || [])
 			const presets = (state && state.presets) || {}
 			const settings = (state && state.settings) || {}
@@ -427,17 +492,114 @@ window.__ModuleLoader__.load({
 				run("/settings", { settings: next })
 			}
 
+			// --- Official half: the session model and its reasoning effort ---
+			// Row payloads, the check mark, the pending dot and the trigger label all
+			// mirror the official ModelSelect so the merged cell behaves identically.
+			const officialGroups = ((official && official.groups) || []).slice()
+			officialGroups.sort((left, right) => officialRank(left) - officialRank(right))
+			const officialChoices = []
+			for (const group of officialGroups) {
+				for (const model of (group.models || [])) officialChoices.push({ group: group, model: model })
+			}
+			const officialCurrent = (official && official.current) || null
+			const officialPending = (official && official.pending) || null
+			const officialBusy = !!(official && official.pending)
+			const officialSelected = officialCurrent
+				? officialChoices.find((choice) => choice.group.id === officialCurrent.provider && choice.model.id === officialCurrent.model)
+				: undefined
+			const officialReasoning = officialSelected ? officialSelected.model.reasoning : undefined
+			const officialEfforts = (officialReasoning && officialReasoning.efforts) || []
+			const officialEffort = officialCurrent
+				? (officialCurrent.reasoningEffort !== undefined ? officialCurrent.reasoningEffort : (officialReasoning ? officialReasoning.defaultEffort : undefined))
+				: undefined
+			let officialEffortLabel
+			if (officialCurrent === null) officialEffortLabel = undefined
+			else if (officialReasoning === undefined) officialEffortLabel = official ? official.retainedEffort : undefined
+			else if (officialEffort === undefined) officialEffortLabel = t.officialDefault
+			else {
+				const hit = officialEfforts.find((level) => level.id === officialEffort)
+				officialEffortLabel = hit && hit.name ? hit.name : officialEffort
+			}
+			const officialWaiting = !!official && officialCurrent === null && official.status === "loading"
+			let officialModelLabel
+			if (officialWaiting) officialModelLabel = t.officialLoading
+			else if (officialSelected) officialModelLabel = officialSelected.model.name || officialSelected.model.id
+			else if (officialCurrent) officialModelLabel = officialCurrent.provider + "/" + officialCurrent.model
+			else officialModelLabel = t.officialFallback
+			const officialEffortChoices = (!officialCurrent || officialReasoning === undefined)
+				? []
+				: (officialReasoning.defaultEffort === undefined
+				? [{ key: "provider-default", effort: undefined, label: t.officialDefault }]
+				: []).concat(officialEfforts.map((level) => ({ key: "effort:" + level.id, effort: level.id, label: level.name })))
+			/** The seat face is what makes this control the official composer model cell. */
+			const seated = !!(props && props.directory)
+			const officialTriggerLabel = officialEffortLabel === undefined ? officialModelLabel : officialModelLabel + " · " + officialEffortLabel
+
+			/**
+			 * Settle an official selection without letting a rejection escape. The popup closes
+			 * only once the host accepted the choice, so a failure stays visible: the message
+			 * lands on the panel's own error line instead of being swallowed silently.
+			 */
+			const settleSelection = (result, close) => {
+				if (!result || typeof result.then !== "function") {
+					if (close) close()
+					return
+				}
+				result.then((outcome) => {
+					if (outcome && outcome.ok === false) {
+						const detail = (outcome.error && (outcome.error.message || outcome.error.code)) || outcome.error
+						setError(String(detail || t.officialError))
+						setOpen(true)
+						return
+					}
+					if (close) close()
+				}, (reason) => {
+					setError(String((reason && reason.message) || reason))
+					setOpen(true)
+				})
+			}
+			/** Official model row: no effort in the payload, and the current model is a no-op. */
+			const chooseOfficialModel = (provider, modelId) => {
+				if (!props || typeof props.select !== "function") return
+				const same = !!(officialCurrent && officialCurrent.provider === provider && officialCurrent.model === modelId)
+				if (same) { setOpen(false); return }
+				setError("")
+				settleSelection(props.select({ provider: provider, model: modelId }), () => setOpen(false))
+			}
+			/** Official effort row: provider-default sends no reasoningEffort key at all. */
+			const chooseOfficialEffort = (effort) => {
+				if (!props || typeof props.select !== "function" || !officialCurrent) return
+				if (officialEffort === effort) { setOpen(false); return }
+				const selection = { provider: officialCurrent.provider, model: officialCurrent.model }
+				if (effort !== undefined) selection.reasoningEffort = effort
+				setError("")
+				settleSelection(props.select(selection), () => setOpen(false))
+			}
+
 			const parts = [
 				h("button", {
 					key: "trigger", type: "button", className: "mr-trigger", ref: triggerRef,
-					title: t.title + " · " + (yielded ? t.yieldedHint : t.engagedHint) +
-						(current ? " — " + current.provider + "/" + current.model + " · " + currentEffort + " · " + (current.stepClass || "") : ""),
+					// Which composer surface is live: the merged official seat, or the fallback chip.
+					"data-mr-surface": props && props.fallbackChip === true ? "chip" : "seat",
+					disabled: locked ? true : undefined,
+					"aria-busy": officialBusy ? "true" : undefined,
+					title: t.title + " · " + (t[mode] || mode) + " · " + (yielded ? t.yieldedHint : t.engagedHint) +
+					(seated
+						? (official ? " — " + officialTriggerLabel : "")
+						: (current ? " — " + current.provider + "/" + current.model + " · " + currentEffort + " · " + (current.stepClass || "") : "")),
 					onClick: openPanel,
 				},
-					h("span", null, t[mode] || mode),
-					current
+					seated
+						? h("span", null, officialModelLabel)
+						: h("span", null, t[mode] || mode),
+					(seated
+						? (officialEffortLabel === undefined ? null : h("span", { className: "mr-sub", title: officialTriggerLabel }, officialEffortLabel))
+						: (effortMode && effortPending
+						? h("span", { className: "mr-sub" }, t.pickModel)
+						: (current
 						? h("span", { className: "mr-sub", title: current.provider + "/" + current.model }, currentModel + " · " + currentEffort)
-						: null,
+						: null))),
+					officialBusy ? h("span", { className: "mr-spin" }) : null,
 					h("span", { className: "mr-dot", "data-yielded": String(yielded) })
 				),
 			]
@@ -533,6 +695,69 @@ window.__ModuleLoader__.load({
 						h("span", { title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
+					// --- Official half, on top: the session model and its reasoning effort ---
+					if (seated) {
+						const officialBody = []
+						officialBody.push(h("div", { key: "official-model-title", className: "mr-group" }, t.officialModel))
+						if (official && official.status === "loading") {
+							officialBody.push(h("div", { key: "official-refreshing", className: "mr-note", style: { padding: "0 8px 2px" } }, t.officialRefreshing))
+						}
+						if (official && official.error) {
+							officialBody.push(h("div", { key: "official-error", className: "mr-err" }, t.officialError + "：" + String((official.error && official.error.message) || official.error)))
+							officialBody.push(h("div", { key: "official-retry", className: "mr-actions", style: { justifyContent: "flex-start" } },
+								h("button", { type: "button", className: "mr-btn", disabled: officialBusy, onClick: () => { if (props.load) props.load() } }, t.officialRetry)
+							))
+						}
+						for (const failure of ((official && official.failures) || [])) {
+							const failureName = failure.id === "deepseek-account" ? t.officialAccount : (failure.name || failure.id)
+							officialBody.push(h("div", { key: "official-failure:" + failure.id, className: "mr-note", style: { padding: "0 8px 2px" } },
+								failureName + " · " + t.officialFailure + "：" + (failure.message || ""),
+								h("button", { type: "button", className: "mr-btn", disabled: officialBusy, onClick: () => { if (props.load) props.load() } }, t.officialRetry)
+							))
+						}
+						for (const group of officialGroups) {
+							officialBody.push(h("div", { key: "official-group:" + group.id, className: "mr-group" }, group.id === "deepseek-account" ? t.officialAccount : (group.name || group.id)))
+							for (const model of (group.models || [])) {
+								const isCurrent = !!(officialCurrent && officialCurrent.provider === group.id && officialCurrent.model === model.id)
+								const isPending = !!(officialPending && officialPending.provider === group.id && officialPending.model === model.id)
+								officialBody.push(h("button", {
+									key: "official-model:" + group.id + "/" + model.id, type: "button", className: "mr-row",
+									role: "menuitemradio", "aria-checked": isCurrent ? "true" : "false",
+									disabled: officialBusy, "data-official-model": group.id + "/" + model.id,
+									title: model.name || model.id,
+									onClick: () => chooseOfficialModel(group.id, model.id),
+								},
+									h("span", { className: "mr-check" }, isPending ? h("span", { className: "mr-spin" }) : (isCurrent ? h(Icon, { name: "check" }) : null)),
+									h("span", { className: "mr-name" }, model.name || model.id)
+								))
+							}
+						}
+						if (official && official.status === "ready" && officialGroups.length === 0) {
+							officialBody.push(h("div", { key: "official-empty", className: "mr-note" }, t.officialEmpty))
+						}
+						if (officialCurrent && officialReasoning !== undefined) {
+							officialBody.push(h("div", { key: "official-effort-title", className: "mr-group" }, t.officialEffort))
+							if (officialEffortChoices.length === 0) {
+								officialBody.push(h("div", { key: "official-effort-empty", className: "mr-note" }, t.officialEmptyEfforts))
+							}
+							for (const level of officialEffortChoices) {
+								const checked = officialEffort === level.effort
+								const isPending = !!(officialPending && officialPending.provider === officialCurrent.provider && officialPending.model === officialCurrent.model && officialPending.reasoningEffort === level.effort)
+								officialBody.push(h("button", {
+									key: "official-effort:" + level.key, type: "button", className: "mr-row",
+									role: "menuitemradio", "aria-checked": checked ? "true" : "false",
+									disabled: officialBusy,
+									"data-official-effort": level.effort === undefined ? "provider-default" : String(level.effort),
+									onClick: () => chooseOfficialEffort(level.effort),
+								},
+									h("span", { className: "mr-check" }, isPending ? h("span", { className: "mr-spin" }) : (checked ? h(Icon, { name: "check" }) : null)),
+									h("span", { className: "mr-name" }, level.label)
+								))
+							}
+						}
+						for (const node of officialBody) body.push(node)
+						body.push(h("div", { key: "official-div", className: "mr-div" }))
+					}
 					if (!sessionId) {
 						body.push(h("div", { key: "nosession", className: "mr-note", style: { padding: "0 8px 4px" } }, t.noSession))
 					}
@@ -561,11 +786,33 @@ window.__ModuleLoader__.load({
 					))
 					body.push(h("div", { key: "div1", className: "mr-div" }))
 
-					body.push(h("div", { key: "pool-title", className: "mr-group" }, t.pool))
-					body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 2px" } }, t.poolHint2))
+					body.push(h("div", { key: "pool-title", className: "mr-group" }, effortMode ? t.effortModelTitle : t.pool))
+					if (effortMode) {
+						if (effortPending) {
+							body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 4px" } },
+								h("div", { style: { color: "var(--dsw-alias-state-warn-label,#d29922)" } }, t.pickModel),
+								h("div", null, t.effortModelHint)
+							))
+						}
+					} else {
+						body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 2px" } }, t.poolHint2))
+					}
 					if (rows.length === 0) body.push(h("div", { key: "pool-none", className: "mr-note" }, t.empty))
 					for (const model of rows) {
 						const entry = pool.find((candidate) => candidate.id === model.id)
+						if (effortMode) {
+							const bound = effortBoundId === model.id
+							body.push(h("button", {
+								key: model.id, type: "button", className: "mr-row", disabled: busy,
+								title: model.id, "data-static": bound ? "true" : undefined,
+								onClick: () => { if (!bound) run("/effort-model", { sessionId: sessionId, model: model.id }) },
+							},
+								h("span", { className: "mr-check" }, bound ? h(Icon, { name: "check" }) : null),
+								h("span", { className: "mr-name" }, model.label),
+								bound ? h("span", { className: "mr-sub" }, t.effortBound) : null
+							))
+							continue
+						}
 						body.push(h("button", {
 							key: model.id, type: "button", className: "mr-row", disabled: busy,
 							title: model.id, onClick: () => toggleModel(model.id),
@@ -601,14 +848,16 @@ window.__ModuleLoader__.load({
 							))
 						}
 					}
-					body.push(h("div", { key: "pool-add", className: "mr-line", style: { padding: "2px 8px 4px 34px" } },
-						h("input", {
-							className: "mr-input", value: customModel, placeholder: t.poolAdd, disabled: busy,
-							onChange: (event) => setCustomModel(event.target.value),
-							onKeyDown: (event) => { if (event.key === "Enter") addModel() },
-						}),
-						h("button", { type: "button", className: "mr-btn", disabled: busy || !customModel.trim(), onClick: addModel }, t.add)
-					))
+					if (!effortMode) {
+						body.push(h("div", { key: "pool-add", className: "mr-line", style: { padding: "2px 8px 4px 34px" } },
+							h("input", {
+								className: "mr-input", value: customModel, placeholder: t.poolAdd, disabled: busy,
+								onChange: (event) => setCustomModel(event.target.value),
+								onKeyDown: (event) => { if (event.key === "Enter") addModel() },
+							}),
+							h("button", { type: "button", className: "mr-btn", disabled: busy || !customModel.trim(), onClick: addModel }, t.add)
+						))
+					}
 
 					body.push(h("div", { key: "div2", className: "mr-div" }))
 					body.push(h("div", { key: "preset-title", className: "mr-group" }, t.presets))
@@ -712,39 +961,222 @@ window.__ModuleLoader__.load({
 			return h("div", { ref: rootRef, style: { position: "relative", display: "inline-flex", alignItems: "center" } }, parts)
 		}
 
+		/** Session projection the host folds every tool-call route into. */
+		const ROUTE_PROJECTION = "modelRouterRoute"
+		/** Slot key and Node kind of one compact route line per tool call. */
+		const ROUTE_KIND = "model-router-route"
+		/** react.memo when the host React provides it; identity under a minimal stub. */
+		const memoComponent = typeof react.memo === "function" ? react.memo : (component) => component
+
+		/**
+		 * Conversation Definition for one compact route row per tool call. Making it a
+		 * separate Node (instead of shadowing the shipped tool row, which would delete
+		 * the Tool UI) keeps the call itself untouched and anchors the route line right
+		 * after it: anchorSeq is the tool/call seq plus a small delta.
+		 */
+		const modelRouterRouteDefinition = {
+			kind: ROUTE_KIND,
+			target: "chat",
+			match: (event) => event.type === "tool/call"
+				? { id: String(event.data.callId), role: "start" }
+				: null,
+			start: (_context, match) => ({
+				callId: String(match.event.data.callId),
+				name: match.event.data.name,
+				turn: match.event.data.turn,
+				step: match.event.data.step,
+				seq: match.event.seq,
+			}),
+			update: (context) => context.state,
+			buildViewNode: (context) => {
+				const state = context.state
+				if (state === undefined || state === null) return null
+				return {
+					key: context.key,
+					kind: ROUTE_KIND,
+					id: context.id,
+					target: "chat",
+					anchorSeq: state.seq + .1,
+					location: context.start && context.start.location ? context.start.location : { kind: "unresolved" },
+					visibility: "visible",
+					data: { callId: state.callId, name: state.name, turn: state.turn, step: state.step },
+				}
+			},
+		}
+
+		/**
+		 * One compact conversation line under a tool call: the provider/model and the
+		 * thinking level that call actually ran with. The projection is read
+		 * defensively and a callId the host has not folded yet renders nothing, so a
+		 * fresh call can never borrow another call's route.
+		 */
+		const ModelRouterRouteRow = memoComponent(function ModelRouterRouteRow(props) {
+			let view = null
+			try {
+				const read = props && typeof props.useProjection === "function" ? props.useProjection : null
+				view = read ? read(ROUTE_PROJECTION) : null
+			} catch (_noProjection) { view = null }
+			try {
+				const node = props ? props.node : null
+				const data = node ? node.data : null
+				const callId = data ? String(data.callId || "") : ""
+				const call = callId && view && view.calls ? view.calls[callId] : null
+				if (!call) return null
+				const provider = call.provider ? String(call.provider) : ""
+				const model = call.model ? String(call.model) : ""
+				const label = provider && model ? provider + "/" + model : (model || provider)
+				if (!label) return null
+				const effort = call.effort === null || call.effort === undefined || call.effort === ""
+					? dict().effortDefault
+					: String(call.effort)
+				return h("div", {
+					className: "mr-call", title: label + " · " + effort,
+					"data-route-call": callId,
+					"data-route-tool": data.name ? String(data.name) : undefined,
+				},
+					h("span", { className: "mr-call-model" }, label),
+					h("span", { className: "mr-call-eff" }, "· " + effort)
+				)
+			} catch (_noRow) { return null }
+		})
+
 		const name = "model-router"
-		const inject = ["slots"]
+		// The router's composer seat drives ui-model-selection's shared ModelDirectory, whose
+		// methods resolve `remote.session` against the CALLER's fiber. Declaring these at the
+		// plugin root - exactly as ui-model-selection declares its own list - is what makes
+		// directoryFor() reachable from the deferred seat callback; without them the fiber walk
+		// ends at the root and throws `cannot get property "remote.session" without inject`.
+		const inject = ["slots", "uiConversation", "sessions", "remote", "remote.session"]
 
 		function apply(ctx) {
 			ensureStyles()
+			const conversation = ctx.uiConversation
+			if (conversation && conversation.events && typeof conversation.events.register === "function") {
+				conversation.events.register(modelRouterRouteDefinition)
+			}
+			ctx.slots.inject("conversation.chat.node", () => ctx.slots.register({
+				name: "conversation.chat.node",
+				key: ROUTE_KIND,
+				locale: NS,
+			}, ModelRouterRouteRow))
+			// The chip registration below writes disposeChip; the merged seat sets seatActive
+			// and retracts the chip, so the composer shows the model control exactly once
+			// whichever of the two deferred callbacks runs first.
+			let disposeChip = null
+			let seatActive = false
 			ctx.inject(["slots", "modelDirectories"], (scope) => {
 				const directories = scope.modelDirectories
-				scope.slots.inject("conversation.input.right", () => scope.slots.register({
-					name: "conversation.input.right",
-					id: "model-router:composer-control",
-					order: 20,
-					registrant: NS,
-					inject: (sessionId) => {
-						const directory = () => {
-							try { return directories && sessionId ? directories.directoryFor(sessionId) : undefined } catch (_noDirectory) { return undefined }
-						}
-						return {
-							sessionId: sessionId,
-							resolveCatalog: () => {
-								const found = directory()
-								return found ? found.store : undefined
+				/**
+				 * The composer face handed to the host. `fallbackChip` selects the plain router
+				 * chip (read-only catalog access, no selection path of its own). When it is false
+				 * the caller is the model seat and it receives the shared ModelDirectory store
+				 * plus load/select - that is what turns the official half of
+				 * ModelRouterControl on inside the merged cell.
+				 */
+				const face = (sessionId, fallbackChip, available) => {
+					const directory = () => {
+						try { return directories && sessionId ? directories.directoryFor(sessionId) : undefined } catch (_noDirectory) { return undefined }
+					}
+					const found = directory()
+					const reachable = available !== false
+					const base = {
+						sessionId: sessionId,
+						fallbackChip: fallbackChip,
+						available: reachable,
+						resolveCatalog: () => (found ? found.store : undefined),
+						loadCatalog: () => {
+							if (!found) return
+							try { found.load().catch(() => {}) } catch (_noLoad) { /* ignore */ }
+						},
+					}
+					if (fallbackChip || !found) return base
+					return Object.assign(base, {
+						directory: found.store,
+						load: () => {
+							if (!reachable) return
+							try { found.load().catch(() => {}) } catch (_noLoad) { /* ignore */ }
+						},
+						select: (selection) => (reachable ? found.select(selection) : Promise.resolve(undefined)),
+					})
+				}
+				/**
+				 * The router's own composer surface and the fallback when the seat is not wired.
+				 * It self-retracts as soon as the merged seat registers, so it is only ever
+				 * visible on a host that keeps the shipped model cell.
+				 */
+				scope.slots.inject("conversation.input.right", () => {
+					const dispose = scope.slots.register({
+						name: "conversation.input.right",
+						id: "model-router:composer-control",
+						order: 20,
+						registrant: NS,
+						inject: (sessionId) => face(sessionId, true, true),
+					}, ModelRouterControl)
+					if (seatActive) {
+						try { dispose() } catch (_noDispose) { /* ignore */ }
+						return () => {}
+					}
+					disposeChip = dispose
+					return dispose
+				})
+			})
+			// The shipped composer model cell (a single slot owned by ui-model-selection's
+			// ModelSelect). Registering at priority -1 replaces it with the merged control:
+			// the official model and effort lists plus the router panel behind one trigger.
+			// `sessions` is requested here beside the seat rather than at the plugin root, so a
+			// host that does not provide it still loads this plugin and simply keeps the
+			// shipped cell. Only a declared service may be touched - reaching for scope.sessions
+			// without it is what made 0.10.0 fail the whole page boot.
+			ctx.inject(["slots", "modelDirectories", "sessions"], (seatScope) => {
+				const seatDirectories = seatScope.modelDirectories
+				const sessions = seatScope.sessions
+				const seatAvailable = (sessionId) => {
+					try { return !sessions || sessions.subagentAddress(sessionId) === undefined } catch (_noSessions) { return true }
+				}
+				try {
+					seatScope.slots.inject("conversation.input.model", () => {
+						const disposeSeat = seatScope.slots.register({
+							name: "conversation.input.model",
+							priority: -1,
+							registrant: NS,
+							inject: (sessionId) => {
+								// Mirror the shipped seat exactly: directoryFor must be asked even for
+								// a not-yet-saved session (the hero composer), or the merged cell would
+								// lose the official half and shadow the official picker with nothing.
+								const directory = (() => {
+									try { return seatDirectories.directoryFor(sessionId) } catch (_noDirectory) { return undefined }
+								})()
+								const available = seatAvailable(sessionId)
+								return {
+									sessionId: sessionId,
+									fallbackChip: false,
+									available: available,
+									directory: directory ? directory.store : undefined,
+									load: () => {
+										if (!directory || !available) return
+										try { directory.load().catch(() => {}) } catch (_noLoad) { /* ignore */ }
+									},
+									select: (selection) => (directory && available ? directory.select(selection) : Promise.resolve(undefined)),
+									resolveCatalog: () => (directory ? directory.store : undefined),
+									loadCatalog: () => {
+										if (!directory) return
+										try { directory.load().catch(() => {}) } catch (_noLoad) { /* ignore */ }
+									},
+								}
 							},
-							loadCatalog: () => {
-								const found = directory()
-								if (!found) return
-								try { found.load().catch(() => {}) } catch (_noLoad) { /* ignore */ }
-							},
+						}, ModelRouterControl)
+						seatActive = true
+						if (typeof disposeChip === "function") {
+							try { disposeChip() } catch (_noDispose) { /* ignore */ }
+							disposeChip = null
 						}
-					},
-				}, ModelRouterControl))
+						return disposeSeat
+					})
+				} catch (_noSeat) {
+					// The shipped cell stays; the chip above remains the router's composer surface.
+				}
 			})
 		}
-
 		exports.name = name
 		exports.inject = inject
 		exports.apply = apply

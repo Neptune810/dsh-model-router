@@ -135,8 +135,17 @@ test('effort scope never changes the model, model scope never changes the effort
 test('a manual pick makes the router stand down until the next command', async () => {
   // The real projection state is { lastUsed, pending } (see the host projection).
   let selection = { lastUsed: null, pending: null }
-  const projections = { stateOf: (session, key) => (key === 'modelSelection' ? selection : undefined) }
+  const registered = []
+  const projections = {
+    stateOf: (session, key) => (key === 'modelSelection' ? selection : undefined),
+    // Model the real sessionProjections service: lib/index.js registers its route
+    // projection through ctx.inject(['sessionProjections'], ...).
+    register: (definition) => { registered.push(definition); return () => {} },
+  }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
+  assert.equal(registered.length, 1, 'exactly one projection registration')
+  assert.equal(registered[0].key, 'modelRouterRoute')
+  assert.equal(registered[0].stateVersion, 1)
   const agent = agentWith()
   emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
 
@@ -163,7 +172,11 @@ test('a manual pick makes the router stand down until the next command', async (
 
 test('the UI resume route re-engages without waiting for a command', async () => {
   let selection = { lastUsed: null, pending: null }
-  const projections = { stateOf: () => selection }
+  const registered = []
+  const projections = {
+    stateOf: () => selection,
+    register: (definition) => { registered.push(definition); return () => {} },
+  }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
   const agent = agentWith()
   emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
@@ -345,8 +358,10 @@ test('a subagent spends the cheap tier even on hard work', async () => {
 
 test('the active todo feeds task-type matching', async () => {
   const presets = { novel: { match: ['续写'], weights: { 'deepseek-official/deepseek-v4-pro': 95 } } }
+  const registered = []
   const projections = {
     stateOf: (session, key) => (key === 'todos' ? [{ content: '续写第三章', status: 'in_progress' }] : undefined),
+    register: (definition) => { registered.push(definition); return () => {} },
   }
   const host = makeHost({ pool: POOL, routes: ROUTES, presets }, { sessionProjections: projections })
   const agent = agentWith()
@@ -356,8 +371,10 @@ test('the active todo feeds task-type matching', async () => {
 })
 
 test('context pressure biases toward the cheap tier', async () => {
+  const registered = []
   const projections = {
     stateOf: (session, key) => (key === 'contextPressure' ? { contextWindow: 1000, pressureTokens: 950, surfaceTokens: 950 } : undefined),
+    register: (definition) => { registered.push(definition); return () => {} },
   }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
   const agent = agentWith()
@@ -448,7 +465,11 @@ test('the catalog route lists provider models for the pool UI', async () => {
 test("the router's own model change is not mistaken for a manual pick", async () => {
   // The host writes what was actually used into lastUsed; pending stays null.
   const selection = { lastUsed: null, pending: null }
-  const projections = { stateOf: (session, key) => (key === 'modelSelection' ? selection : undefined) }
+  const registered = []
+  const projections = {
+    stateOf: (session, key) => (key === 'modelSelection' ? selection : undefined),
+    register: (definition) => { registered.push(definition); return () => {} },
+  }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { sessionProjections: projections })
   const agent = agentWith()
   emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })

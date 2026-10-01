@@ -177,7 +177,7 @@ test('repeated failing tool calls escalate within the task, and the next task re
   assert.equal(fresh.reasoningEffort, 'low')
 })
 
-test('a long quiet tool loop stays at high, never at max', async () => {
+test('a long quiet tool loop does not inflate effort: it stays low, never at max', async () => {
   const { ctx, handlers } = makeCtx()
   apply(ctx, {})
   const { agent, state } = makeAgent()
@@ -192,7 +192,49 @@ test('a long quiet tool loop stays at high, never at max', async () => {
 
   const out = await request(handlers, { agent, turn: 40, step: 120 }, async () => resolved())
   assert.equal(out.model, 'deepseek-flash')
+  // 0.9.0: 60 clean, distinct tool calls are score signals, not an engineering
+  // verdict - the brief decides the class, so a quiet loop stays on the standard
+  // route and the router still pulls the seeded effort down to low.
+  assert.equal(out.reasoningEffort, 'low')
+  assert.notEqual(out.reasoningEffort, 'max')
+})
+
+test('scoring.toolCallClass "engineering" puts a quiet tool loop back on high', async () => {
+  const { ctx, handlers } = makeCtx()
+  apply(ctx, { scoring: { toolCallClass: 'engineering' } })
+  const { agent, state } = makeAgent()
+
+  emit(handlers, 'agent/inbox/claimed', { agent, turn: 1, message: { content: 'work through the checklist' } })
+  const messages = [userText('work through the checklist')]
+  for (let i = 0; i < 3; i += 1) {
+    messages.push(toolCall('c' + i, 'read', '{"file_path":"f' + i + '"}'))
+    messages.push(toolResult('c' + i, 'ok', undefined))
+  }
+  state.messages = messages
+
+  // The seed is low, so only the restored tool-loop rule can lift it to high.
+  const out = await request(handlers, { agent, turn: 1, step: 3 }, async () => resolved({ reasoningEffort: 'low' }))
   assert.equal(out.reasoningEffort, 'high')
+})
+
+test('an invalid scoring.toolCallClass behaves like the standard default at runtime', async () => {
+  for (const bad of ['hard', 42, null]) {
+    const { ctx, handlers } = makeCtx()
+    apply(ctx, { scoring: { toolCallClass: bad } })
+    const { agent, state } = makeAgent()
+
+    emit(handlers, 'agent/inbox/claimed', { agent, turn: 1, message: { content: 'work through the checklist' } })
+    const messages = [userText('work through the checklist')]
+    for (let i = 0; i < 3; i += 1) {
+      messages.push(toolCall('c' + i, 'read', '{"file_path":"f' + i + '"}'))
+      messages.push(toolResult('c' + i, 'ok', undefined))
+    }
+    state.messages = messages
+
+    // Seeded high: a typo must not keep the whole run pinned to high.
+    const out = await request(handlers, { agent, turn: 1, step: 3 }, async () => resolved())
+    assert.equal(out.reasoningEffort, 'low', 'toolCallClass ' + JSON.stringify(bad))
+  }
 })
 
 test('off mode passes through, but a manual max on a managed model is demoted', async () => {

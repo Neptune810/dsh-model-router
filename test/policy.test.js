@@ -95,10 +95,39 @@ test('engineering: code markup lands on the workhorse effort', () => {
   assert.equal(d.effort, 'high')
 })
 
-test('engineering: an agent tool loop counts even with short text', () => {
+test('tool activity is a score signal, not a class verdict: a short tool loop stays standard', () => {
   const d = decideRoute(cfg, resolved, sig({ text: 'continue', toolCalls: 5 }))
+  assert.equal(d.stepClass, 'standard')
+  assert.equal(d.effort, 'low')
+  // The loop is still visible where it belongs: in the score input.
+  assert.ok(scoreOf(sig({ text: 'continue', toolCalls: 5 }), cfg).reason.some((r) => r.includes('run (5)')))
+  assert.ok(scoreOf(sig({ text: 'continue', toolCalls: 5 }), cfg).score > scoreOf(sig({ text: 'continue' }), cfg).score)
+})
+
+test('scoring.toolCallClass "engineering" restores the pre-0.9.0 tool-loop rule', () => {
+  const engCfg = normalizeConfig({ scoring: { toolCallClass: 'engineering' } })
+  assert.equal(engCfg.scoring.toolCallClass, 'engineering')
+  // The override merges over the shipped scoring table instead of replacing it.
+  assert.equal(engCfg.scoring.toolCallBase, cfg.scoring.toolCallBase)
+  assert.equal(engCfg.scoring.hardScore, cfg.scoring.hardScore)
+  const d = decideRoute(engCfg, resolved, sig({ text: 'continue', toolCalls: 5 }))
   assert.equal(d.stepClass, 'engineering')
   assert.equal(d.effort, 'high')
+  assert.deepEqual(d.reason, ['agent tool loop'])
+  // The same step on the shipped default stays cheap, so the key is what flipped it.
+  assert.equal(decideRoute(cfg, resolved, sig({ text: 'continue', toolCalls: 5 })).stepClass, 'standard')
+})
+
+test('scoring.toolCallClass accepts only the two documented values', () => {
+  assert.equal(normalizeConfig({}).scoring.toolCallClass, 'standard')
+  assert.equal(normalizeConfig({ scoring: { toolCallClass: 'engineering' } }).scoring.toolCallClass, 'engineering')
+  assert.equal(normalizeConfig({ scoring: { toolCallClass: 'standard' } }).scoring.toolCallClass, 'standard')
+  for (const bad of ['hard', 'Engineering', 'ENGINEERING', 42, null, true, {}]) {
+    const coerced = normalizeConfig({ scoring: { toolCallClass: bad } })
+    assert.equal(coerced.scoring.toolCallClass, 'standard', 'bad toolCallClass ' + JSON.stringify(bad))
+    // A coerced value behaves like the shipped default, so a typo cannot pin effort to high.
+    assert.equal(decideRoute(coerced, resolved, sig({ text: 'continue', toolCalls: 5 })).stepClass, 'standard')
+  }
 })
 
 test('hard: a dense brief is clamped back to high by default', () => {
@@ -138,12 +167,18 @@ test('a conversation sitting on another deepseek model is pulled back', () => {
   assert.equal(d.stepClass, 'engineering')
 })
 
-test('no ratchet: a very long run never climbs out of engineering', () => {
+test('no ratchet: a long tool loop stays at the class its brief earns', () => {
   const early = decideRoute(cfg, resolved, sig({ text: 'continue', turn: 1, toolCalls: 1 }))
   const late = decideRoute(cfg, resolved, sig({ text: 'continue', turn: 120, toolCalls: 400 }))
-  assert.equal(early.stepClass, 'engineering')
-  assert.equal(late.stepClass, 'engineering')
+  assert.equal(early.stepClass, 'standard')
+  assert.equal(late.stepClass, 'standard')
+  assert.equal(early.effort, 'low')
   assert.equal(late.effort, early.effort)
+  // Tool volume moves the score, never the class.
+  assert.ok(
+    scoreOf(sig({ text: 'continue', turn: 120, toolCalls: 400 }), cfg).score >
+      scoreOf(sig({ text: 'continue' }), cfg).score
+  )
 })
 
 test('no ratchet: turn depth contributes no score by default', () => {
@@ -165,9 +200,50 @@ test('evidence escalation is capped, and capped max falls back', () => {
 })
 
 test('escalation and carry only lift real work', () => {
+  // Cheap intent and a plain tool loop are not "real work": nothing lifts them.
   assert.equal(decideRoute(cfg, resolved, sig({ text: '翻译这句话', carry: 1 })).stepClass, 'trivial')
   assert.equal(decideRoute(cfg, resolved, sig({ text: '帮我看看', carry: 1 })).stepClass, 'standard')
-  assert.equal(decideRoute(cfg, resolved, sig({ text: 'continue', toolCalls: 2, carry: 1 })).stepClass, 'hard')
+  assert.equal(decideRoute(cfg, resolved, sig({ text: 'continue', toolCalls: 2, carry: 1 })).stepClass, 'standard')
+  // Once the brief really earns engineering, carry does lift it further.
+  const carried = decideRoute(cfg, resolved, sig({ text: 'refactor the parser', carry: 1 }))
+  assert.equal(carried.baseClass, 'engineering')
+  assert.equal(carried.stepClass, 'hard')
+  assert.equal(carried.effort, 'high')
+  assert.equal(carried.clamped, true)
+})
+
+test('a tool-heavy quiet step keeps its brief class however many calls it makes', () => {
+  for (const toolCalls of [1, 3, 8, 60, 400]) {
+    const d = decideRoute(cfg, resolved, sig({ text: 'work through the checklist', toolCalls }))
+    assert.equal(d.stepClass, 'standard', 'toolCalls ' + toolCalls)
+    assert.equal(d.effort, 'low')
+  }
+  // A brief that earns engineering keeps it even with a single call...
+  assert.equal(
+    decideRoute(cfg, resolved, sig({ text: 'refactor the parser and add tests', toolCalls: 1 })).stepClass,
+    'engineering'
+  )
+  // ...and the score ladder saturates below the engineering -> hard tiebreak.
+  assert.ok(scoreOf(sig({ text: 'work through the checklist', toolCalls: 400 }), cfg).score < cfg.scoring.hardScore)
+})
+
+test('escalation lifts standard -> engineering -> high and never reaches max while allowMax is false', () => {
+  const one = decideRoute(cfg, resolved, sig({ text: '帮我看看', toolCalls: 1, escalations: 1 }))
+  assert.equal(one.stepClass, 'engineering')
+  assert.equal(one.effort, 'high')
+  const two = decideRoute(cfg, resolved, sig({ text: '帮我看看', toolCalls: 1, escalations: 2 }))
+  assert.equal(two.stepClass, 'hard')
+  assert.equal(two.effort, 'high')
+  assert.equal(two.clamped, true)
+  assert.ok(two.reason.some((r) => r.includes('max is opt-in')))
+  // An engineering brief plus evidence also stops at the clamped ceiling...
+  const eng = decideRoute(cfg, resolved, sig({ text: 'refactor the parser and add tests', toolCalls: 5, escalations: 2 }))
+  assert.equal(eng.baseClass, 'engineering')
+  assert.equal(eng.stepClass, 'hard')
+  assert.equal(eng.effort, 'high')
+  // ...while allowMax still opens it.
+  const open = decideRoute(normalizeConfig({ allowMax: true }), resolved, sig({ text: '帮我看看', escalations: 2 }))
+  assert.equal(open.effort, 'max')
 })
 
 test('property: auto mode never emits max across a signal sweep', () => {

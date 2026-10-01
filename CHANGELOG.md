@@ -1,5 +1,152 @@
 # Changelog
 
+## 0.11.0
+
+**The router now owns the composer model cell: one control that keeps the official model + reasoning-effort sections and the router's own, and takes precedence over the shipped model picker.**
+
+- The client registers its merged control into the shipped `conversation.input.model` seat at priority
+  **-1**, below the shipped `ModelSelect` (priority 0, from
+  `@deepseek-ai/dsh-client-ui-model-selection`). The slots engine renders the lowest priority, so the
+  router's control takes over that cell and the composer shows a single control instead of a second
+  chip beside the official picker.
+- That one control keeps both halves. The official half is 本会话模型 / Session model and 推理等级 /
+  Reasoning effort, driven by the real ModelDirectory through `props.directory.store` subscribe,
+  `props.load()` and `props.select({ provider, model, reasoningEffort })`: provider/model groups, the
+  current-row check, the pending spinner, the provider-default row, catalog loading / error / retry and
+  the official "model · effort" trigger label. Below it sit the router's own groups: 接管 status,
+  控制范围 (模型+思考 / 思考 / 模型), 任务类型, 模型池, 任务预设 and 更多.
+- The old `conversation.input.right` chip (`model-router:composer-control`, order 20) is still
+  registered, but it **self-retracts** — it disposes itself as soon as the seat registration lands — so
+  a normal host renders an empty `.right` column and only ever sees the merged cell. A host that
+  rejects or renames the seat keeps the chip as its fallback.
+- Root cause of the 0.10.0 boot crash, now fixed: cordis resolves nested services such as
+  `remote.session` by walking fibers **upward from the calling fiber**, so a plugin whose methods touch
+  `ModelDirectory.directoryFor()` must itself declare `sessions`, `remote` and `remote.session` at
+  plugin level. 0.10.0's shadow did not, and the app failed to boot with
+  `cannot get property "sessions" without inject`. The client plugin-level inject is now
+  `["slots", "uiConversation", "sessions", "remote", "remote.session"]`, and the package's
+  `dsh.client.inject` declares `@deepseek-ai/dsh-api-remotes` and
+  `@deepseek-ai/dsh-api-session-controller` alongside the UI packages.
+- Browser-verified on a real `dsh web` server with the plugin installed: no boot card, no console
+  errors, exactly one control in the cell, its label shows the official "DeepSeek-V41-Flash / High", the
+  panel shows 本会话模型 + 推理等级 above the router groups, the old `.right` column is empty, and
+  clicking an official effort row really changes the official selection.
+- 130 tests (2 new in `test/client.test.js`).
+
+## 0.10.1
+
+**Rolled back: the composer control is the router's own chip again, and the official model cell stays
+official.**
+
+- 0.10.0 made the control register into the official `conversation.input.model` seat at priority -1, so
+  it *was* the composer model cell. In the field that seat rendered completely blank, and a restart
+  carrying the temporary diagnostics failed to boot, so the change is reverted: the client registers the
+  `conversation.input.right` chip (`model-router:composer-control`, order 20) again, and the official
+  `conversation.input.model` seat is left to the official control.
+- The merged model + effort popup code from 0.10.0 is still in `client/client.js` but is no longer wired
+  by the host; the visible control is the chip and its own panel (scope, pool, effort-scope binding,
+  presets, settings, resume).
+- The 0.10.0 entry below is kept as the record of the attempt.
+
+## 0.10.0
+
+**The router now lives where the model picker lives: its control IS the composer model/effort cell.**
+
+- The client shadows the official composer model/effort cell. It registers its control into the
+  official `conversation.input.model` seat at priority **-1**, while the official `ModelSelect`
+  registers that same seat at priority 0; the slots engine renders the lowest priority, so the shadow
+  wins independently of bundle load order (no patch of the official component is involved). The
+  registration is wrapped in `try`/`catch`: if the seat is renamed or never declared the shadow
+  silently does not register and the pre-existing `conversation.input.right` chip
+  (`model-router:composer-control`, order 20) stays the visible control; while the shadow is live the
+  chip renders `null`, so the two never both appear.
+- One merged popup. The top half is the official session model + reasoning-effort selection: provider
+  groups ordered `deepseek-account` → `deepseek-official` → others, a check mark on the current
+  model, a spinner on the pending one, a provider-default row only when the model advertises no default
+  effort, and catalog loading / error / failure surfaces with a retry. The bottom half is the router's
+  own configuration unchanged: scope (full / effort / model), pool rows with tier / cost / vision, the
+  effort-scope single-model binding, presets, settings and resume.
+- The shadow mirrors the official `select` semantics: a model row calls `select({ provider, model })`
+  with no `reasoningEffort` key, an effort row calls
+  `select({ provider, model, reasoningEffort })`, and the provider-default row sends
+  `{ provider, model }`; picking the already-current model or effort closes with no RPC; a rejected
+  selection keeps the popup open with the error visible; a locked session shows a disabled trigger that
+  never opens; an addressed subagent session (`available === false`) renders nothing, exactly like the
+  official cell. The trigger label is the official "model · effort" wording (with the model-name /
+  provider-model fallback and its loading labels) plus the router's small yielded dot; the per-call
+  route row is unchanged.
+- Honest limits: this is a shadow, not a patch of the official component — the official popup's
+  internals (portal menu, search box, keyboard navigation, module CSS) are not replicated, only its
+  selection semantics. A future DSH that renames or stops declaring `conversation.input.model` makes
+  the shadow silently not register and the small fallback chip takes over. If our component crashes
+  while rendering, the framework retires our entry and the official control comes back automatically.
+  Plugin source changes still need a full `dsh web`/desktop restart.
+- 128 tests (15 new in `test/client.test.js`).
+
+## 0.9.0
+
+**A tool loop no longer pins the effort at high: the brief decides the class, and the loop only adds
+score.**
+
+- Audited cause: `classifyStep` gave **engineering** to any step of a task that had already seen one
+  tool call (cue `agent tool loop`), and `engineering` routes to `high`. The per-task tool counter
+  only resets when a new user command is claimed, so every step from the first tool call to the end of
+  the Agent run stayed at `high`. Descent was unreachable mid-loop: `trivial` needs a cheap cue plus
+  at most 60 tokens, and `standard` required zero tool calls. With `allowMax: false` (the default)
+  `clampEffort` demotes `max` to `high`, so `hard` and `engineering` applied the same effort and
+  evidence escalation (errors/repeats) changed nothing for a task already at engineering.
+- Measured before: `帮我把这个文件里的日志改成中文` → tools=0 `standard`/`low`, then
+  tools=1/3/6/12/25 `engineering`/`high` for the rest of the task; `翻译一下这句话` with a single
+  tool also went to `high`.
+- New `scoring.toolCallClass`, default **`standard`**: tool activity still adds score
+  (`toolCallBase` / `toolCallAt` / `toolCallBig`) but no longer decides the class — the brief (strong
+  cues or structural text) decides, and errors/repeats still escalate on evidence. Set it to
+  `engineering` to restore the pre-0.9.0 rule; any other value normalizes back to `standard`.
+- Measured after: a casual brief with tools stays `standard`/`low` throughout; an engineering brief
+  stays `engineering`/`high` throughout (unchanged); an escalation to `hard` still collapses to
+  `high` while `allowMax` is false, and `allowMax: true` is what makes `max` reachable.
+  `routes.<class>.effort` still overrides any class directly.
+- 113 tests (4 new in `test/policy.test.js`, 2 new in `test/plugin.test.js`).
+
+## 0.8.0
+
+**Every tool call now shows the model and thinking level that ran it.**
+
+- Each tool call in the conversation gains one compact line — `deepseek-official/deepseek-v4-pro · high`
+  — naming the model and the thinking level that actually ran that segment; when the adapter owns the
+  default, the effort shows the localized **默认** / **default** label.
+- The host folds the session's own events into the new `modelRouterRoute` session projection
+  (`stateVersion` 1): `request/header` → provider/model/effort, `step/start` → turn/step, `tool/call`
+  → the pair for that call id. It keeps the last **200** calls per session and drops the oldest.
+- The client half registers a `model-router-route` conversation Definition and a
+  `conversation.chat.node` row anchored right after the call, reading the projection defensively: a
+  call the host has not folded yet renders nothing instead of borrowing another call's route.
+  `dsh.client.inject` gains `@deepseek-ai/dsh-client-ui-chat`, the package that owns that seat.
+- The line is a **separate** compact row next to the tool call, not a badge inside the harness's own
+  tool row or the thinking chain: a keyed slot replaces whatever it targets, and the thinking chain
+  exposes no child slot.
+- 107 tests (12 new in `test/route-projection.test.js`, 4 new in `test/client.test.js`).
+
+## 0.7.0
+
+**The scope decides which manual pick counts, and 思考 is bound to one model you choose.**
+
+- `全授权` is now **模型+思考** (English: **Model+Effort**), because it read like the workspace's own
+  permission level and said nothing about the thinking level; the scope hint now spells out what each
+  mode may change.
+- **思考 works on exactly one model.** The panel asks you to pick a single model first
+  (`POST /model-router/effort-model`), and until you do the router stays out entirely — it changes
+  neither the model nor the effort. Once one is bound, the router only touches a step whose resolved
+  model is that one, and takes the effort vocabulary from that model instead of an unrelated pool
+  entry.
+- **A manual pick only counts in the scope that owns it.** In 思考, switching the model by hand is no
+  longer a manual override — the router keeps adjusting its bound model's thinking level — while
+  changing the effort by hand still stands it down. 模型 is the mirror image: an effort-only change
+  leaves it engaged, a model switch stands it down. 模型+思考 reacts to either.
+- `/state` gains `effortModel`, `effectiveEffortModel` and `effortModelPending`, so the panel can
+  show the bound model and prompt while none is picked.
+- 91 tests (10 new in `test/effort-model.test.js`).
+
 ## 0.6.12
 
 **Releases now publish themselves: push a tag, GitHub Actions does the rest over OIDC.**

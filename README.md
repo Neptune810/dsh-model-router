@@ -22,18 +22,26 @@ still steep. Pushing past it costs about 1.6–1.8x the output tokens for a marg
 
 ## Authorization scopes, the model pool and task presets (v0.5)
 
-`control` decides what the router owns. A manual pick always stands; it makes the router stand down
-until the next command or the composer control's **resume** action.
+`control` decides what the router owns, and a manual pick only counts in the scope that owns it: an
+effort change stands down `full`/`effort` but not `model`, and a model switch stands down
+`full`/`model` but not `effort`. While the router is down it stays out until the next command or the
+composer control's **resume** action.
 
 | Scope | Owns |
 | --- | --- |
-| `full` | model + reasoning effort |
-| `effort` | reasoning effort only; the session keeps its model |
-| `model` | model only; the session keeps its thinking level |
+| `full` — 模型+思考 / Model+Effort | model + reasoning effort |
+| `effort` — 思考 / Effort | one model you pick in the panel: the router only sets that model's thinking level |
+| `model` — 模型 / Model | model only; the session keeps its thinking level |
 
-The client half registers into the `conversation.input.right` list slot — immediately left of the
-manual model selector — and carries the scope switch, the resume action, the task-type picker, the
-model pool and the task presets. It talks to the host over same-origin `/model-router/*` routes.
+In `effort` scope the panel first asks you to pick exactly one model
+(`POST /model-router/effort-model`, reported by `/state` as `effortModel` / `effectiveEffortModel`).
+Until you do, the router stays out entirely — it changes neither the model nor the effort. Once one is
+bound, a manual model switch does not stand it down; changing the thinking level by hand does.
+
+The client half registers its control into the shipped `conversation.input.model` seat at priority -1,
+taking over the composer model cell; it carries the official model + effort sections plus the scope
+switch, the resume action, the task-type picker, the model pool and the task presets, and talks to the
+host over same-origin `/model-router/*` routes.
 
 **Model pool.** Only pooled models are ever selected.
 
@@ -71,6 +79,38 @@ advertises none.
 Opaque by default (the theme menu colour is translucent, which let the conversation
 show through): ![translucent vs opaque](docs/preview-background.png)
 
+## The router control is the composer model cell (v0.11.0)
+
+The router's control registers into the shipped `conversation.input.model` seat at priority **-1**,
+below the shipped `ModelSelect` (priority 0, from `@deepseek-ai/dsh-client-ui-model-selection`). The
+slots engine renders the lowest priority, so the router's merged control takes over the composer model
+cell and the composer shows a single control instead of a second chip beside the official picker.
+
+That one control keeps both halves. The official half is 本会话模型 / Session model and 推理等级 /
+Reasoning effort, driven by the real ModelDirectory through `props.directory.store` subscribe,
+`props.load()` and `props.select({ provider, model, reasoningEffort })`: provider/model groups, the
+current row's check, the pending spinner, the provider-default row, catalog loading / error / retry, and
+the official "model · effort" trigger label. Below it sit the router's own groups: the 接管 status,
+控制范围 (模型+思考 / 思考 / 模型), 任务类型, 模型池, 任务预设 and 更多. Every mutation goes to the host
+over same-origin `/model-router/*` routes, and the per-call route row in the conversation is unchanged.
+
+The old `conversation.input.right` chip (`model-router:composer-control`, order 20) is still registered,
+but it **self-retracts** — it disposes itself as soon as the seat registration lands — so a normal host
+renders an empty `.right` column and only ever sees the merged cell. A host that rejects or renames the
+seat keeps the chip as its fallback.
+
+0.10.0 tried this first and was rolled back in 0.10.1: the seat rendered blank and a restart failed to
+boot. The root cause: cordis resolves nested services such as `remote.session` by walking fibers
+**upward from the calling fiber**, so the client plugin itself must declare `sessions`, `remote` and
+`remote.session` before a method may touch `ModelDirectory.directoryFor()`. The plugin-level inject is
+now `["slots", "uiConversation", "sessions", "remote", "remote.session"]`.
+
+**Limits.** This is a registration into the shipped seat, not a patch of the official component: the
+official popup's internals (portal menu, search box, keyboard navigation, module CSS) are not
+replicated, only its selection semantics. A DSH that stops declaring `conversation.input.model` makes
+the seat registration fail silently and the small fallback chip takes over. Plugin source changes still
+need a full `dsh web`/desktop restart.
+
 ## The panel matches the host (v0.6.4)
 
 The composer control is styled with the harness's own tokens — the same 34px rows,
@@ -85,7 +125,7 @@ The composer control is the whole configuration surface — no JSON or YAML:
 
 | Section | What you do |
 | --- | --- |
-| mode | click 全授权 / 思考等级 / 模型模式; a manual pick adds a **resume** button |
+| mode | click 模型+思考 / 思考 / 模型; in 思考, pick the one model the router may tune; a manual pick adds a **resume** button |
 | task type | pick *auto* (keyword rules) or one of your presets |
 | model pool | **tick models from the live catalog**, then set tier / cost / vision with dropdowns |
 | task presets | **+ 新建预设** → click a keyword pack (写作 / 代码 / 翻译 / 分析) or add a word → choose each pooled model's weight |
@@ -93,6 +133,27 @@ The composer control is the whole configuration surface — no JSON or YAML:
 
 Everything persists in `<profile>/.model-router/state.json` through the same-origin
 `/model-router/*` routes, so the profile row config stays optional.
+
+## Every call shows its route (v0.8.0)
+
+Every tool call in the conversation now carries one compact line with the model and thinking level
+that actually ran that segment:
+
+```
+deepseek-official/deepseek-v4-pro · high
+```
+
+The host folds the session's own events into the `modelRouterRoute` session projection
+(`stateVersion` 1): `request/header` gives the provider, model and effort in force, `step/start`
+gives the turn and step, and `tool/call` records that pair under the call id. The effort is `null`
+when the adapter owns the default, and those rows show the localized **默认** / **default** label.
+The projection keeps the last 200 calls per session and drops the oldest.
+
+The client half registers a `model-router-route` conversation Definition on every `tool/call` and
+renders the row through the `conversation.chat.node` slot, anchored right after the call (`+0.1`).
+It reads the projection defensively: a call id the host has not folded yet renders nothing rather
+than borrowing another call's route. The line is a **separate** compact row next to the tool call —
+see [Limitations](#limitations) for why it is not a badge inside the tool row.
 
 ## Images, session signals, subagents and the classifier (v0.6.0)
 
@@ -122,7 +183,8 @@ keyword rules on any failure. The default stays `rules`.
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
    calls are counted per task, so a long agent run does not drift toward the most expensive effort.
-   A long run is not a harder task.
+   A long run is not a harder task. Since 0.9.0 a tool loop is a score signal only — it no longer
+   pins the class at `engineering` (`scoring.toolCallClass`).
 2. **Escalation needs evidence.** Inside the current task, `escalateOnErrors` failing tool results,
    or the same tool call retried with identical arguments `escalateOnRepeats` times, step the class
    up — at most `maxEscalations` times. Nothing else moves it.
@@ -144,6 +206,29 @@ Task boundaries come from `agent/inbox/claimed`, which is what actually opens a 
 When a task ends on an unresolved failure, the next one inherits a single hesitant step up — and only
 if it is engineering or hard work. A one-line "translate this" never inherits a crash.
 
+## Tool loops no longer pin the effort at high (v0.9.0)
+
+Before 0.9.0, `classifyStep` classified a step as `engineering` whenever its task had already seen one
+tool call (cue `agent tool loop`), and `engineering` routes to `high`. Because the per-task tool
+counter only resets when a new command is claimed, every step from the first tool call to the end of the
+Agent run stayed at `high`. There was no way back down mid-loop: `trivial` needs a cheap cue and at
+most 60 tokens, and `standard` required zero tool calls. And with `allowMax: false` (the default),
+`max` is demoted to `high`, so `hard` and `engineering` applied the same effort — evidence
+escalation changed nothing for a task that was already engineering.
+
+Measured before: `帮我把这个文件里的日志改成中文` ran `standard`/`low` at 0 tools, then
+`engineering`/`high` at 1, 3, 6, 12 and 25 tools for the rest of the task; `翻译一下这句话` with one
+tool also went to `high`.
+
+`scoring.toolCallClass` (default `standard`) decides whether a tool loop can earn the engineering class
+on its own. With `standard`, tool activity still adds score (`toolCallBase` = 5, `toolCallAt` = 3,
+`toolCallBig` = 8) but the brief — strong cues or structural text — decides the class, and
+`escalateOnErrors` / `escalateOnRepeats` still escalate on evidence. Set it to `engineering` to
+restore the old rule; any other value falls back to `standard`. Measured after: a casual brief with
+tools stays `standard`/`low` throughout, an engineering brief stays `engineering`/`high` throughout.
+`hard` still collapses to `high` unless `allowMax: true`, and `routes.<class>.effort` (for example
+`routes.engineering.effort: low`) is the direct way to say how expensive a class may get.
+
 ## Configuration
 
 The plugin reads its config from its row in the profile's `cordis.patch.yml`:
@@ -164,6 +249,8 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
     presets: {}           # task type -> { match: [...], weights: { modelId: 0-100 } }
     scoring:
       costPenalty: 0.4    # how strongly relative cost subtracts from a pool score
+      turnPerPoint: 0     # raise this to let long sessions weigh more (not recommended)
+      toolCallClass: standard  # class a tool loop earns: standard (0.9.0) | engineering (pre-0.9.0)
     hysteresis:
       downAfter: 2        # quiet steps required before the effort steps down
     imagePolicy: keep     # keep | vision — route image tasks to a vision model
@@ -178,8 +265,6 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
     classifierModel: null # model used by the llm classifier (defaults to the first pool entry)
     escalateOnErrors: 2   # failed tool results needed to step up
     escalateOnRepeats: 3  # identical retries needed to step up
-    scoring:
-      turnPerPoint: 0     # raise this to let long sessions weigh more (not recommended)
     routes:
       trivial:     { effort: low }   # "off" here is raised to low unless allowThinkingOff
       standard:    { effort: low }
@@ -200,11 +285,12 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `demoteManualMax` | `true` | also demote a manually selected `max` |
 | `allowThinkingOff` | `false` | allow effort `off` again; only for sessions that stay non-thinking |
 | `control` | `full` | what the router owns: `full`, `effort` or `model` |
-| `manualOverride.yieldOnManual` | `true` | a manual pick makes the router stand down |
+| `manualOverride.yieldOnManual` | `true` | a manual pick in the scope that owns it makes the router stand down |
 | `manualOverride.resumeOnNextCommand` | `true` | the next command re-engages it |
 | `pool` | `[]` | `provider/model` whitelist with `cost`/`tier`/`tags`/`weights`/`maxPerTask` |
 | `presets` | `{}` | task types with `match` rules and per-model `weights` |
 | `scoring.costPenalty` | `0.4` | relative-cost weight in the pool score |
+| `scoring.toolCallClass` | `standard` | class a tool loop earns on its own: `standard` (0.9.0) or `engineering` (pre-0.9.0 rule); any other value falls back to `standard` |
 | `hysteresis.downAfter` | `2` | quiet steps before a downgrade applies |
 | `classifier` | `rules` | `rules` or `llm` (one small call per turn, rules as fallback) |
 | `classifierModel` | first pool entry | model the LLM classifier uses |
@@ -251,6 +337,17 @@ enough.
   as a form in the settings UI. This is deliberate: a schema would require importing
   `@deepseek-ai/*` packages, which a plugin installed beside the profile cannot resolve.
 - The router only touches the `deepseek-official` provider and models matching `familyPattern`.
+- **The router control takes over the official model cell by registration, not by patching the
+  component.** It registers into `conversation.input.model` at priority -1 (below the shipped
+  `ModelSelect` at 0), keeping the official model + effort sections inside its own panel. The old
+  `conversation.input.right` chip (`model-router:composer-control`, order 20) self-retracts and is only
+  a fallback for a host that rejects the seat. 0.10.0's first attempt shipped a blank cell and was
+  rolled back in 0.10.1 because it had not declared `sessions` / `remote` / `remote.session` on the
+  plugin root.
+- **The per-call route line is a separate small row** anchored after the tool call, not a badge inside
+  the harness's own tool row or inside the thinking chain: a keyed slot replaces whatever it targets,
+  and the thinking chain exposes no child slot. A call the host has not folded yet shows nothing
+  rather than guessing. Plugin source changes only appear after you restart `dsh web`.
 
 ## Tests
 
@@ -258,16 +355,35 @@ enough.
 node --test
 ```
 
-81 tests. `test/policy.test.js` (30) covers classification, the absence of a ratchet, the
+130 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
-detector, and tool-result error parsing; `test/routing.test.js` (12) covers the pool, preset
+detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
+restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
-`test/plugin.test.js` (14) drives the host wiring with ctx/agent doubles; `test/modes.test.js` (14)
+`test/plugin.test.js` (16) drives the host wiring with ctx/agent doubles, including a quiet tool loop
+that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (21)
 covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
 Desktop proxy stripped, and one carrying `Origin: null`), pool/preset editing, a
 pinned task type, a third-party effort vocabulary, vision routing, subagent frugality, todo-driven
-task types, context pressure, the `/router` command and the LLM classifier; `test/client.test.js` (4) loads the shipped
-browser bundle in a VM and asserts the composer contribution.
+task types, context pressure, the `/router` command and the LLM classifier;
+`test/effort-model.test.js` (10) covers effort scope bound to one model (unbound stands off, binding
+clears the pending flag, only the bound model's effort moves, the vocabulary comes from its own pool
+entry, a session-less binding becomes the default) and the scope-aware manual yield (a model switch in
+effort scope is not an override, an effort change is, model scope ignores effort, full scope reacts to
+both) plus the route's clearing and validation; `test/route-projection.test.js` (12) covers the
+projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
+effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
+repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (25)
+loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
+as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
+closed trigger, the documented host routes, the route
+Definition's match/anchor and its defensive read of the folded projection, the localized default label,
+the seat face delegating to the session directory, the official selection semantics (model rows without
+`reasoningEffort`, effort rows with it, the provider default, the current-row no-op, a locked session, an
+unavailable subagent cell, a failed pick keeping its message, catalog errors offering a retry, and group
+order), the router half's control/pool/settings payloads and the `/effort-model` binding, and the
+declared `ui-chat` seat and `uiConversation` service.
 
 ## License
 

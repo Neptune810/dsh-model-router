@@ -71,23 +71,39 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
 .mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}
 .mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
 .mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
+.mr-trigger:disabled{opacity:.55;cursor:default}
+.mr-spin{width:12px;height:12px;flex:none;border:2px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-top-color:var(--dsw-alias-label-primary,#e8e8ea);border-radius:50%;animation:mr-spin .7s linear infinite}
+@keyframes mr-spin{to{transform:rotate(360deg)}}
 .mr-panel{position:static!important;max-height:none!important;overflow:visible!important;flex:none!important}
 </style>
 </head>
 <body>
 <div class="main">
 <div class="wrap">
-  <button class="mr-trigger" type="button">全授权 <span class="mr-sub" title="deepseek-official/deepseek-v4-pro">deepseek-v4-pro · high</span> <span class="mr-dot" data-yielded="false"></span></button>
+  <button class="mr-trigger" type="button" title="输入栏模型格的静态样子：显示本会话模型，副标签是它的推理等级">deepseek-v4-pro <span class="mr-sub" title="本会话模型 deepseek-official/deepseek-v4-pro 的推理等级">high</span> <span class="mr-dot" data-yielded="false"></span></button>
+  <button class="mr-trigger" type="button" disabled title="会话被占用 / 已失效时：按钮仍然在，但是禁用的（不会弹面板）">deepseek-v4-pro <span class="mr-sub">high</span> <span class="mr-spin" title="正在切换模型（pending）"></span> <span class="mr-dot" data-yielded="false"></span></button>
   <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
-  <p class="caption">dsh-model-router 输入栏面板的静态预览：渲染的就是插件里那份 CSS，只把主题变量换成了近似值。鼠标停在任意控件上会显示解释。</p>
+  <p class="caption">dsh-model-router 已并入官方输入栏的「模型」格（就是原来选模型/思考等级的那个位置）：点开是同一个弹窗，上半部分是官方的本会话模型 + 推理等级，下半部分是插件自己的路由设置。渲染的就是插件里那份 CSS，只把主题变量换成了近似值；鼠标停在任意控件上会显示解释。<br>官方那格没被声明时（老版本 / 别的宿主），插件会退回输入栏右侧的小胶囊，两者不会同时出现。</p>
 </div>
 <div class="mr-panel">
   <div class="mr-head"><span class="mr-name">模型路由</span><span class="mr-dot" data-yielded="false" title="绿点 = 正在自动接管：按需要换模型、调思考等级"></span><span title="绿点 = 正在自动接管">已接管</span><button class="mr-btn mr-icon-btn"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
-  <div class="mr-line" style="padding:0 8px 6px"><span style="flex:1" title="插件能改什么">控制范围</span><div class="mr-seg" title="全授权 = 模型 + 思考等级；思考 = 只调思考等级；模型 = 只调模型"><button data-active="true" title="模型和思考等级都交给插件">全授权</button><button title="只让插件调思考等级，模型不动">思考</button><button title="只让插件换模型，思考等级不动">模型</button></div></div>
+  <!-- 上半部分 = 官方那半：本会话模型 + 推理等级（渲染顺序与 client.js 一致） -->
+  <div class="mr-group" title="官方那半：这里改的是本会话真正用的模型和推理等级，和插件接管无关">本会话模型</div>
+  <div class="mr-group" title="按官方顺序分组：DeepSeek 账号 → DeepSeek 官方 → 其它供应商">DeepSeek 账号</div>
+  <button class="mr-row" type="button" role="menuitemradio" aria-checked="true" title="官方模型行：点了就把本会话切成这个模型，不会顺带动思考等级"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span></button>
+  <button class="mr-row" type="button" role="menuitemradio" aria-checked="false" title="点别的模型 = 只换本会话模型；点已经选中的这一行 = 什么都不发，直接关掉弹窗"><span class="mr-check"></span><span class="mr-name">DeepSeek V4 Flash</span></button>
+  <div class="mr-group">DeepSeek 官方</div>
+  <button class="mr-row" type="button" role="menuitemradio" aria-checked="false" title="正在切换（pending）：对勾的位置显示转圈，按钮同时禁用"><span class="mr-check"><span class="mr-spin"></span></span><span class="mr-name">DeepSeek V4</span></button>
+  <div class="mr-group" title="只对当前这个模型有效；当前模型没有任何等级可选时，这一整段不出现">推理等级</div>
+  <button class="mr-row" type="button" role="menuitemradio" aria-checked="false" title="不给服务端发思考等级 = 交回供应商默认；只有模型自己没写默认等级时才有这一行"><span class="mr-check"></span><span class="mr-name">默认（供应商）</span></button>
+  <button class="mr-row" type="button" role="menuitemradio" aria-checked="true" title="发送 reasoningEffort=high；点已选中的那行同样是什么都不发"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">high</span></button>
+  <div class="mr-div"></div>
+  <!-- 下半部分 = 插件自己的路由设置（控制范围 / 模型池 / 预设 / 更多 / 最近决策） -->
+  <div class="mr-line" style="padding:0 8px 6px"><span style="flex:1" title="插件能改什么">控制范围</span><div class="mr-seg" title="插件能改什么：模型+思考 = 模型 + 思考等级；思考 = 只调选中的那一个模型的思考等级；模型 = 只调模型"><button data-active="true" title="模型和思考等级都交给插件">模型+思考</button><button title="只调你在下面选中的那一个模型的思考等级；没选之前不接管">思考</button><button title="只让插件换模型，思考等级不动">模型</button></div></div>
   <button class="mr-row" title="自动 = 按关键词规则判断；也可以强制指定一个类型"><span class="mr-name">任务类型</span><span class="mr-sub">自动（按关键词规则）</span><span class="mr-check"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5l5 4.5-5 4.5"/></svg></span></button>
   <div class="mr-div"></div>
   <div class="mr-group">模型池</div>
-  <div class="mr-note" style="padding:0 8px 2px">勾选可被路由的模型，只有勾选的会被选中</div>
+  <div class="mr-note" style="padding:0 8px 2px" title="思考模式下这行会变成「先选一个模型」，而且下面改成只能选唯一一个">勾选可被路由的模型，只有勾选的会被选中；思考模式下改为只选唯一一个</div>
   <button class="mr-row"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span><span class="mr-sub">攻坚</span></button>
   <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-tag" title="日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）">定位</span><div class="mr-seg" title="日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）"><button title="日常：平时优先用它，省钱">日常</button><button data-active="true" title="攻坚：任务变难、或工具报错等证据出现时才优先">攻坚</button></div><span class="mr-tag" title="相对价格，随你标">价格</span><div class="mr-seg" title="相对价格，随你标：越贵越要任务够硬才选得中（1/4/8 分别扣 0.4 / 1.6 / 3.2 分）"><button title="成本 1，扣 0.4 分">便宜</button><button title="成本 4，扣 1.6 分">中</button><button data-active="true" title="成本 8，扣 3.2 分">贵</button></div><button class="mr-chip" title="带图任务优先选它（+25 分）">视觉</button></div>
   <button class="mr-row"><span class="mr-check"></span><span class="mr-name">DeepSeek Flash</span></button>

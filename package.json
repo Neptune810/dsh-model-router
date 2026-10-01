@@ -1,10 +1,10 @@
 {
   "name": "@neptune810/dsh-model-router",
-  "version": "0.6.12",
+  "version": "0.11.0",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Model router for DeepSeek Harness: keep a pool of models and every step is routed to one of them with its reasoning effort set — a click-only composer panel, three authorization scopes (where a manual pick always wins), task presets with per-model weights, vision routing for image steps, session signals (todo, context pressure, token budget, subagents) and an optional semantic task classifier. Thinking stays on, because DeepSeek rejects a tool call made with thinking off.",
+  "description": "Model router for DeepSeek Harness: keep a pool of models and every step is routed to one of them with its reasoning effort set — a click-only composer panel, three authorization scopes (a manual pick only counts in the scope that owns it, and effort scope is bound to the one model you choose), task presets with per-model weights, vision routing for image steps, session signals (todo, context pressure, token budget, subagents) and an optional semantic task classifier. Thinking stays on, because DeepSeek rejects a tool call made with thinking off.",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -38,8 +38,11 @@
     "client": {
       "platform": "web",
       "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
         "@deepseek-ai/dsh-client-ui-model-selection",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-chat"
       ]
     }
   },

@@ -59,20 +59,35 @@ over there are regenerated on `main` after merge and must not be edited by hand.
   "bundle": { "patch": "./cordis.patch.yml" },
   "client": {
     "platform": "web",
-    "inject": ["@deepseek-ai/dsh-client-ui-slots", "@deepseek-ai/dsh-client-ui-conversation"]
+    "inject": [
+      "@deepseek-ai/dsh-api-remotes",
+      "@deepseek-ai/dsh-api-session-controller",
+      "@deepseek-ai/dsh-client-ui-model-selection",
+      "@deepseek-ai/dsh-client-ui-conversation",
+      "@deepseek-ai/dsh-client-ui-chat"
+    ]
   }
 }
 ```
 
 `client/client.js` is committed, not built — it is written in the same lazy-CJS bundle shape every
 third-party client plugin uses (`window.__ModuleLoader__.load({ id, factory })`), so the package
-still installs without a build step. It registers one contribution into the
-`conversation.input.right` list slot, which the composer renders immediately left of the manual
-model seat.
+still installs without a build step. Since 0.11.0 it registers its control into the shipped
+`conversation.input.model` seat at priority -1, so the router takes over the composer's model cell
+and shows the official model + reasoning-effort sections and its own in one control. The earlier
+contribution into the `conversation.input.right` list slot is still registered, but it disposes
+itself as soon as the seat lands and only survives as the fallback for a host that refuses it.
+
+The `inject` list must name every service the plugin's own code touches, because cordis resolves a
+nested name such as `remote.session` by walking fibers upward from the calling fiber: the shipped
+`ModelDirectory.directoryFor()` resolves `remote.session` against *our* root, so omitting it is what
+made 0.10.0 fail the page boot audit (see the 0.11.0 changelog entry).
 
 ## npm
 
-Published: **`@neptune810/dsh-model-router@0.6.11`** (2026-10-01). Earlier releases: 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15).
+Published: **`@neptune810/dsh-model-router@0.11.0`** (2026-10-01). Earlier releases: 0.6.12, 0.6.11, 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15). The 0.7.0–0.10.1
+line was developed in the working tree but never tagged, so 0.11.0 is the first registry release that
+carries it.
 Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
 and lets people install without the `github:` spec.
