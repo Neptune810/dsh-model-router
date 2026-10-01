@@ -49,5 +49,22 @@ jobs:
 
       # No registry-url and no NODE_AUTH_TOKEN on purpose: with id-token: write,
       # npm finds the OIDC identity by itself.
+      #
+      # npm >= 11 holds a fresh publish in a *staging* window (minutes, and it
+      # has been seen at 17) before the version is visible on the registry.
+      # Publishing again during that window fails with
+      # "E409 ... Cannot publish over previously staged version" even though the
+      # first upload was accepted, so that exact conflict is not a failure.
       - name: Publish
-        run: npm publish --access public
+        run: |
+          set -u
+          version="$(node -p "require('./package.json').version")"
+          if ! out="$(npm publish --access public 2>&1)"; then
+            printf '%s\n' "$out"
+            if printf '%s' "$out" | grep -qiE 'E409|previously staged|Cannot publish over'; then
+              echo "::warning::npm kept $version in its staging window; the publish was accepted and becomes visible shortly."
+              exit 0
+            fi
+            exit 1
+          fi
+          printf '%s\n' "$out"
