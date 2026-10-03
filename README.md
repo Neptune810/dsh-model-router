@@ -115,6 +115,23 @@ replicated, only its selection semantics. A DSH that stops declaring `conversati
 the seat registration fail silently and the small fallback chip takes over. Plugin source changes still
 need a full `dsh web`/desktop restart.
 
+## New conversations inherit the last plan and confirm it (v0.13.0)
+
+Every DSH start used to reset the panel to its defaults, and each new conversation decided its routing
+plan on its own. The host now keeps the plan you last set — the scope, the bound effort model and the
+pinned task type — under `last` in `<profile>/.model-router/state.json`, and a conversation with no
+choice of its own inherits it. Choices stay per conversation: once you configure a conversation, its own
+`sessions` entry wins and the other conversations are unaffected.
+
+An inherited plan is not a decision you made in *this* conversation, so the panel opens with a
+warn-tinted bar at the top: 已沿用上一次的选择 / carried over from your last choice, or
+新对话：先确认这次的路由方案 / new conversation — confirm this routing plan when there was nothing to
+inherit yet. It lists the effective 范围 / 思考模型 / 任务类型 / 模型池 with a 确认 / Confirm button
+(`POST /model-router/confirm { sessionId, plan }`), and the composer trigger carries a pulsing amber dot
+until you answer. Confirming records the plan key for that session — `/state` reports `plan`, `planKey`
+and `planConfirmed` — and neither the bar nor the dot comes back in that conversation; changing the scope,
+the bound model, the task type or the pool produces a different key and asks once more.
+
 ## The panel matches the host (v0.6.4)
 
 The composer control is styled with the harness's own tokens — the same 34px rows,
@@ -359,7 +376,7 @@ enough.
 node --test
 ```
 
-131 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
+133 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
@@ -378,7 +395,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (26)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (28)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route

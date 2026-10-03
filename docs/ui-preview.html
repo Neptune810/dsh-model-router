@@ -73,6 +73,15 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
 .mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}
 .mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
 .mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
+.mr-confirm{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-warn-label,rgba(210,153,34,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-warn,rgba(210,153,34,.12))}
+.mr-confirm-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-state-warn-label,#d29922);font-size:11px;font-weight:500}
+.mr-confirm-dot{width:6px;height:6px;border-radius:50%;flex:none;background:currentColor}
+.mr-confirm-plan{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mr-confirm-val{color:var(--dsw-alias-label-primary,#e8e8ea)}
+.mr-confirm-foot{display:flex;align-items:center;gap:8px}
+.mr-confirm-hint{flex:1;min-width:0;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:15px}
+.mr-attn{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-warn-label,#d29922);animation:mr-attn 1.8s ease-out infinite}
+@keyframes mr-attn{0%{box-shadow:0 0 0 0 rgba(210,153,34,.5)}70%{box-shadow:0 0 0 5px rgba(210,153,34,0)}100%{box-shadow:0 0 0 0 rgba(210,153,34,0)}}
 .mr-trigger:disabled{opacity:.55;cursor:default}
 .mr-spin{width:12px;height:12px;flex:none;border:2px solid var(--dsw-alias-border-l1,rgba(127,127,127,.3));border-top-color:var(--dsw-alias-label-primary,#e8e8ea);border-radius:50%;animation:mr-spin .7s linear infinite}
 @keyframes mr-spin{to{transform:rotate(360deg)}}
@@ -83,12 +92,27 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
 <div class="main">
 <div class="wrap">
   <button class="mr-trigger" type="button" title="输入栏模型格的静态样子：显示本会话模型，副标签是它的推理等级">deepseek-v4-pro <span class="mr-sub" title="本会话模型 deepseek-official/deepseek-v4-pro 的推理等级">high</span> <span class="mr-dot" data-yielded="false"></span></button>
+  <button class="mr-trigger" type="button" title="新对话还没确认路由方案时：触发器上多一个脉冲黄点（确认后消失）">deepseek-v4-pro <span class="mr-sub" title="本会话模型 deepseek-official/deepseek-v4-pro 的推理等级">high</span> <span class="mr-attn" title="新对话待确认路由方案"></span> <span class="mr-dot" data-yielded="false"></span></button>
   <button class="mr-trigger" type="button" disabled title="会话被占用 / 已失效时：按钮仍然在，但是禁用的（不会弹面板）">deepseek-v4-pro <span class="mr-sub">high</span> <span class="mr-spin" title="正在切换模型（pending）"></span> <span class="mr-dot" data-yielded="false"></span></button>
   <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
-  <p class="caption">dsh-model-router 已并入官方输入栏的「模型」格（就是原来选模型/思考等级的那个位置）：点开是同一个弹窗，上半部分是官方的本会话模型 + 推理等级，下半部分是插件自己的路由设置。渲染的就是插件里那份 CSS，只把主题变量换成了近似值；鼠标停在任意控件上会显示解释。<br>模型池不再单独列一段：每一行模型的右半边就是那个「模型池」小胶囊，点一下加进/移出，进了池子的模型才会在它下面展开定位 / 价格 / 视觉那一行——一份列表同时干两件事，菜单因此短了一半。<br>官方那格没被声明时（老版本 / 别的宿主），插件会退回输入栏右侧的小胶囊，这时模型池才会单独成段。</p>
+  <p class="caption">dsh-model-router 已并入官方输入栏的「模型」格（就是原来选模型/思考等级的那个位置）：点开是同一个弹窗，上半部分是官方的本会话模型 + 推理等级，下半部分是插件自己的路由设置。渲染的就是插件里那份 CSS，只把主题变量换成了近似值；鼠标停在任意控件上会显示解释。<br>模型池不再单独列一段：每一行模型的右半边就是那个「模型池」小胶囊，点一下加进/移出，进了池子的模型才会在它下面展开定位 / 价格 / 视觉那一行；新对话继承上一次的方案，并在顶部高亮条里确认一次——一份列表同时干两件事，菜单因此短了一半。<br>官方那格没被声明时（老版本 / 别的宿主），插件会退回输入栏右侧的小胶囊，这时模型池才会单独成段。</p>
 </div>
 <div class="mr-panel">
   <div class="mr-head"><span class="mr-name">模型路由</span><span class="mr-dot" data-yielded="false" title="绿点 = 正在自动接管：按需要换模型、调思考等级"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="绿点 = 正在自动接管">已接管</span><button class="mr-btn mr-icon-btn" style="margin-left:auto"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
+  <!-- 每个新对话先确认一次：继承上一次的方案，确认后本对话不再出现这条 -->
+  <div class="mr-confirm" data-mr-confirm="true">
+    <div class="mr-confirm-head"><span class="mr-confirm-dot"></span><span title="这条方案是从上一个对话继承来的">已沿用上一次的选择</span></div>
+    <div class="mr-confirm-plan">
+      <span class="mr-tag">范围</span><span class="mr-confirm-val">思考</span>
+      <span class="mr-tag">思考模型</span><span class="mr-confirm-val">deepseek-v4-pro</span>
+      <span class="mr-tag">任务类型</span><span class="mr-confirm-val">小说续写</span>
+      <span class="mr-tag">模型池</span><span class="mr-confirm-val">2 个</span>
+    </div>
+    <div class="mr-confirm-foot">
+      <span class="mr-confirm-hint" title="确认后本对话不再提示；改范围 / 模型 / 任务类型 / 模型池会重新提示">确认后本对话不再提示</span>
+      <button class="mr-btn" data-primary="true" type="button" title="POST /model-router/confirm { sessionId, plan }">确认</button>
+    </div>
+  </div>
   <!-- 上半部分 = 官方那半：本会话模型 + 推理等级（渲染顺序与 client.js 一致） -->
   <div class="mr-group" title="官方那半：这里改的是本会话真正用的模型和推理等级，和插件接管无关">本会话模型</div>
   <div class="mr-group" title="按官方顺序分组：DeepSeek 账号 → DeepSeek 官方 → 其它供应商">DeepSeek 账号</div>

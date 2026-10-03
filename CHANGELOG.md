@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.13.0
+
+**A new conversation inherits the last routing plan and asks you to confirm it once, instead of quietly resetting to the defaults on every DSH start.**
+
+- The host keeps the plan you last set — the scope, the bound effort model and the pinned task type — under
+  `last` in `<profile>/.model-router/state.json`. A conversation with no choice of its own inherits it; a
+  conversation you have already configured keeps its own `sessions` entry, and the two never affect each
+  other.
+- A conversation that inherited a plan opens with a warn-tinted bar at the top: 已沿用上一次的选择 /
+  carried over from your last choice, or 新对话：先确认这次的路由方案 / new conversation — confirm this
+  routing plan when there was nothing to inherit yet. It lists the effective 范围 / 思考模型 / 任务类型 /
+  模型池 and a 确认 / Confirm button that posts `POST /model-router/confirm { sessionId, plan }`.
+- Until it is confirmed the composer trigger carries a pulsing amber dot. Confirming records the plan key for
+  that session — `/state` reports it as `plan`, `planKey` and `planConfirmed` — so the bar, the dot and
+  the trigger tooltip stand down. Changing the scope, the bound model, the task type or the pool produces a
+  different key and asks once more.
+- `docs/ui-preview.html` shows the bar and the trigger dot.
+- 133 tests (`test/client.test.js` 28: the bar's plan summary, the confirm round-trip, the silent confirmed
+  case and the changed-plan case).
+
 ## 0.12.0
 
 **The model pool is no longer a second list: it lives on the model rows themselves, so the panel is one list instead of two near-identical ones.**

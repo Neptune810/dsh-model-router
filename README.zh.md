@@ -83,8 +83,10 @@ effort 字段。
 ModelDirectory 驱动（`props.directory.store` 订阅、`props.load()`、`props.select({ provider, model,
 reasoningEffort })`）：provider/模型分组、当前行的对勾、待选行的转圈、供应商默认行、目录加载 / 出错 /
 重试，以及官方「模型 · 等级」的触发器文案。下面才是路由器自己的分组：接管状态、控制范围（模型+思考 /
-思考 / 模型）、任务类型、模型池、任务预设、更多。所有改动都通过同源 `/model-router/*` 路由发给宿主；对话
-区里每次调用的路由行不变。
+思考 / 模型）、任务类型，然后是模型列表本身——**模型池折进模型行**：每个会话模型行右侧带一个 模型池 /
+Model pool 小胶囊，点它把该模型加入或移出池子，入池的行会在下面展开 定位 / 价格 / 视觉，目录里没有对应
+provider 分组的池条目会和「手动填模型 ID」一起归到 其他模型 / Other models。再往下是 任务预设 与 更多。
+所有改动都通过同源 `/model-router/*` 路由发给宿主；对话区里每次调用的路由行不变。
 
 旧的 `conversation.input.right` chip（`model-router:composer-control`，order 20）仍然注册着，但它会
 **自我收回**——座位注册一落地就把自己 dispose 掉——所以正常宿主渲染出的 `.right` 一列是空的，永远只会看到
@@ -98,6 +100,20 @@ reasoningEffort })`）：provider/模型分组、当前行的对勾、待选行�
 **限制。** 这是注册进官方座位，不是给官方组件打补丁：官方弹层的内部实现（portal 菜单、搜索框、键盘导航、
 模块 CSS）没有被复制，只复刻了它的选择语义。如果某个 DSH 不再声明 `conversation.input.model`，座位注册会静默
 失败，小号的回退 chip 接管。插件源码改动仍然需要完整重启 `dsh web` / 桌面端。
+
+## 新对话继承上一次的方案并确认一次（v0.13.0）
+
+以前每次启动 DSH 面板都会回到默认值，每个新对话也各按各的来。现在宿主会记住你最后一次设定的方案——控制
+范围、绑定的思考模型、钉住的任务类型——存在 `<profile>/.model-router/state.json` 的 `last` 里；自己还没做
+过选择的对话就沿用它。选择仍然是分对话的：某个对话一旦自己配过，就以它自己的 `sessions` 条目为准，对话之间
+互不影响。
+
+继承来的方案不是你在**这个**对话里做的决定，所以面板顶部会先出现一条警示色高亮条：有可继承的东西时是
+「已沿用上一次的选择」，什么都没有时是「新对话：先确认这次的路由方案」。条上列出生效的 范围 / 思考模型 /
+任务类型 / 模型池，以及一个「确认」按钮（`POST /model-router/confirm { sessionId, plan }`）；没确认之前
+composer 触发器上会有一个脉冲的黄点。确认会把这个方案键记到该会话上——`/state` 回报 `plan`、`planKey`
+与 `planConfirmed`——此后本对话不再出现高亮条和黄点；改动控制范围、绑定模型、任务类型或模型池都会产生不同
+的键，于是再确认一次。
 
 ## 全部点一点就能配（v0.6.2）
 
@@ -316,7 +332,7 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 node --test
 ```
 
-131 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+133 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（12 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（16 个）用 ctx/agent 替身
@@ -328,7 +344,7 @@ node --test
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（26 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（28 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、

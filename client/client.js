@@ -68,6 +68,13 @@ window.__ModuleLoader__.load({
 				pressure: "上下文压力", on: "快满省", off: "关",
 				noPresets: "还没有预设", current: "当前", loading: "读取中…", empty: "没有可选项",
 				noSession: "新会话还没建立：这里的选择会成为默认值，发出第一条消息后按会话生效",
+				confirmNew: "新对话：先确认这次的路由方案",
+				confirmInherited: "已沿用上一次的选择",
+				confirmScope: "范围", confirmModel: "思考模型", confirmTask: "任务类型", confirmPool: "模型池",
+				confirmAction: "确认", confirmCount: "个",
+				confirmNone: "未指定", confirmAuto: "自动",
+				confirmHint: "确认后本对话不再提示；改范围 / 模型 / 任务类型 / 模型池会重新提示",
+				confirmAttn: "新对话待确认路由方案",
 				recent: "最近决策", turnShort: "轮",
 				needName: "先给任务类型起个名字", session: "会话",
 				poolAdd: "手动填模型 ID", delete: "删",
@@ -115,6 +122,13 @@ window.__ModuleLoader__.load({
 				pressure: "Context pressure", on: "cheap", off: "off",
 				noPresets: "no presets yet", current: "now", loading: "loading…", empty: "nothing to show",
 				noSession: "no session yet — your pick becomes the default and applies once this conversation starts",
+				confirmNew: "new conversation — confirm this routing plan",
+				confirmInherited: "carried over from your last choice",
+				confirmScope: "scope", confirmModel: "effort model", confirmTask: "task", confirmPool: "pool",
+				confirmAction: "Confirm", confirmCount: "models",
+				confirmNone: "unset", confirmAuto: "auto",
+				confirmHint: "asked once per conversation; changing scope / model / task / pool asks again",
+				confirmAttn: "new conversation needs a routing plan",
 				recent: "Recent routing", turnShort: "turn",
 				needName: "name the task type first", session: "session",
 				poolAdd: "add a model id", delete: "del",
@@ -182,6 +196,17 @@ window.__ModuleLoader__.load({
 			".mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}",
 			".mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
 			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
+			// The per-conversation confirmation: a warn-tinted bar because it wants an answer,
+			// plus the pulsing dot that announces it on the composer trigger.
+			".mr-confirm{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-warn-label,rgba(210,153,34,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-warn,rgba(210,153,34,.12))}",
+			".mr-confirm-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-state-warn-label,#d29922);font-size:11px;font-weight:500}",
+			".mr-confirm-dot{width:6px;height:6px;border-radius:50%;flex:none;background:currentColor}",
+			".mr-confirm-plan{display:flex;flex-wrap:wrap;align-items:center;gap:6px}",
+			".mr-confirm-val{color:var(--dsw-alias-label-primary,#e8e8ea)}",
+			".mr-confirm-foot{display:flex;align-items:center;gap:8px}",
+			".mr-confirm-hint{flex:1;min-width:0;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:15px}",
+			".mr-attn{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-warn-label,#d29922);animation:mr-attn 1.8s ease-out infinite}",
+			"@keyframes mr-attn{0%{box-shadow:0 0 0 0 rgba(210,153,34,.5)}70%{box-shadow:0 0 0 5px rgba(210,153,34,0)}100%{box-shadow:0 0 0 0 rgba(210,153,34,0)}}",
 			".mr-trigger:disabled{opacity:.55;cursor:default}",
 			".mr-spin{width:10px;height:10px;flex:none;border-radius:50%;border:1.6px solid var(--dsw-alias-border-l1,rgba(127,127,127,.45));border-top-color:var(--dsw-alias-label-primary,#e8e8ea);animation:mr-spin .7s linear infinite}",
 			"@keyframes mr-spin{to{transform:rotate(360deg)}}",
@@ -312,6 +337,7 @@ window.__ModuleLoader__.load({
 			const [poolOpen, setPoolOpen] = react.useState(false)
 			const [hostGroups, setHostGroups] = react.useState([])
 			const [catalogStore, setCatalogStore] = react.useState(props && props.resolveCatalog ? props.resolveCatalog() : undefined)
+			const [planDone, setPlanDone] = react.useState("")
 			const triggerRef = react.useRef(null)
 			const panelRef = react.useRef(null)
 			const rootRef = react.useRef(null)
@@ -351,6 +377,8 @@ window.__ModuleLoader__.load({
 			}, [sessionId])
 
 			react.useEffect(() => { load() }, [load])
+			// The confirmation is per conversation: a new session asks again.
+			react.useEffect(() => { setPlanDone("") }, [sessionId])
 			react.useEffect(() => {
 				// The host records every routed step; poll so the badge and the panel show
 				// the model and effort of the current step while a task is running.
@@ -387,6 +415,16 @@ window.__ModuleLoader__.load({
 				api(path, { method: "POST", body })
 					.then(() => { setError(""); load(); if (after) after() })
 					.catch((reason) => { setError(String((reason && reason.message) || reason)); if (after) after() })
+					.finally(() => setBusy(false))
+			}
+
+			/** Accept the plan for this conversation, so the bar stands down. */
+			const confirmPlan = () => {
+				if (!planKey) return
+				setBusy(true)
+				api("/confirm", { method: "POST", body: { sessionId: sessionId, plan: planKey } })
+					.then(() => { setError(""); setPlanDone(planKey); load() })
+					.catch((reason) => setError(String((reason && reason.message) || reason)))
 					.finally(() => setBusy(false))
 			}
 
@@ -435,6 +473,13 @@ window.__ModuleLoader__.load({
 			 */
 			const poolCount = effortMode ? (effortBoundId ? 1 : 0) : pool.length
 			const showPool = poolOpen || (effortMode && effortPending)
+			// New conversations inherit the last plan and are asked to confirm it once. The host
+			// records the confirmation per session; planDone covers the session-less draft, which
+			// has no session to record it against.
+			const plan = (state && state.plan) || null
+			const planKey = (state && state.planKey) || ""
+			const inherited = !!(state && state.inherited)
+			const needsConfirm = !!(plan && planKey && !(state && state.planConfirmed) && planDone !== planKey)
 			const presets = (state && state.presets) || {}
 			const settings = (state && state.settings) || {}
 			const packed = pool.map((entry) => entry.id)
@@ -648,7 +693,8 @@ window.__ModuleLoader__.load({
 					title: t.title + " · " + (t[mode] || mode) + " · " + (yielded ? t.yieldedHint : t.engagedHint) +
 					(seated
 						? (official ? " — " + officialTriggerLabel : "")
-						: (current ? " — " + current.provider + "/" + current.model + " · " + currentEffort + " · " + (current.stepClass || "") : "")),
+						: (current ? " — " + current.provider + "/" + current.model + " · " + currentEffort + " · " + (current.stepClass || "") : "")) +
+					(needsConfirm ? " · " + t.confirmAttn : ""),
 					onClick: openPanel,
 				},
 					seated
@@ -662,6 +708,7 @@ window.__ModuleLoader__.load({
 						? h("span", { className: "mr-sub", title: current.provider + "/" + current.model }, currentModel + " · " + currentEffort)
 						: null))),
 					officialBusy ? h("span", { className: "mr-spin" }) : null,
+					needsConfirm ? h("span", { className: "mr-attn", title: t.confirmAttn }) : null,
 					h("span", { className: "mr-dot", "data-yielded": String(yielded) })
 				),
 			]
@@ -767,6 +814,32 @@ window.__ModuleLoader__.load({
 						}, t.pool, h("span", { className: "mr-tag" }, String(poolCount))),
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
+					// --- Per-conversation confirmation, before anything else can be touched ---
+					if (needsConfirm) {
+						const scopeLabel = t[plan.control] || plan.control || t.confirmNone
+						const modelLabel = plan.effortModel ? String(plan.effortModel).split("/").pop() : t.confirmNone
+						const taskLabel = plan.taskType || t.confirmAuto
+						body.push(h("div", { key: "confirm", className: "mr-confirm", "data-mr-confirm": "true" },
+							h("div", { className: "mr-confirm-head" },
+								h("span", { className: "mr-confirm-dot" }),
+								h("span", null, inherited ? t.confirmInherited : t.confirmNew)
+							),
+							h("div", { className: "mr-confirm-plan" },
+								h("span", { className: "mr-tag" }, t.confirmScope),
+								h("span", { className: "mr-confirm-val" }, scopeLabel),
+								plan.control === "effort" ? h("span", { className: "mr-tag" }, t.confirmModel) : null,
+								plan.control === "effort" ? h("span", { className: "mr-confirm-val" }, modelLabel) : null,
+								h("span", { className: "mr-tag" }, t.confirmTask),
+								h("span", { className: "mr-confirm-val" }, taskLabel),
+								h("span", { className: "mr-tag" }, t.confirmPool),
+								h("span", { className: "mr-confirm-val" }, String(plan.pool || 0) + " " + t.confirmCount)
+							),
+							h("div", { className: "mr-confirm-foot" },
+								h("span", { className: "mr-confirm-hint" }, t.confirmHint),
+								h("button", { type: "button", className: "mr-btn", "data-primary": "true", disabled: busy, onClick: confirmPlan }, t.confirmAction)
+							)
+						))
+					}
 					// --- Official half, on top: the session model and its reasoning effort ---
 					if (seated) {
 						const officialBody = []

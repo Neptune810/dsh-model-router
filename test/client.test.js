@@ -861,3 +861,61 @@ test('the seated panel folds the pool into the model rows instead of a second li
   await app.rt.flush()
   assert.deepEqual(plain(app.net.posts('/model-router/pool').pop().body), { pool: [] })
 })
+
+/** The state a fresh conversation sees: the last plan, inherited and unconfirmed. */
+function planningState(overrides = {}) {
+  return Object.assign({
+    effectiveControl: 'effort', engaged: true, effortModelPending: false,
+    effectiveEffortModel: 'deepseek-official/deepseek-v4-pro',
+    current: null, pool: [], presets: {}, settings: {}, decisions: [],
+    plan: { control: 'effort', effortModel: 'deepseek-official/deepseek-v4-pro', taskType: '小说续写', pool: 2, poolIds: ['a', 'b'] },
+    planKey: 'effort|deepseek-official/deepseek-v4-pro|小说续写|a,b',
+    planConfirmed: false, inherited: true,
+  }, overrides)
+}
+
+test('a new conversation highlights the inherited plan and confirms it once', async () => {
+  const app = await openControl({ state: planningState() })
+  // The trigger announces the pending confirmation before the panel is even opened.
+  assert.equal(byClass(app.holder.tree, 'mr-attn').length, 1, 'the trigger carries the attention dot')
+  assert.match(triggerOf(app.holder.tree).props.title, /新对话待确认路由方案/)
+
+  openPanel(app.holder)
+  await app.rt.flush()
+  const bar = byClass(app.holder.tree, 'mr-confirm')[0]
+  assert.ok(bar, 'the unconfirmed plan renders the highlight bar')
+  const shown = textOf(bar)
+  assert.match(shown, /已沿用上一次的选择/)
+  assert.match(shown, /思考/, 'the bar states the scope')
+  assert.match(shown, /deepseek-v4-pro/, 'the bar states the bound effort model')
+  assert.match(shown, /小说续写/, 'the bar states the pinned task type')
+  assert.match(shown, /2 个/, 'the bar states the pool size')
+
+  const button = findAll(bar, (node) => node.type === 'button')[0]
+  assert.equal(textOf(button), '确认')
+  button.props.onClick()
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/confirm').pop().body), { sessionId: 'session-1', plan: 'effort|deepseek-official/deepseek-v4-pro|小说续写|a,b' })
+  assert.equal(byClass(app.holder.tree, 'mr-confirm').length, 0, 'the bar stands down for the rest of the conversation')
+  assert.equal(byClass(app.holder.tree, 'mr-attn').length, 0, 'and so does the trigger dot')
+})
+
+test('a confirmed plan is silent, and a changed plan asks again', async () => {
+  const confirmed = await openControl({ state: planningState({ planConfirmed: true }) })
+  openPanel(confirmed.holder)
+  await confirmed.rt.flush()
+  assert.equal(byClass(confirmed.holder.tree, 'mr-confirm').length, 0, 'a confirmed plan is not asked twice')
+  assert.equal(byClass(confirmed.holder.tree, 'mr-attn').length, 0)
+
+  // Changing the plan changes the key, so the conversation is asked once more.
+  const changed = await openControl({ state: planningState({
+    plan: { control: 'effort', effortModel: 'deepseek-official/deepseek-v4-pro', taskType: '代码重构', pool: 2, poolIds: ['a', 'b'] },
+    planKey: 'effort|deepseek-official/deepseek-v4-pro|代码重构|a,b',
+  }) })
+  openPanel(changed.holder)
+  await changed.rt.flush()
+  const bar = byClass(changed.holder.tree, 'mr-confirm')[0]
+  assert.ok(bar, 'a changed plan is confirmed again')
+  assert.match(textOf(bar), /代码重构/)
+  assert.equal(changed.net.posts('/model-router/confirm').length, 0, 'rendering the bar posts nothing by itself')
+})
