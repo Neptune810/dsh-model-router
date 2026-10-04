@@ -402,7 +402,7 @@ enough.
 node --test
 ```
 
-160 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
+161 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
@@ -424,7 +424,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (32)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (33)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route

@@ -429,7 +429,7 @@ async function openControl(options = {}) {
   const rt = createRuntime()
   const bundle = mountBundle({
     react: rt.react, modelDirectories: dirs.modelDirectories, fetch: net.fetch, sessions: options.sessions,
-    globals: browserGlobals(),
+    globals: Object.assign(browserGlobals(), options.globals || {}),
   })
   const entry = registrationNamed(bundle.registrations, 'conversation.input.right')
   const face = chipFace(bundle.registrations)
@@ -1046,4 +1046,54 @@ test('the cross-brand setting offers allow / ask / never and posts the choice', 
   segmented.props.onChange('never')
   await app.rt.flush()
   assert.deepEqual(plain(app.net.posts('/model-router/settings').pop().body), { settings: { crossProvider: 'never' } })
+})
+
+test('the readout polls while visible and refreshes at once when the window returns', async () => {
+  // The composer trigger sits outside the conversation projection, so the host's
+  // current step reaches it over /state. It must not wait a full tick after the
+  // window comes back, and it must not poll at all while hidden.
+  const listeners = {}
+  const documentStub = {
+    hidden: true,
+    body: { appendChild: () => {}, removeChild: () => {} },
+    createElement: () => ({ style: {} }),
+    addEventListener: (type, fn) => { listeners[type] = fn },
+    removeEventListener: (type) => { delete listeners[type] },
+  }
+  let armed = null
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'cheap', cost: 1, tags: [] }],
+    presets: {}, settings: {}, decisions: [],
+  }
+  const app = await openControl({
+    state,
+    globals: {
+      document: documentStub,
+      setInterval: (fn, ms) => { armed = { fn: fn, ms: ms }; return 7 },
+      clearInterval: () => { armed = null },
+    },
+  })
+  await app.rt.flush()
+  assert.ok(armed, 'the readout keeps a poll armed while a conversation is open')
+  assert.ok(armed.ms <= 1000, 'the poll is short enough to read as live: ' + armed.ms)
+  const fetches = () => app.net.calls.filter((entry) => entry.path === '/model-router/state').length
+  const before = fetches()
+
+  // Hidden: the tick does nothing, so a backgrounded app costs nothing.
+  armed.fn()
+  await app.rt.flush()
+  assert.equal(fetches(), before, 'a hidden window does not poll')
+
+  // Visible again: refresh now instead of waiting for the next tick.
+  documentStub.hidden = false
+  listeners.visibilitychange()
+  await app.rt.flush()
+  assert.equal(fetches(), before + 1, 'becoming visible refreshes immediately')
+
+  // And the tick keeps working once visible.
+  armed.fn()
+  await app.rt.flush()
+  assert.equal(fetches(), before + 2)
 })

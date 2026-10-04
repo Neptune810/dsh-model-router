@@ -413,13 +413,22 @@ window.__ModuleLoader__.load({
 			react.useEffect(() => { setPlanDone("") }, [sessionId])
 			react.useEffect(() => {
 				// The host records every routed step; poll so the badge and the panel show
-				// the model and effort of the current step while a task is running.
+				// the model and effort of the current step while a task is running. The
+				// interval is short because this is a local read-only route, and waking
+				// the window back up refreshes at once instead of waiting for the tick.
 				if (!sessionId || typeof setInterval !== "function") return undefined
-				const timer = setInterval(() => {
-					if (typeof document !== "undefined" && document.hidden) return
-					load()
-				}, 2500)
-				return () => clearInterval(timer)
+				const visible = () => !(typeof document !== "undefined" && document.hidden)
+				const onWake = () => { if (visible()) load() }
+				const timer = setInterval(() => { if (visible()) load() }, 700)
+				const listensDocument = typeof document !== "undefined" && typeof document.addEventListener === "function"
+				const listensWindow = typeof window !== "undefined" && typeof window.addEventListener === "function"
+				if (listensDocument) document.addEventListener("visibilitychange", onWake)
+				if (listensWindow) window.addEventListener("focus", onWake)
+				return () => {
+					clearInterval(timer)
+					if (listensDocument) document.removeEventListener("visibilitychange", onWake)
+					if (listensWindow) window.removeEventListener("focus", onWake)
+				}
 			}, [sessionId, load])
 			react.useEffect(() => {
 				if (typeof console !== "undefined" && console.info) {

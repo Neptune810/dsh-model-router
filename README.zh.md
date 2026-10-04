@@ -351,7 +351,7 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 node --test
 ```
 
-160 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+161 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（12 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（16 个）用 ctx/agent 替身
@@ -365,7 +365,7 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（32 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（33 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、

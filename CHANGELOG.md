@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.2
+
+**The composer readout now tracks the host almost live: a shorter poll plus an immediate refresh the moment the window comes back.**
+
+- The trigger/badge readout is driven by `GET /model-router/state`, which the panel polls. The interval dropped
+  from 2500 ms to 700 ms, so the model and effort of the current step appear within well under a second.
+- `visibilitychange` (becoming visible) and window `focus` now call the same refresh at once, instead of waiting
+  for the next tick — the common "switch back to DSH and the label is stale" case is gone. A hidden window still
+  polls nothing.
+- Unchanged by design: the cell itself shows the official session model + reasoning effort (the plugin never
+  writes `modelSelection`), while the router's own per-step choice appears in the readout, the panel and the
+  per-call route rows.
+- 161 tests (`test/client.test.js` 1 new: the poll is armed while visible, does nothing while hidden, and a
+  returning window refreshes immediately).
 ## 0.14.1
 
 **A plan confirmation now survives a restart, so a conversation you already answered no longer pulses the amber dot and asks again.**
