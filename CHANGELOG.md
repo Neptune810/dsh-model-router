@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.1
+
+**A plan confirmation now survives a restart, so a conversation you already answered no longer pulses the amber dot and asks again.**
+
+- The per-conversation live state seeded `confirmedPlan: ''` instead of reading the value the store had persisted.
+  A conversation confirmed before its first request — and every conversation after a DSH restart — therefore came
+  back unconfirmed, showing the warn bar and the pulsing amber dot on the composer trigger again. `lib/index.js`
+  now seeds it from the session record, exactly like the control scope, the bound effort model and the pinned task
+  type.
+- Editing the scope, the bound model, the task type or the pool still produces a different plan key and asks once
+  more; only the lost-answer case changed.
+- 160 tests (`test/modes.test.js` 2 new: a plan confirmed before the first request survives the live state being
+  created, and an edited pool still asks again).
 ## 0.14.0
 
 **Crossing brands is now its own decision: the model pool is grouped per provider with bulk add/remove, costs can be filled in automatically, and a switch to a different provider asks first.**

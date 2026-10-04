@@ -722,3 +722,58 @@ test('a refreshed OpenRouter snapshot wins over the built-in rules', async () =>
   }
 })
 
+/**
+ * `/state?sessionId=` for one conversation. A session the host has never seen
+ * still answers from the store, which is what the panel opens with.
+ */
+async function sessionState(host, sessionId) {
+  const res = await call(host.routes.get('/model-router/state'), { url: '/model-router/state?sessionId=' + sessionId })
+  return JSON.parse(res.payload)
+}
+
+test('a plan confirmed before the conversation ran survives the live state being created (regression)', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  // A brand-new conversation has no live agent state yet, so the panel's confirm
+  // can only persist to the store. It must still count once the conversation runs
+  // its first request (and across a host restart), or the panel highlights the plan
+  // and pulses the amber dot again even though the user just answered.
+  const before = await sessionState(host, 's1')
+  assert.ok(before.planKey, 'the host states a plan key before the first request')
+  const confirmed = await call(host.routes.get('/model-router/confirm'), {
+    method: 'POST', url: '/model-router/confirm', headers: SAME_ORIGIN,
+    body: { sessionId: 's1', plan: before.planKey },
+  })
+  assert.equal(confirmed.status, 200)
+  assert.equal((await sessionState(host, 's1')).planConfirmed, true, 'the store alone already answers true')
+
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('写一个函数') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  const after = await sessionState(host, 's1')
+  assert.equal(after.planKey, before.planKey, 'running a request does not change the plan')
+  assert.equal(after.planConfirmed, true, 'the confirmation is not lost when the live state is created')
+})
+
+test('changing the pool or the scope still asks again after a confirmation', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('写一个函数') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+  const key = (await sessionState(host, 's1')).planKey
+  await call(host.routes.get('/model-router/confirm'), {
+    method: 'POST', url: '/model-router/confirm', headers: SAME_ORIGIN,
+    body: { sessionId: 's1', plan: key },
+  })
+  assert.equal((await sessionState(host, 's1')).planConfirmed, true)
+
+  // Editing the pool produces a different key, which is what asks once more.
+  await call(host.routes.get('/model-router/pool'), {
+    method: 'POST', url: '/model-router/pool', headers: SAME_ORIGIN,
+    body: { pool: [POOL[0]] },
+  })
+  const edited = await sessionState(host, 's1')
+  assert.notEqual(edited.planKey, key)
+  assert.equal(edited.planConfirmed, false, 'an edited plan asks again')
+})
+

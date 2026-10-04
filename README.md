@@ -402,13 +402,13 @@ enough.
 node --test
 ```
 
-158 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
+160 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
 `test/plugin.test.js` (16) drives the host wiring with ctx/agent doubles, including a quiet tool loop
-that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (31)
+that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (33)
 covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
 Desktop proxy stripped, and one carrying `Origin: null`), pool/preset editing, a
 pinned task type, a third-party effort vocabulary, vision routing, subagent frugality, todo-driven

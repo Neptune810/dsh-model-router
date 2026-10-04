@@ -351,11 +351,11 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 node --test
 ```
 
-158 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+160 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（12 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（16 个）用 ctx/agent 替身
-驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（31 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
+驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（33 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
 任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令、
 LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、允许/只切一次/禁止、只有异品牌时照常路由）与
 定价路由；`test/pricing.test.js`（11 个）覆盖价格分类表、USD 分档边界、OpenRouter 解析与索引、手标条目
