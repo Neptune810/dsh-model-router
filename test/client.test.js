@@ -919,3 +919,131 @@ test('a confirmed plan is silent, and a changed plan asks again', async () => {
   assert.match(textOf(bar), /代码重构/)
   assert.equal(changed.net.posts('/model-router/confirm').length, 0, 'rendering the bar posts nothing by itself')
 })
+
+test('pool rows are grouped by provider and each group adds or removes the whole brand', async () => {
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] }],
+    presets: {}, settings: { crossProvider: 'confirm' }, decisions: [],
+  }
+  const snapshot = officialSnapshot({
+    groups: [
+      { id: 'deepseek-official', name: 'Official', models: [{ id: 'deepseek-v4-pro', name: 'V4 Pro' }, { id: 'deepseek-flash', name: 'Flash' }] },
+      { id: 'vendor-x', name: 'Vendor X', models: [{ id: 'writer-pro', name: 'Writer Pro' }] },
+    ],
+  })
+  const app = await openControl({ state, snapshot })
+  openPanel(app.holder)
+  await app.rt.flush()
+
+  const heads = findAll(app.holder.tree, (node) => node.props && node.props.className === 'mr-prov')
+  assert.ok(heads.length >= 2, 'each provider group renders a header row')
+  const addVendor = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-provider-add'] === 'vendor-x')[0]
+  const removeVendor = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-provider-remove'] === 'vendor-x')[0]
+  assert.ok(addVendor && removeVendor, 'the vendor-x header carries the bulk controls')
+  assert.equal(textOf(addVendor), '全加入')
+  assert.equal(textOf(removeVendor), '全移除')
+
+  // Add all: only what is missing enters the pool, as a cheap default entry.
+  addVendor.props.onClick()
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/pool').pop().body), { pool: [
+    { id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] },
+    { id: 'vendor-x/writer-pro', tier: 'cheap', cost: 1, tags: [] },
+  ] })
+
+  // Remove all: every entry of that brand goes, the other brand survives.
+  // A fresh mount, because the stub /state never echoes the optimistic pool back.
+  const both = Object.assign({}, state, { pool: [
+    { id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] },
+    { id: 'vendor-x/writer-pro', tier: 'cheap', cost: 1, tags: [] },
+  ] })
+  const second = await openControl({ state: both, snapshot })
+  openPanel(second.holder)
+  await second.rt.flush()
+  const dropVendor = findAll(second.holder.tree, (node) => node.type === 'button' && node.props['data-provider-remove'] === 'vendor-x')[0]
+  dropVendor.props.onClick()
+  await second.rt.flush()
+  assert.deepEqual(plain(second.net.posts('/model-router/pool').pop().body), { pool: [
+    { id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] },
+  ] })
+})
+
+test('the panel head prices the pool, with the network fetch behind its own button', async () => {
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] }],
+    presets: {}, settings: {}, decisions: [],
+  }
+  const app = await openControl({ state })
+  openPanel(app.holder)
+  await app.rt.flush()
+
+  const auto = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-auto-price'])[0]
+  const net = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-net-price'])[0]
+  assert.ok(auto && net, 'the head offers both pricing controls')
+  assert.equal(textOf(auto), '自动定价')
+  assert.equal(textOf(net), '联网定价')
+
+  auto.props.onClick()
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/pool/auto-price').pop().body), { fetch: false })
+
+  const net2 = findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-net-price'])[0]
+  net2.props.onClick()
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/pool/auto-price').pop().body), { fetch: true })
+
+  // Nothing changed in this stub, so the note says so instead of inventing a count.
+  const note = findAll(app.holder.tree, (node) => node.props && node.props['data-mr-price-note'])[0]
+  assert.ok(note, 'the outcome is shown under the head')
+  assert.match(textOf(note), /没有需要更新的模型/)
+})
+
+test('a cross-provider proposal renders the bar and answers through /cross', async () => {
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] }, { id: 'vendor-x/writer-pro', tier: 'cheap', cost: 4, tags: [] }],
+    presets: {}, settings: { crossProvider: 'confirm' }, decisions: [],
+    cross: { mode: 'confirm', defaultMode: 'confirm', anchor: 'deepseek-official', allowed: false, proposal: { id: 'vendor-x/writer-pro', provider: 'vendor-x', model: 'writer-pro', tier: 'cheap', cost: 4, score: 12 } },
+  }
+  const app = await openControl({ state, snapshot: officialSnapshot({ groups: [{ id: 'deepseek-official', name: 'Official', models: [{ id: 'deepseek-v4-pro', name: 'V4 Pro' }] }] }) })
+  openPanel(app.holder)
+  await app.rt.flush()
+
+  const bar = byClass(app.holder.tree, 'mr-cross')[0]
+  assert.ok(bar, 'the proposal renders its own bar')
+  assert.match(textOf(bar), /跨品牌切换/)
+  assert.match(textOf(bar), /vendor-x\/writer-pro/, 'the bar names the target model')
+  const answer = (action) => findAll(app.holder.tree, (node) => node.type === 'button' && node.props['data-mr-cross-action'] === action)[0]
+  assert.equal(textOf(answer('once')), '只切一次')
+  assert.equal(textOf(answer('allow')), '本会话允许')
+  assert.equal(textOf(answer('never')), '不再跨品牌')
+
+  answer('once').props.onClick()
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/cross').pop().body), { sessionId: 'session-1', action: 'once' })
+})
+
+test('the cross-brand setting offers allow / ask / never and posts the choice', async () => {
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] }],
+    presets: {}, settings: { crossProvider: 'confirm' }, decisions: [],
+  }
+  const app = await openControl({ state })
+  openPanel(app.holder)
+  await app.rt.flush()
+  const row = findAll(app.holder.tree, (node) => node.props && node.props['data-mr-cross-setting'] === 'true')[0]
+  assert.ok(row, 'the more section carries the cross-brand setting')
+  const segmented = findAll(row, (node) => Array.isArray(node.props && node.props.options))[0]
+  assert.deepEqual(plain(segmented.props.options.map((option) => option.value)), ['allow', 'confirm', 'never'])
+  assert.equal(segmented.props.value, 'confirm')
+  segmented.props.onChange('never')
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/settings').pop().body), { settings: { crossProvider: 'never' } })
+})

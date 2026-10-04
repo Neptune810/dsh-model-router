@@ -78,6 +78,17 @@ window.__ModuleLoader__.load({
 				recent: "最近决策", turnShort: "轮",
 				needName: "先给任务类型起个名字", session: "会话",
 				poolAdd: "手动填模型 ID", delete: "删",
+				crossTitle: "跨品牌切换", crossPropose: "这一步想换到另一个品牌",
+				crossOnce: "只切一次", crossAllow: "本会话允许", crossNever: "不再跨品牌",
+				crossHint: "跨品牌比同品牌换模型影响大：默认先经你确认；「只切一次」只放行这一次",
+				crossSetting: "跨品牌", crossAllowLabel: "允许", crossConfirmLabel: "先问", crossNeverLabel: "禁止",
+				crossSettingHint: "插件能不能把本会话切到别的模型品牌：允许 = 直接切；先问 = 先弹确认；禁止 = 始终留在原品牌",
+				autoPrice: "自动定价", autoPriceHint: "用内置规则给没手标的模型填「便宜/中/贵」",
+				netPrice: "联网定价", netPriceHint: "先从 OpenRouter 拉一次价格快照，再给模型定价",
+				priceBusy: "定价中…", priceNone: "没有需要更新的模型",
+				priceDone: "已更新 {n} 个模型 · {s}",
+				groupAdd: "全加入", groupRemove: "全移除",
+				groupAddHint: "把该品牌的全部模型加入池", groupRemoveHint: "把该品牌的模型全部移出池",
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -132,6 +143,17 @@ window.__ModuleLoader__.load({
 				recent: "Recent routing", turnShort: "turn",
 				needName: "name the task type first", session: "session",
 				poolAdd: "add a model id", delete: "del",
+				crossTitle: "Cross-provider switch", crossPropose: "this step wants another brand",
+				crossOnce: "Switch once", crossAllow: "Allow in this chat", crossNever: "Never cross brands",
+				crossHint: "changing brand is weightier than swapping models inside one: it asks first by default; \u201conce\u201d lets just this step through",
+				crossSetting: "Cross-brand", crossAllowLabel: "allow", crossConfirmLabel: "ask", crossNeverLabel: "off",
+				crossSettingHint: "whether the router may move this chat to another brand: allow = yes, ask = confirm first, off = stay on the current brand",
+				autoPrice: "Auto price", autoPriceHint: "fill untagged models from the built-in rules",
+				netPrice: "Fetch prices", netPriceHint: "pull an OpenRouter price snapshot, then price the pool",
+				priceBusy: "pricing\u2026", priceNone: "nothing to update",
+				priceDone: "updated {n} models \u00b7 {s}",
+				groupAdd: "Add all", groupRemove: "Remove all",
+				groupAddHint: "add every model of this provider to the pool", groupRemoveHint: "remove this provider's models from the pool",
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -193,6 +215,15 @@ window.__ModuleLoader__.load({
 			".mr-chip[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.22));border-color:transparent;color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-actions{display:flex;justify-content:flex-end;gap:6px;padding:8px 8px 2px}",
 			".mr-div{height:1px;margin:6px 8px;background:var(--dsw-alias-border-l1,rgba(127,127,127,.18))}",
+			".mr-prov{display:flex;align-items:center;gap:4px;padding:6px 8px 2px}",
+			".mr-prov .mr-group{padding:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			".mr-prov .mr-chip{height:20px;font-size:10px;padding:0 6px}",
+			".mr-cross{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-business-primary,rgba(59,130,246,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover,rgba(59,130,246,.12))}",
+			".mr-cross-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-state-business-primary,#3b82f6);font-size:11px;font-weight:500}",
+			".mr-cross-dot{width:6px;height:6px;border-radius:50%;flex:none;background:currentColor}",
+			".mr-cross-body{color:var(--dsw-alias-label-primary,#e8e8ea);font-size:12px;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+			".mr-cross-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}",
+			".mr-cross-hint{flex:1;min-width:0;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:15px}",
 			".mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}",
 			".mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
 			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
@@ -335,6 +366,7 @@ window.__ModuleLoader__.load({
 			const [solidBg, setSolidBg] = react.useState(null)
 			const [poolOverride, setPoolOverride] = react.useState(null)
 			const [poolOpen, setPoolOpen] = react.useState(false)
+			const [priceNote, setPriceNote] = react.useState("")
 			const [hostGroups, setHostGroups] = react.useState([])
 			const [catalogStore, setCatalogStore] = react.useState(props && props.resolveCatalog ? props.resolveCatalog() : undefined)
 			const [planDone, setPlanDone] = react.useState("")
@@ -483,6 +515,10 @@ window.__ModuleLoader__.load({
 			const presets = (state && state.presets) || {}
 			const settings = (state && state.settings) || {}
 			const packed = pool.map((entry) => entry.id)
+			// The cross-provider guard: the host proposes a brand switch, the panel answers it.
+			const cross = (state && state.cross) || {}
+			const crossProposal = cross.proposal || null
+			const crossMode = cross.mode || settings.crossProvider || "confirm"
 
 			/** Rows come from the pool, the host catalog and the client catalog. */
 			const rows = []
@@ -513,6 +549,53 @@ window.__ModuleLoader__.load({
 				if (!id || packed.indexOf(id) >= 0) return
 				savePool(pool.concat([{ id: id, tier: "cheap", cost: 1, tags: [] }]))
 			}
+			/** Which brand a model id belongs to — the /-prefix of "provider/model". */
+			const providerOf = (id) => String(id || "").split("/")[0]
+			/** Every model id of one provider the panel knows about (pool or catalog). */
+			const providerModels = (provider) => rows.filter((model) => providerOf(model.id) === provider).map((model) => model.id)
+			/** Bulk-add a whole brand, so a multi-brand pool is not one click per model. */
+			const addProvider = (provider) => {
+				const missing = providerModels(provider).filter((id) => packed.indexOf(id) < 0)
+				if (missing.length === 0) return
+				savePool(pool.concat(missing.map((id) => ({ id: id, tier: "cheap", cost: 1, tags: [] }))))
+			}
+			/** Bulk-remove a whole brand; entries with the same prefix all go. */
+			const removeProvider = (provider) => {
+				const next = pool.filter((entry) => providerOf(entry.id) !== provider)
+				if (next.length !== pool.length) savePool(next)
+			}
+			/** The brand header of a pool group: name on the left, add/remove all on the right. */
+			const providerHead = (provider, label, keyName) => h("div", { className: "mr-prov", key: keyName || ("provider:" + provider) },
+				h("div", { className: "mr-group", title: provider }, label || provider),
+				h("button", {
+					type: "button", className: "mr-chip", disabled: busy, title: t.groupAddHint,
+					"data-provider-add": provider,
+					onClick: () => addProvider(provider),
+				}, t.groupAdd),
+				h("button", {
+					type: "button", className: "mr-chip", disabled: busy, title: t.groupRemoveHint,
+					"data-provider-remove": provider,
+					onClick: () => removeProvider(provider),
+				}, t.groupRemove)
+			)
+			/** Auto-fill the cost labels; the remote flag pulls a fresh OpenRouter snapshot first. */
+			const autoPrice = (remote) => {
+				setBusy(true)
+				setPriceNote(t.priceBusy)
+				api("/pool/auto-price", { method: "POST", body: { fetch: remote === true } })
+					.then((result) => {
+						const changed = (result && result.changed) || []
+						setError("")
+						setPriceNote(changed.length === 0
+							? t.priceNone
+							: t.priceDone.replace("{n}", String(changed.length)).replace("{s}", String((result && result.source) || "builtin")))
+						load()
+					})
+					.catch((reason) => { setPriceNote(""); setError(String((reason && reason.message) || reason)) })
+					.finally(() => setBusy(false))
+			}
+			/** Answer a cross-provider proposal: once / allow for this chat / never again. */
+			const setCross = (action) => run("/cross", { sessionId: sessionId, action: action })
 			/**
 			 * The trailing control of a merged model row: tick the model into the router pool,
 			 * or — in effort scope — bind it as the single model the router may touch.
@@ -812,8 +895,20 @@ window.__ModuleLoader__.load({
 							"aria-expanded": String(showPool),
 							onClick: () => setPoolOpen(!showPool),
 						}, t.pool, h("span", { className: "mr-tag" }, String(poolCount))),
+						// Cost auto-fill lives on the head so it is reachable in both layouts.
+						effortMode ? null : h("button", {
+							type: "button", className: "mr-chip", style: { marginLeft: seated ? "auto" : "4px" }, disabled: busy,
+							title: t.autoPriceHint, "data-mr-auto-price": "true",
+							onClick: () => autoPrice(false),
+						}, t.autoPrice),
+						effortMode ? null : h("button", {
+							type: "button", className: "mr-chip", disabled: busy,
+							title: t.netPriceHint, "data-mr-net-price": "true",
+							onClick: () => autoPrice(true),
+						}, t.netPrice),
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
+					if (priceNote) body.push(h("div", { className: "mr-note", "data-mr-price-note": "true" }, priceNote))
 					// --- Per-conversation confirmation, before anything else can be touched ---
 					if (needsConfirm) {
 						const scopeLabel = t[plan.control] || plan.control || t.confirmNone
@@ -837,6 +932,23 @@ window.__ModuleLoader__.load({
 							h("div", { className: "mr-confirm-foot" },
 								h("span", { className: "mr-confirm-hint" }, t.confirmHint),
 								h("button", { type: "button", className: "mr-btn", "data-primary": "true", disabled: busy, onClick: confirmPlan }, t.confirmAction)
+							)
+						))
+					}
+					// --- Cross-provider proposal: the host wants another brand ---
+					if (crossProposal && crossMode === "confirm") {
+						const target = String(crossProposal.id || "")
+						body.push(h("div", { key: "cross", className: "mr-cross", "data-mr-cross": "proposal" },
+							h("div", { className: "mr-cross-head" },
+								h("span", { className: "mr-cross-dot" }),
+								h("span", null, t.crossTitle)
+							),
+							h("div", { className: "mr-cross-body", title: target }, t.crossPropose + " · " + target),
+							h("div", { className: "mr-cross-foot" },
+								h("span", { className: "mr-cross-hint" }, t.crossHint),
+								h("button", { type: "button", className: "mr-btn", disabled: busy, "data-mr-cross-action": "once", onClick: () => setCross("once") }, t.crossOnce),
+								h("button", { type: "button", className: "mr-btn", disabled: busy, "data-mr-cross-action": "allow", onClick: () => setCross("allow") }, t.crossAllow),
+								h("button", { type: "button", className: "mr-btn", disabled: busy, "data-mr-cross-action": "never", onClick: () => setCross("never") }, t.crossNever)
 							)
 						))
 					}
@@ -872,7 +984,10 @@ window.__ModuleLoader__.load({
 						const officialIds = {}
 						const officialBare = {}
 						for (const group of officialGroups) {
-							officialBody.push(h("div", { key: "official-group:" + group.id, className: "mr-group" }, group.id === "deepseek-account" ? t.officialAccount : (group.name || group.id)))
+							const groupLabel = group.id === "deepseek-account" ? t.officialAccount : (group.name || group.id)
+							officialBody.push(effortMode
+								? h("div", { key: "official-group:" + group.id, className: "mr-group" }, groupLabel)
+								: providerHead(group.id, groupLabel, "official-group:" + group.id))
 							for (const model of (group.models || [])) {
 								const id = group.id + "/" + model.id
 								officialIds[id] = true
@@ -911,13 +1026,26 @@ window.__ModuleLoader__.load({
 							extraModels.push({ id: entry.id, label: entry.id })
 						}
 						if (extraModels.length > 0) {
-							officialBody.push(h("div", { key: "official-group:other", className: "mr-group" }, t.poolOther))
+							// One brand per header, same as the official groups, so the bulk
+							// add/remove controls are reachable for models outside the directory.
+							const extraProviders = []
 							for (const model of extraModels) {
-								officialBody.push(h("div", { key: "pool-model:" + model.id, className: "mr-row", style: { paddingRight: "8px" } },
-									h("span", { className: "mr-pick" }, h("span", { className: "mr-name", title: model.id }, model.label)),
-									poolToggle(model.id)
-								))
-								if (!effortMode && packed.indexOf(model.id) >= 0) officialBody.push(poolOptions(model.id))
+								const provider = providerOf(model.id)
+								if (extraProviders.indexOf(provider) < 0) extraProviders.push(provider)
+							}
+							for (const provider of extraProviders) {
+								const label = extraProviders.length === 1 ? t.poolOther : t.poolOther + " · " + provider
+								officialBody.push(effortMode
+									? h("div", { key: "other-group:" + provider, className: "mr-group" }, label)
+									: providerHead(provider, label, "other-group:" + provider))
+								for (const model of extraModels) {
+									if (providerOf(model.id) !== provider) continue
+									officialBody.push(h("div", { key: "pool-model:" + model.id, className: "mr-row", style: { paddingRight: "8px" } },
+										h("span", { className: "mr-pick" }, h("span", { className: "mr-name", title: model.id }, model.label)),
+										poolToggle(model.id)
+									))
+									if (!effortMode && packed.indexOf(model.id) >= 0) officialBody.push(poolOptions(model.id))
+								}
 							}
 						}
 						if (!effortMode) {
@@ -997,7 +1125,19 @@ window.__ModuleLoader__.load({
 							body.push(h("div", { key: "pool-hint", className: "mr-note", style: { padding: "0 8px 2px" } }, t.poolHint2))
 						}
 						if (rows.length === 0) body.push(h("div", { key: "pool-none", className: "mr-note" }, t.empty))
+						// Same brand grouping as the merged layout: one header per provider,
+						// with the bulk add/remove controls the multi-brand pool needs.
+						const fallbackProviders = []
 						for (const model of rows) {
+							const provider = providerOf(model.id)
+							if (fallbackProviders.indexOf(provider) < 0) fallbackProviders.push(provider)
+						}
+						for (const provider of fallbackProviders) {
+							body.push(effortMode
+								? h("div", { key: "pool-group:" + provider, className: "mr-group" }, provider)
+								: providerHead(provider, provider, "pool-group:" + provider))
+							for (const model of rows) {
+							if (providerOf(model.id) !== provider) continue
 							const entry = pool.find((candidate) => candidate.id === model.id)
 							if (effortMode) {
 								const bound = effortBoundId === model.id
@@ -1046,6 +1186,7 @@ window.__ModuleLoader__.load({
 									}, t.vision)
 								))
 							}
+						}
 						}
 						if (!effortMode) {
 							body.push(h("div", { key: "pool-add", className: "mr-line", style: { padding: "2px 8px 4px 34px" } },
@@ -1119,7 +1260,20 @@ window.__ModuleLoader__.load({
 						})
 					))
 
-					if (state && state.decisions && state.decisions.length > 0) {
+					// Crossing brands is more conservative than swapping models inside one brand.
+				body.push(h("div", { key: "cross-setting", className: "mr-line", style: { padding: "2px 8px" }, "data-mr-cross-setting": "true" },
+					h("span", { className: "mr-name", title: t.crossSettingHint }, t.crossSetting),
+					h(Segmented, {
+						title: t.crossSettingHint, disabled: busy, value: crossMode,
+						onChange: (value) => setSetting({ crossProvider: value }),
+						options: [
+							{ value: "allow", label: t.crossAllowLabel, title: t.crossSettingHint },
+							{ value: "confirm", label: t.crossConfirmLabel, title: t.crossSettingHint },
+							{ value: "never", label: t.crossNeverLabel, title: t.crossSettingHint },
+						],
+					})
+				))
+				if (state && state.decisions && state.decisions.length > 0) {
 						body.push(h("div", { key: "recent-title", className: "mr-group" }, t.recent))
 						body.push(h("div", { key: "recent" },
 							state.decisions.slice(-5).reverse().map((decision, index) => h("div", {

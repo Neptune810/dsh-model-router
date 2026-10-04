@@ -275,6 +275,9 @@ test('a pinned task type overrides the keyword rules', async () => {
 test('third-party models route with their own effort vocabulary', async () => {
   const host = makeHost(
     {
+      // crossProvider must be explicitly allowed: the default ('confirm') would
+      // hold this step on deepseek-official and only propose the vendor-x switch.
+      crossProvider: 'allow',
       pool: [
         { id: 'deepseek-official/deepseek-flash', cost: 1, tier: 'cheap' },
         { id: 'vendor-x/writer-pro', cost: 4, tier: 'strong', weights: { novel: 99 } },
@@ -528,3 +531,194 @@ test('a pick for a session that has not run yet is reflected by /state', async (
   assert.equal(state.effectiveControl, 'effort')
   assert.equal(state.pinnedTaskType, 'novel', 'the pinned task type shows before the first request')
 })
+
+// ---- cross-provider guard (v0.14) -------------------------------------------
+
+/** Pool that spans two brands: flash is the anchor, writer-pro is the rival. */
+const CROSS_POOL = [
+  { id: 'deepseek-official/deepseek-flash', cost: 1, tier: 'cheap' },
+  { id: 'vendor-x/writer-pro', cost: 4, tier: 'strong', weights: { novel: 99 } },
+]
+const CROSS_PRESETS = { novel: { match: ['续写'], weights: { 'vendor-x/writer-pro': 99 } } }
+const SAME_ORIGIN = { origin: 'http://localhost', host: 'localhost' }
+
+async function stateOf(host, sessionId = 's1') {
+  const res = await call(host.routes.get('/model-router/state'), {
+    method: 'GET', url: '/model-router/state?sessionId=' + sessionId,
+  })
+  return JSON.parse(res.payload)
+}
+
+test('a cross-provider switch is proposed, not taken, by default', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: CROSS_PRESETS })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段') })
+  const held = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(held.provider, 'deepseek-official', 'the conversation stays on its own brand')
+  assert.equal(held.model, 'deepseek-flash')
+
+  const state = await stateOf(host)
+  assert.equal(state.cross.mode, 'confirm')
+  assert.equal(state.cross.defaultMode, 'confirm')
+  assert.equal(state.cross.anchor, 'deepseek-official')
+  assert.equal(state.cross.allowed, false)
+  assert.equal(state.cross.proposal.id, 'vendor-x/writer-pro', 'the rival is exposed as a proposal')
+  assert.equal(state.cross.proposal.provider, 'vendor-x')
+})
+
+test('allowing a conversation lets it cross to the other brand', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: CROSS_PRESETS })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  const allowed = await call(host.routes.get('/model-router/cross'), {
+    method: 'POST', url: '/model-router/cross', headers: SAME_ORIGIN,
+    body: { sessionId: 's1', action: 'allow' },
+  })
+  assert.equal(allowed.status, 200)
+
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段', 2) })
+  const crossed = await request(host, { agent, turn: 2, step: 0 }, seed())
+  assert.equal(crossed.provider, 'vendor-x')
+  assert.equal(crossed.model, 'writer-pro')
+  assert.equal((await stateOf(host)).cross.allowed, true)
+})
+
+test('approving the proposal crosses once, then the new brand is the anchor', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: CROSS_PRESETS })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  const once = await call(host.routes.get('/model-router/cross'), {
+    method: 'POST', url: '/model-router/cross', headers: SAME_ORIGIN,
+    body: { sessionId: 's1', action: 'once' },
+  })
+  assert.equal(once.status, 200)
+  assert.equal(JSON.parse(once.payload).once, 'vendor-x/writer-pro')
+
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段', 2) })
+  const crossed = await request(host, { agent, turn: 2, step: 0 }, seed())
+  assert.equal(crossed.provider, 'vendor-x')
+  assert.equal(crossed.model, 'writer-pro')
+  assert.equal((await stateOf(host)).cross.allowed, false, 'once is not a standing permission')
+})
+
+test('never keeps the conversation on its own brand with no proposal', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: CROSS_PRESETS, crossProvider: 'never' })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段') })
+  const held = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(held.provider, 'deepseek-official')
+  assert.equal(held.model, 'deepseek-flash')
+  const state = await stateOf(host)
+  assert.equal(state.cross.mode, 'never')
+  assert.equal(state.cross.proposal, null)
+})
+
+test('a pool that only holds another brand still routes (guard needs an anchor brand)', async () => {
+  const host = makeHost({
+    pool: [{ id: 'vendor-x/writer-pro', cost: 4, tier: 'strong', weights: { novel: 99 } }],
+    routes: ROUTES,
+    presets: CROSS_PRESETS,
+  })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(out.provider, 'vendor-x')
+  assert.equal(out.model, 'writer-pro')
+})
+
+test('a single-brand pool never proposes a cross-provider switch', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed(HARD_BRIEF) })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal((await stateOf(host)).cross.proposal, null)
+})
+
+test('the /cross route rejects an unknown action', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES })
+  const res = await call(host.routes.get('/model-router/cross'), {
+    method: 'POST', url: '/model-router/cross', headers: SAME_ORIGIN,
+    body: { sessionId: 's1', action: 'sometimes' },
+  })
+  assert.equal(res.status, 400)
+})
+
+test('the pool auto-pricer fills unlabelled rows and leaves hand-labelled ones alone', async () => {
+  const host = makeHost({
+    pool: [
+      { id: 'deepseek-official/deepseek-reasoner' },
+      { id: 'deepseek-official/deepseek-flash', cost: 8, costSource: 'manual' },
+      { id: 'vendor-x/gpt-4o-mini' },
+    ],
+    routes: ROUTES,
+  })
+  const priced = await call(host.routes.get('/model-router/pool/auto-price'), {
+    method: 'POST', url: '/model-router/pool/auto-price', headers: SAME_ORIGIN, body: {},
+  })
+  assert.equal(priced.status, 200)
+  const payload = JSON.parse(priced.payload)
+  assert.equal(payload.ok, true)
+  assert.equal(payload.source, 'builtin')
+  const filled = Object.fromEntries(payload.changed.map((row) => [row.id, row.to]))
+  assert.equal(filled['deepseek-official/deepseek-reasoner'], 4)
+  assert.equal(filled['vendor-x/gpt-4o-mini'], 1)
+  assert.deepEqual(payload.skipped.map((row) => row.id), ['deepseek-official/deepseek-flash'])
+
+  const state = await stateOf(host)
+  const rows = Object.fromEntries(state.pool.map((row) => [row.id, row]))
+  assert.equal(rows['deepseek-official/deepseek-flash'].cost, 8, 'the manual label survives')
+  assert.equal(rows['deepseek-official/deepseek-flash'].costSource, 'manual')
+  assert.equal(rows['deepseek-official/deepseek-reasoner'].costSource, 'builtin')
+})
+
+test('the /prices route reports a fetch failure instead of throwing', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const original = globalThis.fetch
+  globalThis.fetch = async () => { throw new Error('offline') }
+  try {
+    const res = await call(host.routes.get('/model-router/prices'), {
+      method: 'POST', url: '/model-router/prices', headers: SAME_ORIGIN, body: {},
+    })
+    assert.equal(res.status, 400, 'a failed refresh is reported as a 400')
+    assert.match(JSON.parse(res.payload).error, /offline|fetch/i)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('a refreshed OpenRouter snapshot wins over the built-in rules', async () => {
+  const host = makeHost({ pool: [{ id: 'vendor-x/mystery-model' }], routes: ROUTES })
+  const original = globalThis.fetch
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      data: [
+        { id: 'vendor-x/mystery-model', name: 'Mystery', pricing: { prompt: '0.00002', completion: '0.00006' } },
+      ],
+    }),
+  })
+  try {
+    const refreshed = await call(host.routes.get('/model-router/prices'), {
+      method: 'POST', url: '/model-router/prices', headers: SAME_ORIGIN, body: {},
+    })
+    assert.equal(refreshed.status, 200)
+    assert.equal(JSON.parse(refreshed.payload).count, 1)
+
+    const priced = await call(host.routes.get('/model-router/pool/auto-price'), {
+      method: 'POST', url: '/model-router/pool/auto-price', headers: SAME_ORIGIN, body: {},
+    })
+    const payload = JSON.parse(priced.payload)
+    assert.equal(payload.source, 'openrouter+builtin')
+    assert.equal(payload.changed[0].source, 'openrouter')
+    assert.equal(payload.changed[0].to, 8, 'the snapshot price is used')
+    const state = await stateOf(host)
+    assert.equal(state.prices.remote.count, 1)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+

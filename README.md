@@ -95,7 +95,9 @@ the official "model · effort" trigger label. Below it sit the router's own grou
 model rows**: every session-model row carries a 模型池 / Model pool chip on its right, tapping it pools or
 unpools that model, a pooled row expands its 定位 / 价格 / 视觉 controls underneath, and pool entries
 whose provider group is not in the directory gather under 其他模型 / Other models with the manual
-"type a model id" row. Then 任务预设 and 更多. Every mutation goes to the host over same-origin
+"type a model id" row. **Rows are grouped by provider**, each group header carrying 全加入 / Add all and
+全移除 / Remove all, and the panel head carries 自动定价 / Auto price and 联网定价 / Fetch prices to fill
+the 便宜 / 中 / 贵 cost level of entries you have not labelled by hand. Then 任务预设 and 更多. Every mutation goes to the host over same-origin
 `/model-router/*` routes, and the per-call route row in the conversation is unchanged.
 
 The old `conversation.input.right` chip (`model-router:composer-control`, order 20) is still registered,
@@ -132,6 +134,30 @@ until you answer. Confirming records the plan key for that session — `/state` 
 and `planConfirmed` — and neither the bar nor the dot comes back in that conversation; changing the scope,
 the bound model, the task type or the pool produces a different key and asks once more.
 
+## Multiple brands: grouping, automatic pricing and the cross-brand guard (v0.14.0)
+
+The pool used to be a flat list, so a second brand took one click per model. The model list is now **grouped
+by provider** — every official directory group and every brand under 其他模型 / Other models — and each
+group header carries 全加入 / Add all and 全移除 / Remove all, so a whole brand enters or leaves the pool
+in one click.
+
+Costs no longer have to be labelled by hand. A built-in **relative-price classifier** (`lib/pricing.js`,
+pure and dependency-free) maps a model name onto 便宜 / 中 / 贵 (cost 1 / 4 / 8) for the common DeepSeek,
+OpenAI, Anthropic, Google, Qwen and Llama families; 自动定价 / Auto price uses it plus any stored
+OpenRouter snapshot, and 联网定价 / Fetch prices pulls a fresh snapshot first (20 s timeout). Each pool
+entry records where its level came from in `costSource` (`builtin` | `openrouter` | `manual`), and an entry
+you labelled by hand is never overwritten.
+
+Crossing brands is its own decision. 跨品牌 / Cross-brand has three values — 允许 / 先问 / 禁止 (allow /
+ask / off, default ask). Under `ask`, when the next step wants a model from another brand the host **stays
+on the current brand**, exposes the candidate as `state.cross.proposal`, and the panel shows a propose bar
+with 只切一次 / Switch once, 本会话允许 / Allow in this chat and 不再跨品牌 / Never cross brands. A pool
+holding only another brand still routes (the guard needs a same-brand alternative), and the hysteresis
+memory can no longer resurrect a model the guard excluded.
+
+Routes: `POST /model-router/cross { sessionId, action }` (`allow` / `once` / `never`),
+`POST /model-router/pool/auto-price { fetch }` and `POST /model-router/prices`; `/state` gains `cross` and
+`prices`.
 ## The panel matches the host (v0.6.4)
 
 The composer control is styled with the harness's own tokens — the same 34px rows,
@@ -376,17 +402,20 @@ enough.
 node --test
 ```
 
-133 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
+158 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
 `test/plugin.test.js` (16) drives the host wiring with ctx/agent doubles, including a quiet tool loop
-that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (21)
+that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (31)
 covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
 Desktop proxy stripped, and one carrying `Origin: null`), pool/preset editing, a
 pinned task type, a third-party effort vocabulary, vision routing, subagent frugality, todo-driven
-task types, context pressure, the `/router` command and the LLM classifier;
+task types, context pressure, the `/router` command, the LLM classifier, the cross-brand guard (ask holds
+and exposes a proposal, allow / once / never, a pool holding only the other brand still routes) and the
+pricing routes; `test/pricing.test.js` (11) covers the price table, the USD band boundaries, OpenRouter
+parsing and lookup, manual entries being left alone, and a snapshot beating the built-in rules;
 `test/effort-model.test.js` (10) covers effort scope bound to one model (unbound stands off, binding
 clears the pending flag, only the bound model's effort moves, the vocabulary comes from its own pool
 entry, a session-less binding becomes the default) and the scope-aware manual yield (a model switch in
@@ -395,7 +424,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (28)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (32)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route

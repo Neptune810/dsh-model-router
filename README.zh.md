@@ -36,7 +36,7 @@
 
 客户端半边以优先级 -1 注册进官方 `conversation.input.model` 座位，**接管 composer 的模型格**；它同时
 承载官方「本会话模型 + 推理等级」两段和路由器的模式切换、重新接管、任务类型选择与任务预设：**模型池已合并进同一份模型列表**——每行右侧的
-「模型池」胶囊点一下把这个模型加进 / 移出池子，进了池子的行会在下面展开定位 / 价格 / 视觉，池里多出来的模型归到「其他模型」一组，菜单因此短了一半。
+「模型池」胶囊点一下把这个模型加进 / 移出池子，进了池子的行会在下面展开定位 / 价格 / 视觉，池里多出来的模型归到「其他模型」一组，菜单因此短了一半。列表按 provider 分组，每组标题右侧有「全加入 / 全移除」，成本还能用内置规则或 OpenRouter 快照自动填。
 所有写操作都走同源 `/model-router/*` 路由。
 
 **模型池**：只有池里的模型会被选中。
@@ -85,7 +85,7 @@ reasoningEffort })`）：provider/模型分组、当前行的对勾、待选行�
 重试，以及官方「模型 · 等级」的触发器文案。下面才是路由器自己的分组：接管状态、控制范围（模型+思考 /
 思考 / 模型）、任务类型，然后是模型列表本身——**模型池折进模型行**：每个会话模型行右侧带一个 模型池 /
 Model pool 小胶囊，点它把该模型加入或移出池子，入池的行会在下面展开 定位 / 价格 / 视觉，目录里没有对应
-provider 分组的池条目会和「手动填模型 ID」一起归到 其他模型 / Other models。再往下是 任务预设 与 更多。
+provider 分组的池条目会和「手动填模型 ID」一起归到 其他模型 / Other models。**模型行按 provider 分组**，每组标题右侧是 全加入 / Add all 与 全移除 / Remove all；面板头部有 自动定价 / Auto price 与 联网定价 / Fetch prices 两个按钮，用来给没手标价格的池条目填 便宜 / 中 / 贵。再往下是 任务预设 与 更多。
 所有改动都通过同源 `/model-router/*` 路由发给宿主；对话区里每次调用的路由行不变。
 
 旧的 `conversation.input.right` chip（`model-router:composer-control`，order 20）仍然注册着，但它会
@@ -115,6 +115,25 @@ composer 触发器上会有一个脉冲的黄点。确认会把这个方案键�
 与 `planConfirmed`——此后本对话不再出现高亮条和黄点；改动控制范围、绑定模型、任务类型或模型池都会产生不同
 的键，于是再确认一次。
 
+## 多品牌：分组、自动定价与跨品牌确认（v0.14.0）
+
+以前池子一行一个模型平铺，换第二个品牌要点很多次。现在模型列表**按 provider 分组**：官方目录的每个分组、
+以及「其他模型」里每个品牌，标题右侧都有「全加入 / Add all」和「全移除 / Remove all」，一次把整个品牌的
+模型放进 / 拿出池子。
+
+成本不再必须手标。内置的**相对价格分类器**（`lib/pricing.js`，纯函数、无依赖）按模型名给出 便宜 / 中 / 贵
+（cost 1 / 4 / 8），覆盖常见的 DeepSeek、OpenAI、Anthropic、Google、Qwen、Llama 家族；「自动定价」用它
+加上已存的 OpenRouter 快照，**联网定价**先拉一次 OpenRouter 快照（20 秒超时）再定价。每条池条目的
+`costSource` 记录来源（`builtin` / `openrouter` / `manual`），你手标过的那条永远不被覆盖。
+
+跨品牌切换本身也变成一个决定。`跨品牌 / Cross-brand` 有三个取值：允许 / 先问 / 禁止（默认先问）。选「先问」
+时，如果下一步想用的模型属于另一个品牌，宿主**先留在当前品牌**，把候选放进 `state.cross.proposal`，面板顶部
+弹出提议条，三个按钮分别对应 只切一次 / 本会话允许 / 不再跨品牌。池子里只有另一个品牌的模型时照常路由（守卫
+只在存在同品牌备选时才拦），迟滞记忆也不会再把被拦下的模型放回来。
+
+对应路由：`POST /model-router/cross { sessionId, action }`（action 取 `allow` / `once` / `never`）、
+`POST /model-router/pool/auto-price { fetch }`、`POST /model-router/prices`；`/state` 增加 `cross` 与
+`prices`。
 ## 全部点一点就能配（v0.6.2）
 
 输入栏那个控件就是完整的配置入口，不需要写 JSON/YAML：
@@ -125,7 +144,7 @@ composer 触发器上会有一个脉冲的黄点。确认会把这个方案键�
 | 任务类型 | 选「自动（按关键词规则）」或某个预设 |
 | 模型池 | **从实时模型目录里勾选**，再用下拉设档位 / 成本 / 视觉 |
 | 任务预设 | 点「+ 新建预设」→ 点常用词包（写作/代码/翻译/分析）或输入一个词 → 用下拉给每个池内模型选权重 |
-| 更多 | 带图步骤、任务识别（规则/语义）、上下文压力 |
+| 更多 | 带图步骤、任务识别（规则/语义）、上下文压力、跨品牌（允许/先问/禁止） |
 
 所有设置通过同源 `/model-router/*` 路由持久化到 `<profile>/.model-router/state.json`，行配置只是可选默认值。
 
@@ -332,19 +351,21 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 node --test
 ```
 
-133 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+158 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（12 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（16 个）用 ctx/agent 替身
-驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（21 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
-任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令
-与 LLM 语义分类；`test/effort-model.test.js`（10 个）覆盖思考模式绑定唯一模型（没选不接管、绑定后清掉待选
+驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（31 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
+任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令、
+LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、允许/只切一次/禁止、只有异品牌时照常路由）与
+定价路由；`test/pricing.test.js`（11 个）覆盖价格分类表、USD 分档边界、OpenRouter 解析与索引、手标条目
+不被覆盖、快照优先于内置规则；`test/effort-model.test.js`（10 个）覆盖思考模式绑定唯一模型（没选不接管、绑定后清掉待选
 标记、只调绑定模型的思考等级、词表取自它自己的池条目、无会话的绑定成为默认值）与按模式区分的手调让位
 （思考模式下换模型不算手调、改思考等级才算，模型模式忽略改思考等级，模型+思考对两者都反应）以及新路由的
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（28 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（32 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、

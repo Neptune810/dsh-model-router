@@ -73,6 +73,15 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
 .mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}
 .mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
 .mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}
+.mr-prov{display:flex;align-items:center;gap:4px;padding:6px 8px 2px}
+.mr-prov .mr-group{padding:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-prov .mr-chip{height:20px;font-size:10px;padding:0 6px}
+.mr-cross{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-business-primary,rgba(59,130,246,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover,rgba(59,130,246,.12))}
+.mr-cross-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-state-business-primary,#3b82f6);font-size:11px;font-weight:500}
+.mr-cross-dot{width:6px;height:6px;border-radius:50%;flex:none;background:currentColor}
+.mr-cross-body{color:var(--dsw-alias-label-primary,#e8e8ea);font-size:12px;line-height:17px}
+.mr-cross-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mr-cross-hint{flex:1;min-width:0;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:15px}
 .mr-confirm{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-warn-label,rgba(210,153,34,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-warn,rgba(210,153,34,.12))}
 .mr-confirm-head{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-state-warn-label,#d29922);font-size:11px;font-weight:500}
 .mr-confirm-dot{width:6px;height:6px;border-radius:50%;flex:none;background:currentColor}
@@ -95,10 +104,10 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
   <button class="mr-trigger" type="button" title="新对话还没确认路由方案时：触发器上多一个脉冲黄点（确认后消失）">deepseek-v4-pro <span class="mr-sub" title="本会话模型 deepseek-official/deepseek-v4-pro 的推理等级">high</span> <span class="mr-attn" title="新对话待确认路由方案"></span> <span class="mr-dot" data-yielded="false"></span></button>
   <button class="mr-trigger" type="button" disabled title="会话被占用 / 已失效时：按钮仍然在，但是禁用的（不会弹面板）">deepseek-v4-pro <span class="mr-sub">high</span> <span class="mr-spin" title="正在切换模型（pending）"></span> <span class="mr-dot" data-yielded="false"></span></button>
   <button class="toggle" type="button" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">切换深/浅色</button>
-  <p class="caption">dsh-model-router 已并入官方输入栏的「模型」格（就是原来选模型/思考等级的那个位置）：点开是同一个弹窗，上半部分是官方的本会话模型 + 推理等级，下半部分是插件自己的路由设置。渲染的就是插件里那份 CSS，只把主题变量换成了近似值；鼠标停在任意控件上会显示解释。<br>模型池不再单独列一段：每一行模型的右半边就是那个「模型池」小胶囊，点一下加进/移出，进了池子的模型才会在它下面展开定位 / 价格 / 视觉那一行；新对话继承上一次的方案，并在顶部高亮条里确认一次——一份列表同时干两件事，菜单因此短了一半。<br>官方那格没被声明时（老版本 / 别的宿主），插件会退回输入栏右侧的小胶囊，这时模型池才会单独成段。</p>
+  <p class="caption">dsh-model-router 已并入官方输入栏的「模型」格（就是原来选模型/思考等级的那个位置）：点开是同一个弹窗，上半部分是官方的本会话模型 + 推理等级，下半部分是插件自己的路由设置。渲染的就是插件里那份 CSS，只把主题变量换成了近似值；鼠标停在任意控件上会显示解释。<br>模型池不再单独列一段：每一行模型的右半边就是那个「模型池」小胶囊，点一下加进/移出，进了池子的模型才会在它下面展开定位 / 价格 / 视觉那一行；新对话继承上一次的方案，并在顶部高亮条里确认一次；模型行按 provider 分组，每组右侧可以一次把整个品牌加入 / 移出池子，面板头部能用内置规则或 OpenRouter 快照自动填价格；跨品牌切换默认先问，顶部弹出提议条——一份列表同时干两件事，菜单因此短了一半。<br>官方那格没被声明时（老版本 / 别的宿主），插件会退回输入栏右侧的小胶囊，这时模型池才会单独成段。</p>
 </div>
 <div class="mr-panel">
-  <div class="mr-head"><span class="mr-name">模型路由</span><span class="mr-dot" data-yielded="false" title="绿点 = 正在自动接管：按需要换模型、调思考等级"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="绿点 = 正在自动接管">已接管</span><button class="mr-btn mr-icon-btn" style="margin-left:auto"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
+  <div class="mr-head"><span class="mr-name">模型路由</span><span class="mr-dot" data-yielded="false" title="绿点 = 正在自动接管：按需要换模型、调思考等级"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="绿点 = 正在自动接管">已接管</span><button class="mr-chip" style="margin-left:auto" title="用内置规则给没手标的模型填「便宜/中/贵」">自动定价</button><button class="mr-chip" title="先从 OpenRouter 拉一次价格快照，再给模型定价">联网定价</button><button class="mr-btn mr-icon-btn" style="margin-left:auto"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l8 8M11 3l-8 8"/></svg></button></div>
   <!-- 每个新对话先确认一次：继承上一次的方案，确认后本对话不再出现这条 -->
   <div class="mr-confirm" data-mr-confirm="true">
     <div class="mr-confirm-head"><span class="mr-confirm-dot"></span><span title="这条方案是从上一个对话继承来的">已沿用上一次的选择</span></div>
@@ -113,13 +122,32 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
       <button class="mr-btn" data-primary="true" type="button" title="POST /model-router/confirm { sessionId, plan }">确认</button>
     </div>
   </div>
+  <!-- 跨品牌提议：宿主下一步想换到另一个品牌时才会出现（默认「先问」） -->
+  <div class="mr-cross" data-mr-cross="proposal">
+    <div class="mr-cross-head"><span class="mr-cross-dot"></span><span>跨品牌切换</span></div>
+    <div class="mr-cross-body" title="vendor-x/writer-pro">这一步想换到另一个品牌 · vendor-x/writer-pro</div>
+    <div class="mr-cross-foot">
+      <span class="mr-cross-hint" title="POST /model-router/cross { sessionId, action }">只影响这一步；不选就继续用当前品牌</span>
+      <button class="mr-btn" type="button" title="只让这一步跨过去">只切一次</button>
+      <button class="mr-btn" type="button" title="本对话内不再询问">本会话允许</button>
+      <button class="mr-btn" type="button" title="写进设置：以后不再跨品牌">不再跨品牌</button>
+    </div>
+  </div>
   <!-- 上半部分 = 官方那半：本会话模型 + 推理等级（渲染顺序与 client.js 一致） -->
   <div class="mr-group" title="官方那半：这里改的是本会话真正用的模型和推理等级，和插件接管无关">本会话模型</div>
-  <div class="mr-group" title="按官方顺序分组：DeepSeek 账号 → DeepSeek 官方 → 其它供应商">DeepSeek 账号</div>
+  <div class="mr-prov" title="按 provider 分组：每组标题右侧可以一次把整个品牌的模型加入 / 移出模型池">
+    <div class="mr-group">DeepSeek 账号</div>
+    <button class="mr-chip" title="把该品牌的全部模型加入池">全加入</button>
+    <button class="mr-chip" title="把该品牌的模型全部移出池">全移除</button>
+  </div>
   <div class="mr-row" title="左边是官方模型行，右边那个「模型池」胶囊才是插件的：勾上 = 允许路由到这个模型"><button class="mr-pick" type="button" role="menuitemradio" aria-checked="true" title="官方模型行：点了就把本会话切成这个模型，不会顺带动思考等级"><span class="mr-check"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3L11.5 4"/></svg></span><span class="mr-name">DeepSeek V4 Pro</span></button><button class="mr-chip" data-active="true" title="已在模型池里：再点一次把它移出去">模型池</button></div>
   <div class="mr-line" style="padding:0 8px 4px 34px"><span class="mr-tag" title="日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）">定位</span><div class="mr-seg" title="日常 = 平时就用它；攻坚 = 只在硬活/工程活时优先（hard +15 分、工程 +8 分）"><button title="日常：平时优先用它，省钱">日常</button><button data-active="true" title="攻坚：任务变难、或工具报错等证据出现时才优先">攻坚</button></div><span class="mr-tag" title="相对价格，随你标">价格</span><div class="mr-seg" title="相对价格，随你标：越贵越要任务够硬才选得中（1/4/8 分别扣 0.4 / 1.6 / 3.2 分）"><button title="成本 1，扣 0.4 分">便宜</button><button title="成本 4，扣 1.6 分">中</button><button data-active="true" title="成本 8，扣 3.2 分">贵</button></div><button class="mr-chip" title="带图任务优先选它（+25 分）">视觉</button></div>
   <div class="mr-row" title="这个模型不在模型池里，所以下面没有定位/价格那一行"><button class="mr-pick" type="button" role="menuitemradio" aria-checked="false" title="点别的模型 = 只换本会话模型；点已经选中的这一行 = 什么都不发，直接关掉弹窗"><span class="mr-check"></span><span class="mr-name">DeepSeek V4 Flash</span></button><button class="mr-chip" title="点一下把它加进模型池">模型池</button></div>
-  <div class="mr-group">DeepSeek 官方</div>
+  <div class="mr-prov">
+    <div class="mr-group">DeepSeek 官方</div>
+    <button class="mr-chip" title="把该品牌的全部模型加入池">全加入</button>
+    <button class="mr-chip" title="把该品牌的模型全部移出池">全移除</button>
+  </div>
   <div class="mr-row"><button class="mr-pick" type="button" role="menuitemradio" aria-checked="false" title="正在切换（pending）：对勾的位置显示转圈，按钮同时禁用"><span class="mr-check"><span class="mr-spin"></span></span><span class="mr-name">DeepSeek V4</span></button><button class="mr-chip" title="点一下把它加进模型池">模型池</button></div>
   <div class="mr-group" title="只对当前这个模型有效；当前模型没有任何等级可选时，这一整段不出现">推理等级</div>
   <button class="mr-row" type="button" role="menuitemradio" aria-checked="false" title="不给服务端发思考等级 = 交回供应商默认；只有模型自己没写默认等级时才有这一行"><span class="mr-check"></span><span class="mr-name">默认（供应商）</span></button>
@@ -140,6 +168,13 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:ce
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断">任务识别</span><div class="mr-seg" title="关键词 = 按预设里的 match；语义 = 每轮一次小模型判断"><button data-active="true" title="按预设里的 match 匹配">关键词</button><button title="每轮一次小模型判断">语义</button></div></div>
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="上下文压力：快满时优先用便宜模型">上下文压力</span><div class="mr-seg" title="快满时优先用便宜模型"><button title="不参与判断">关</button><button data-active="true" title="上下文快满时优先便宜模型">快满省</button></div></div>
   <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="半透明的主题菜单色会让背后的聊天内容透上来">面板背景</span><div class="mr-seg" title="选「不透明」最好读；选「跟随主题」会加毛玻璃模糊"><button data-active="true" title="用主题底色算出不透明色，文字最清楚">不透明</button><button title="沿用主题的半透明菜单色，再加背景模糊">跟随主题</button></div></div>
+  <div class="mr-line" style="padding:2px 8px"><span class="mr-name" title="跨品牌 = 换到另一个 provider 的模型；比同品牌换模型更保守">跨品牌</span><div class="mr-seg" title="允许 = 直接跨；先问 = 顶部弹出提议条等你点；禁止 = 只留在当前品牌"><button title="直接跨过去">允许</button><button data-active="true" title="先弹出提议条等你选">先问</button><button title="只留在当前品牌">禁止</button></div></div>
+  <div class="mr-prov">
+    <div class="mr-group">其他模型 · vendor-x</div>
+    <button class="mr-chip" title="把该品牌的全部模型加入池">全加入</button>
+    <button class="mr-chip" title="把该品牌的模型全部移出池">全移除</button>
+  </div>
+  <div class="mr-row" data-static="true"><span class="mr-check"></span><span class="mr-name">writer-pro</span><button class="mr-chip" title="点一下把它加进模型池">模型池</button></div>
   <div class="mr-group">最近决策</div>
   <div>
     <div class="mr-line" style="padding:0 8px"><span class="mr-tag">T3.4</span><span class="mr-name" title="deepseek-official/deepseek-v4-pro">deepseek-v4-pro · high</span><span class="mr-sub">hard</span></div>

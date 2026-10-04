@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.14.0
+
+**Crossing brands is now its own decision: the model pool is grouped per provider with bulk add/remove, costs can be filled in automatically, and a switch to a different provider asks first.**
+
+- 模型池 / Model pool rows are grouped by provider — both under the official directory groups and under 其他模型 /
+  Other models — and every group header carries 全加入 / Add all and 全移除 / Remove all, so building a
+  second-brand pool is two clicks instead of one click per model.
+- New `lib/pricing.js` (pure, import-free): a built-in relative-price classifier for the 便宜 / 中 / 贵 levels
+  (1 / 4 / 8) covering the common DeepSeek, OpenAI, Anthropic, Google, Qwen and Llama families, plus
+  `POST /model-router/pool/auto-price { fetch }` and `POST /model-router/prices`. Every pool entry records
+  where its cost came from (`costSource`: `builtin` | `openrouter` | `manual`); a level you labelled by hand
+  is never overwritten. 自动定价 / Auto price uses the built-in table and any stored snapshot; 联网定价 /
+  Fetch prices pulls a fresh OpenRouter snapshot first (20 s timeout) and stores it in
+  `<profile>/.model-router/state.json` under `prices`.
+- Cross-provider guard: a switch away from the provider currently in use is gated by 跨品牌 / Cross-brand
+  (允许 / 先问 / 禁止 — allow / ask / off, default ask). Under `ask` the host stays on the current brand and
+  exposes `state.cross.proposal`, and the panel shows a propose bar with 只切一次 / Switch once, 本会话允许 /
+  Allow in this chat and 不再跨品牌 / Never cross brands. A pool that holds only another brand keeps routing
+  (the guard only fires when a same-brand alternative exists), and the hysteresis memory can no longer
+  resurrect a model the guard excluded.
+- `POST /model-router/cross { sessionId, action }`; `/state` gains `cross` (mode, anchor, proposal) and
+  `prices` (levels, remote snapshot info).
+- `docs/ui-preview.html` shows the grouped pool, the per-brand add/remove controls, the price buttons and the
+  propose bar.
+- 158 tests (`test/pricing.test.js` 11 new; `test/client.test.js` 4 new for provider grouping, the price buttons and the cross-brand bar; the cross-guard and auto-price route cases in `test/modes.test.js`).
 ## 0.13.0
 
 **A new conversation inherits the last routing plan and asks you to confirm it once, instead of quietly resetting to the defaults on every DSH start.**
