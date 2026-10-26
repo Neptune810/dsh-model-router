@@ -253,6 +253,36 @@ description, daysUntil}]}`；面板在触发器与面板标题各点一个黄点
 （`--out`、`--now`、`--days`、`--offline <snapshot>`、`--json`、`--quiet`、`--fail-on-drift`）。它是建议性的：默认
 exit 0，且**从不**自动改目录，由人更新 YAML。`.github/workflows/catalog-diff.yml` 每周一 03:00 UTC 运行并上传报告。
 
+## 成本感知路由：默认关闭（v0.16.0）
+
+0.15.1 知道了「一步花了多少钱」；0.16.0 给候选标价：每个池条目都按随包模型目录算出当步生效的混合
+「美元/百万 token」单价，成本项由此可以参与打分。开关默认**关闭**，所以路由结果不变——十个 golden 快照与
+0.15.1 逐字节相同——先交付的是证据：每一步还会记录「若打开成本感知会选谁」，面板与 `/stats` 都能看出两者
+是否一致。
+
+- **`lib/pricing2.js`（子路径导出 `./pricing2`）。** `blendedUsdPerMTok(model, at, mix)` 按 token 构成给单个
+  模型算一个混合单价；`DEFAULT_MIX` 是 50% 新输入 / 35% 缓存读 / 15% 输出，而 `mixFromSplit(split)` 用真实会话
+  产生的构成——DeepSeek 会话约 97% 的 token 是缓存读，按默认构成估价会高估约一倍。`longContextRates(model,
+  tokens, at)` 给出当步生效的长上下文档（`whole_request` 整段按长价、`excess` 只对超出阈值的部分按长价），
+  `stepCost(model, split, at)` 给一次 `split` 定价、在没有长上下文档命中时与目录价格逐位相同，
+  `perCallCost(model, counts, at)` 按各自的 `effectiveFrom` 给 DeepSeek Search/Fetch 这类千次调用行定价。
+  未知价格一律是 `null`，绝不取 0。
+- **成本项。** `scoring.costWeight`（默认 0.15）扣 `costWeight * 10 * (rate/floor - 1)`，上限
+  `costGuard.maxMultiple - 1`（默认 8×）——最多 10.5 分，而 `hardBonus` 是 15、`engineeringBonus` 是 8：成本用来
+  打破平手、微调同档取舍，不会压过任务类别。`costGuard.unknownPricing: 'exclude'`（默认）对目录无法定价的
+  条目直接排除而不是猜；`hard` 步骤免于倍数限制；一旦守卫把池清空，路由器会关掉成本感知重试一次
+  （`costFallback`）——成本绝不能让会话无路由可用。
+- **影子。** `costAware` 关闭时，每一步同时算出成本感知会怎么选并记录下来。`GET /model-router/state` 多了
+  `costAware`：`{enabled, costWeight, guard, mix, floorUsdPerMTok, entries[{id, tier, priced, usdPerMTok,
+  currency, peak}], shadow}`，其中 `shadow` 为 `{current, candidate, agree, currentUsdPerMTok,
+  candidateUsdPerMTok, savedRatio, currentStepUsd, candidateStepUsd, costFallback}`。
+  `GET /model-router/stats` 在同一窗口内汇总：`shadow: {steps, agreeSteps, divergedSteps, agreementRate,
+  pricedSteps, currentUsd, candidateUsd, savedUsd, savedRatio}`。
+- **面板一行。** 价格提示下面多一行：`成本影子 (off) · 成本路由会选 X 而不是 Y · 便宜约 N%`；两者一致时是
+  `成本影子 (off) · 成本路由也选 X`；开关打开后是 `成本影子 (on)`。宿主不发 `costAware` 块时完全不显示。
+- **怎么打开。** 在行配置里写 `costAware: true`（面板暂不提供开关）。此后只要成本项的分差压过原有分差，
+  同一个配置就会路由到更便宜的那个模型。
+
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -430,10 +460,11 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-305 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+333 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
-`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（17 个）覆盖模型池、
-预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（19 个）用 ctx/agent 替身
+`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（23 个）覆盖模型池、
+预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞，以及成本项（加权扣分与上限）、成本守卫的四种拒绝
+（未定价条目、无底价、`hard` 豁免、倍数上限）与保证会话有路由的回退；`test/plugin.test.js`（19 个）用 ctx/agent 替身
 驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（34 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
 任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令、
 LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、允许/只切一次/禁止、只有异品牌时照常路由）与
@@ -444,12 +475,13 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（41 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（43 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
-分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，目录黄点与它下面的最多三行说明（宿主不发 `catalog` 块时完全安静），以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（13 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、只报一次的错误与关闭开关；`test/observation.test.js`（7 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
+分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，目录黄点与它下面的最多三行说明（宿主不发 `catalog` 块时完全安静）、成本影子的那一行（分叉时带节省比例、一致时的
+写法、开关状态、英文界面，以及宿主不发 `costAware` 块时的安静），以及声明的 `ui-chat` 座位与
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（14 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误与关闭开关；`test/observation.test.js`（11 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子）；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 
 ## 模型目录
 

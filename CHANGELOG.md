@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.16.0
+
+**A cost release that changes no route by default: every pool entry is priced at the catalog's own rate for the
+instant of the step, a cost term can join the score, and with the flag off each step also records what a cost-aware
+router would have picked. The golden snapshots are byte-identical to 0.15.1.**
+
+- **Token-level cost basis (`lib/pricing2.js`, new subpath export `./pricing2`).** `blendedUsdPerMTok(model, at,
+  mix)` returns one USD-per-million-token rate blended over a token mix; `DEFAULT_MIX` is 50% fresh input / 35% cache
+  read / 15% output, and `mixFromSplit(split)` derives the mix a real session produced (a DeepSeek session reads cache
+  for ~97% of its tokens, so the shipped default would overstate its rate ~2x). `longContextRates(model, promptTokens,
+  at)` returns the long-context tier in force (`whole_request` or `excess`, largest matching threshold wins,
+  `effectiveFrom` respected), `stepCost(model, split, at)` prices one split and matches `catalog-pricing`'s
+  `tokenCost` bit for bit whenever no long-context tier applies, and `perCallCost(model, counts, at)` prices
+  per-1000-call rows such as DeepSeek Search/Fetch on their own `effectiveFrom`. An unknown price is `null`, never
+  zero.
+- **Cost-aware scoring, off by default.** `scoring.costWeight` (0.15) subtracts `costWeight * 10 * (rate/floor - 1)`
+  capped at `costGuard.maxMultiple - 1` (8x), so at most 10.5 points against `hardBonus` 15 and `engineeringBonus` 8:
+  cost tilts same-tier choices and breaks ties, it does not outvote the task class. `costGuard.unknownPricing:
+  'exclude'` (default) drops an entry the catalog cannot price instead of guessing; `hard` steps are exempt from the
+  multiple. A guard that empties the pool retries once with cost awareness off and reports `costFallback`, so cost can
+  never leave a session unrouted. Turned on with `costAware: true` in the row config (the panel does not expose it
+  yet).
+- **The shadow.** With `costAware` off, every routed step also computes the cost-aware choice and records it in
+  `router.decision/1`: `{current, candidate, agree, currentUsdPerMTok, candidateUsdPerMTok, savedRatio,
+  currentStepUsd, candidateStepUsd, costFallback}`. `GET /state.costAware` publishes `{enabled, costWeight, guard,
+  mix, floorUsdPerMTok, entries[{id, tier, priced, usdPerMTok, currency, peak}], shadow}`.
+- **`/stats.shadow`.** `{steps, agreeSteps, divergedSteps, agreementRate, pricedSteps, currentUsd, candidateUsd,
+  savedUsd, savedRatio}` over the same window as the rest of the summary. A shadow step with no priced pair still
+  counts as a step but contributes no money, and a malformed `shadow` is ignored rather than throwing.
+- **Panel line.** The composer panel prints one caption under the price note: `cost shadow (off) · cost routing
+  would pick X over Y · ~N% cheaper`, or the agreement form, or `cost shadow (on)` once the flag is on. A host that
+  sends no `costAware` block renders nothing.
+- **Tests.** 333 tests (305 in 0.15.1): `pricing2` 15 (mix, blended rate, long-context tiers, `stepCost` parity with
+  the catalog price, per-call rows), `routing` 23 (the cost term, the guard's four refusals, the flip and the
+  fallback), `observation` 11 (the shadow end to end and the flag actually moving the route), `telemetry` 14 (the
+  shadow ledger), `client` 43 (the shadow line, agreement, enabled, English).
+- **Upgrade note:** no state-file migration and no config change. `costAware` defaults to `false`, so a 0.15.1
+  profile routes exactly as before and starts collecting shadow evidence instead.
 ## 0.15.1
 
 **A data release: the shipped catalog now prices every routed step, the panel names the hard dates coming up, and a weekly drift report tells maintainers what changed upstream. No routing decision changes - the golden snapshots are byte-identical to 0.15.0.**

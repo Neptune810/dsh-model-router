@@ -303,6 +303,41 @@ models API and writes a markdown report (`--out`, `--now`, `--days`, `--offline 
 `--fail-on-drift`). It is advisory - exit 0 by default - and it never edits the catalog: a human updates the YAML.
 `.github/workflows/catalog-diff.yml` runs it every Monday at 03:00 UTC and uploads the report.
 
+## Cost-aware routing, shipped off (v0.16.0)
+
+0.15.1 learned what a step costs. 0.16.0 prices the candidates: every pool entry gets one blended
+USD-per-million-token rate from the shipped catalog for the instant of the step, and a cost term can join the
+score. The flag ships **off**, so the route does not move - the ten golden snapshots are byte-identical to
+0.15.1 - and what you get on day one is evidence: every step also records which model a cost-aware router would
+have picked, and the panel and `/stats` show whether the two agree.
+
+- **`lib/pricing2.js` (subpath `./pricing2`).** `blendedUsdPerMTok(model, at, mix)` returns one rate for one
+  model, blended over a token mix; `DEFAULT_MIX` is 50% fresh input / 35% cache read / 15% output and
+  `mixFromSplit(split)` derives the mix a real session produced - a DeepSeek session reads cache for ~97% of
+  its tokens, so pricing it at the default mix would overstate it about 2x. `longContextRates(model, tokens, at)`
+  returns the long-context tier in force (`whole_request` prices the whole prompt at the long rate, `excess`
+  prices only the tokens past the threshold), `stepCost(model, split, at)` prices one split and matches the
+  catalog price bit for bit whenever no long-context tier applies, and `perCallCost(model, counts, at)` prices
+  per-1000-call rows such as DeepSeek Search/Fetch on their own `effectiveFrom`. An unknown price stays `null`;
+  it is never rounded to zero.
+- **The cost term.** `scoring.costWeight` (default 0.15) subtracts `costWeight * 10 * (rate/floor - 1)` capped
+  at `costGuard.maxMultiple - 1` (default 8x) - at most 10.5 points, against a `hardBonus` of 15 and an
+  `engineeringBonus` of 8. Cost breaks ties and tilts same-tier choices; it does not outvote the task class.
+  `costGuard.unknownPricing: 'exclude'` (the default) drops an entry the catalog cannot price instead of
+  guessing, `hard` steps are exempt from the multiple, and if the guard ever empties the pool the router retries
+  once with cost awareness off (`costFallback`) - cost never leaves a session unrouted.
+- **The shadow.** With `costAware` off, each routed step also runs the cost-aware choice and records it.
+  `GET /model-router/state` gains `costAware`: `{enabled, costWeight, guard, mix, floorUsdPerMTok,
+  entries[{id, tier, priced, usdPerMTok, currency, peak}], shadow}`, where `shadow` is `{current, candidate,
+  agree, currentUsdPerMTok, candidateUsdPerMTok, savedRatio, currentStepUsd, candidateStepUsd, costFallback}`.
+  `GET /model-router/stats` sums it over the same window as the rest of the summary: `shadow: {steps,
+  agreeSteps, divergedSteps, agreementRate, pricedSteps, currentUsd, candidateUsd, savedUsd, savedRatio}`.
+- **The panel line.** One caption under the price note: `cost shadow (off) · cost routing would pick X over Y ·
+  ~N% cheaper`, or `cost shadow (off) · cost routing also picks X` when the two agree, or `cost shadow (on)`
+  once the flag is on. A host that sends no `costAware` block renders nothing.
+- **Turning it on.** `costAware: true` in the row config (the panel does not expose it yet). The same config
+  then routes to the cheaper model whenever the cost term outweighs the score gap the shadow was reporting.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -494,11 +529,13 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-305 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+333 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
-restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (17) covers the pool, preset
-weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
+restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (23) covers the pool, preset
+weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis, plus the cost term (the
+weighted penalty and its cap), the cost guard's refusals (unpriced entry, unknown floor, `hard` exemption, the
+multiple) and the fallback that keeps a session routed;
 `test/plugin.test.js` (19) drives the host wiring with ctx/agent doubles, including a quiet tool loop
 that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (34)
 covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
@@ -516,7 +553,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (41)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (43)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -526,7 +563,8 @@ the seat face delegating to the session directory, the official selection semant
 unavailable subagent cell, a failed pick keeping its message, catalog errors offering a retry, and group
 order), the router half's control/pool/settings payloads and the `/effort-model` binding, the pool
 control that collapses the list and reopens it, and the catalog warning dot and its three-line note (and the silence of a host that
-sends no `catalog` block), and the declared `ui-chat` seat and `uiConversation`
+sends no `catalog` block), the cost shadow's caption (a divergence with its saving, the agreement form, the enabled flag, English, and the
+silence of a host that sends no `costAware` block), and the declared `ui-chat` seat and `uiConversation`
 service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
@@ -536,13 +574,19 @@ against its schema, pins the documented completeness warnings, proves the genera
 watchlist rules and covers `findModel`; `test/catalog-pricing.test.js` (18) covers the rate in force (`pricing.next`
 on its day, the peak/off-peak windows), the token split, the null-not-zero price rules and the alert window;
 `test/catalog-diff.test.js` (15) drives the drift report against a frozen OpenRouter snapshot; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
-PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (13) covers decision events landing on disk, monthly
+PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (14) covers decision events landing on disk, monthly
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
-counts as unpriced), a once-only error and the off switch;
-`test/observation.test.js` (7) walks the v0.15 surface end to end (/state fields, ETag 304, `/stats` aggregation,
-`/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`);
-`test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only with `GOLDEN_UPDATE=1`), so
-unintended drift fails.
+counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
+costs nothing), a once-only error and the off switch;
+`test/observation.test.js` (11) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
+`/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`, and the cost
+shadow: the model a cost-aware router would have picked, the agreement a cheap-live route records, the flag
+actually moving the route, and a pool the catalog cannot price recording neither a rate nor a shadow);
+`test/pricing2.test.js` (15) covers the blended rate (peak, off-peak and the weekend, cache-only and output-only
+mixes), the long-context tiers (the largest threshold wins, `effectiveFrom` is respected, `whole_request` vs
+`excess`), `stepCost` matching the catalog price at three instants, and the per-call rows before and after
+their `effectiveFrom`; `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only
+with `GOLDEN_UPDATE=1`), so unintended drift fails.
 
 ## The model catalog
 
