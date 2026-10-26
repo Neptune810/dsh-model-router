@@ -475,6 +475,33 @@ experiments: { enabled: false, apply: false, epsilon: 0.1, seed: null }
 shadow steps, one restart on a build that records the shadow), and this repository records the threshold rather than
 pretending to have met it. `npm run replay` is the honest way to answer the flip question on real traffic meanwhile.
 
+## What 1.0.0 actually promises (v1.0.0)
+
+A 1.0 is a promise about what will not break, so this version is mostly about making the existing
+surface legible rather than adding capability.
+
+- **A versioned envelope.** Every HTTP response from the panel's router — including the 403, 405 and
+  400 answers produced by the transport — now carries `"schemaVersion": 1`. A reader can refuse an
+  envelope it does not understand instead of guessing; `docs/api.md` documents the fifteen routes and
+  the module entry points published through `package.json#exports`.
+- **The contract is tested, not just described.** `test/contract.test.js` fails if `docs/api.md` and
+  the registered routes disagree, if a host event the plugin listens to is missing from
+  `docs/compat.md`, if an export stops resolving or escapes the published directories, or if a
+  response ever loses its `schemaVersion`.
+- **Degradation is named.** `/state.compat` reports `missing` (a capability without which routing
+  cannot run, today only `sessionProjections`) and `optional` (`webServer`, `commands`, `llm`). The
+  panel renders a note listing what is missing in the chat language, so a host that is too old shows
+  as a shortcoming instead of looking fine while features silently do nothing.
+- **An upgrade path with no migration.** `docs/migration-0.14-to-1.0.md` lists every configuration key
+  added since 0.14.2, notes that nothing needs migrating (the state file is read as-is), and records
+  the one default that changed shape: `peakPolicy` starts at `inform`, which only ever prints.
+- **Additive within 1.x.** Modules may gain exports and `/state` may gain fields in a minor release;
+  removing or repurposing either waits for 2.0. `PUBLISHING.md` covers the mechanics, `CONTRIBUTING.md`
+  the checks a change must pass, and `SECURITY.md` what the plugin stores and what it never reads.
+
+Deliberately not in this version: splitting the browser bundle into a build artifact, and a CI matrix
+against two host versions. Both are infrastructure work that does not change what the router decides,
+and both are recorded as deferred in `PLAN.md` rather than implied by the version number.
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -666,7 +693,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-413 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+421 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
@@ -695,7 +722,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (56)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (57)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -738,7 +765,12 @@ the budget table and its per-model overrides, the `maxOutput` cap, the four `why
 summary and malformed input; `test/replay.test.js` (5) drives `lib/replay.js` over a frozen ledger (an unchanged
 replay, a step that would route elsewhere today, `--fail-on-change`, a config exposing an alias collapse, the
 `--since` / `--until` window, and the two exit-2 paths); `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only
-with `GOLDEN_UPDATE=1`), so unintended drift fails.
+with `GOLDEN_UPDATE=1`), so unintended drift fails; `test/contract.test.js` (7) pins the 1.0
+contract itself — every response carries `schemaVersion` (refusals included), the routes in
+`docs/api.md` are exactly the registered ones, every host event the plugin listens to appears in
+`docs/compat.md`, every published entry point resolves and lives in a published directory, the
+package declares the host it supports and never peers on it, the 1.0 documentation set exists,
+and the degradations the panel names stay documented.
 
 ## The model catalog
 

@@ -1,3 +1,35 @@
+## 1.0.0
+
+**A stability release: the surface the panel and any other client talk to is now versioned, documented and
+tested against the code, and a host missing a capability is named instead of looking fine. No routing decision
+changes; `costAware` stays `false`.**
+
+- **A versioned envelope (`lib/routes.js`).** `API_SCHEMA_VERSION = 1` and `withSchemaVersion` stamp every
+  response — route results and the transport's own 400/403/405/500 answers alike — so a client can refuse an
+  envelope it does not understand. `/state` keeps its ETag over the final bytes, so the version is inside the
+  hash it advertises.
+- **A contract that fails the build (`test/contract.test.js`, 7 cases).** The routes in `docs/api.md` are
+  exactly the registered ones (and every registered path is documented); every host event the plugin listens to
+  appears in `docs/compat.md`; every `package.json#exports` target resolves and lives in a published directory;
+  `engines` declares `node >=20` and `dsh >=0.1.7-rc.2 <0.2.0` and `peerDependencies` stays undeclared; the 1.0
+  documentation set is present; and no response ever loses `schemaVersion`.
+- **Degradation is named (`/state.compat`).** `missing` lists the capabilities routing cannot run without
+  (today `sessionProjections`), `optional` lists the rest (`webServer`, `commands`, `llm`). The panel renders the
+  missing list in the chat language (`data-mr-compat`), so an old host reads as a shortcoming rather than as
+  features that quietly do nothing.
+- **Documentation set.** `docs/api.md` (the envelope, the fifteen routes, the published modules, the 1.x
+  stability promise), `docs/compat.md` (host contracts, verified against dsh 0.1.7-rc.2),
+  `docs/migration-0.14-to-1.0.md` (no state migration; the keys added since 0.14.2; the single default that
+  changed shape), `CONTRIBUTING.md` (layout and the four checks), `SECURITY.md` (what is stored, what is never
+  read).
+- **Not in this version, on purpose:** splitting the browser bundle into a build artifact, and a CI matrix
+  against two host versions. Recorded as deferred in `PLAN.md`.
+
+Tests: 421 (0.17.1: 413). 1.0.0 adds `test/contract.test.js` (7) and one panel case for the compat note.
+
+Upgrade note: no state migration and no behaviour change. Everything this release adds is a larger envelope
+(`schemaVersion`), a new `/state` field (`compat` was already there, the panel now reads it) and new
+documentation. Rolling back to 0.17.1 leaves the state file readable.
 # Changelog
 
 ## 0.17.1

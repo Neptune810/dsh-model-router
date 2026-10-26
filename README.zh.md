@@ -396,6 +396,28 @@ experiments: { enabled: false, apply: false, epsilon: 0.1, seed: null }
 构建上一次），本仓库如实记录这条门槛，而不是假装已经达到。在此之前，`npm run replay` 才是用真实流量回答「要不要翻」的
 诚实办法。
 
+## 1.0.0 到底承诺了什么（v1.0.0）
+
+1.0 承诺的是「什么不会再变」，所以这一版主要是把既有表面写清楚、测住，而不是加能力。
+
+- **带版本的信封。** 面板路由的每一个 HTTP 应答——包括传输层自己产生的 403 / 405 / 400——现在都带
+  `"schemaVersion": 1`。读方可以拒收看不懂的信封，而不是猜；`docs/api.md` 记录了 15 条路由与
+  `package.json#exports` 发布的模块入口。
+- **契约是被测的，不只是被写的。** `test/contract.test.js` 会在这些情况失败：`docs/api.md` 与已注册
+  路由不一致、插件监听的宿主事件没出现在 `docs/compat.md`、某个导出解析不到或跑出了发布目录、
+  以及任何应答丢掉 `schemaVersion`。
+- **降级会被点名。** `/state.compat` 报 `missing`（缺了它路由跑不起来，目前只有 `sessionProjections`）
+  与 `optional`（`webServer`、`commands`、`llm`）。面板会用对话语言列出缺了什么，于是「宿主太旧」
+  表现为一条明确的缺陷，而不是看起来正常、功能却什么也没做。
+- **升级路径不需要迁移。** `docs/migration-0.14-to-1.0.md` 列出 0.14.2 以来新增的每一个配置键，说明
+  无需迁移（状态文件按原样读），并记录唯一一个形状变化的默认值：`peakPolicy` 从 `inform` 起步，
+  而它只会打印。
+- **1.x 内只增不改。** minor 版本可以给模块加导出、给 `/state` 加字段；删掉或改变含义要等到 2.0。
+  发布机制见 `PUBLISHING.md`，改动必须通过的检查见 `CONTRIBUTING.md`，插件存了什么、绝不读什么见
+  `SECURITY.md`。
+
+这一版故意不含：把浏览器包拆成构建产物、以及面向两个宿主版本的 CI 矩阵。两者都是不改变路由结论的
+基础设施工作，都在 `PLAN.md` 里如实记为顺延，而不是靠版本号暗示已经做完。
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -573,7 +595,7 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-413 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+421 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（26 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞，以及成本项（加权扣分与上限）、成本守卫的四种拒绝
@@ -591,7 +613,7 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（56 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（57 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
@@ -602,6 +624,7 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 `uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误、关闭开关与档位映射计数；`test/observation.test.js`（23 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
 放行一次、inform 模式只警告不拦、被停用的渠道让重试换到另一供应商、关闭故障转移时路由保持不动，以及跨品牌
 提案只在明显更好或更便宜时出现；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/feedback.test.js`（8 个）覆盖三个标签及其别名、归一化记录（备注折叠、长度上限、缺省 provider）、结果对、跳过坏行的读取器、聚合（按标签、按任务类型、覆盖占比、被回答的结果），以及关闭时不写任何东西；`test/classifier2.test.js`（6 个）覆盖散文里的结构化结论、置信度闸门、「上调一档而不是猜」、有界重试与连续三次失败打开的熔断器；`test/experiments.test.js`（7 个）覆盖哪些任务类型可探索、种子抽签、每一种拒绝理由、exploit 与 explore、epsilon 夹取与按臂报告；`test/effort.test.js`（7 个）覆盖八档阶梯与分值、未知词按 `high` 归类、预算表与按模型覆盖、`maxOutput` 夹取、四种 `why`、按类型/组合的汇总与畸形输入；`test/replay.test.js`（5 个）用冻结账本驱动 `lib/replay.js`（原样回放、今天会换路由的一步、`--fail-on-change`、暴露别名塌缩的配置、`--since`/`--until` 窗口、两条 exit 2 路径）；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
+`test/contract.test.js`（7 个）把 1.0 契约本身钉住：每个应答都带 `schemaVersion`（连拒绝应答也算）、`docs/api.md` 里的路由与注册的路由完全一致、插件监听的每个宿主事件都出现在 `docs/compat.md`、每个导出都能解析且落在发布目录内、包声明了它支持的宿主且从不 peer 依赖宿主、1.0 的文档集齐全、面板点名的降级都有文档对应。
 
 ## 模型目录
 

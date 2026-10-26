@@ -1,6 +1,6 @@
 {
   "name": "@neptune810/dsh-model-router",
-  "version": "0.17.1",
+  "version": "1.0.0",
   "publishConfig": {
     "access": "public"
   },
@@ -40,6 +40,11 @@
     "docs/preview-dark.png",
     "docs/preview-light.png",
     "docs/preview-background.png",
+    "docs/api.md",
+    "docs/compat.md",
+    "docs/migration-0.14-to-1.0.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "scripts": {
