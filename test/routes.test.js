@@ -57,8 +57,9 @@ function fakeApi(overrides) {
       return {
         ok: true,
         sessions: [],
-        stateFile: 'C:\\Users\\someone\\.dsh\\profiles\\web\\.model-router\\state.json',
-        prices: { levels: [1, 4, 8], remote: null, file: 'C:\\Users\\someone\\.dsh\\profiles\\web\\.model-router\\state.json' },
+        // Forward slashes so the fixture means the same path on Windows and Linux.
+        stateFile: '/home/someone/.dsh/profiles/web/.model-router/state.json',
+        prices: { levels: [1, 4, 8], remote: null, file: '/home/someone/.dsh/profiles/web/.model-router/state.json' },
       }
     },
     setPool() { calls.pool += 1; return { ok: true } },
