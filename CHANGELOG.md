@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.17.1
+
+**A feedback release: the panel can now take a verdict (too expensive / too weak / just right) and the router answers it
+on the next step, the classifier is allowed to admit doubt instead of guessing, and ε-greedy exploration ships as a
+shadow behind two switches. No route changes unless you turn something on; `costAware` stays `false`.**
+
+- **Route feedback (`lib/feedback-store.js`).** Three labels in the panel (`data-mr-feedback`), each one a
+  `POST /model-router/feedback` with `{ sessionId, label }`. The verdict is written to
+  `telemetry/feedback.v1.jsonl` — local only, never uploaded — and the **next routed step answers it**: `outcome:
+  "stayed"` when the route that followed is the one the label judged, `"moved"` when it is not. `/state.feedback`
+  publishes the labels, the last verdict and whether one is waiting; `/stats.feedback` aggregates the file: totals,
+  per-label counts, `overrides` (every label that is not `just-right`) with their share, `outcomes` with the changed
+  share, and `byClass` so "too weak" and "too expensive" can be read per step class.
+- **Classifier v2 (`lib/classifier2.js`).** `parseVerdict` reads `{ class, confidence, family, evidence, signals }` out of
+  the model's prose and `decideVerdict` keeps a `source` on the answer. The model's classification is used only above
+  `classifierMinConfidence` (0.6); below it the tier is raised one step rather than guessed. The call is bounded
+  (`classifierAttempts` 2, `classifierTimeoutMs` 2000) and behind a circuit breaker that opens after three failures and
+  leaves the router on rules for ten minutes. `/state.classifier` publishes the verdict, `escalate` and the breaker.
+- **ε-greedy exploration (`lib/experiments.js`).** `experiments.enabled` defaults to `false`; with it on, `planExperiment`
+  draws once per step, and only on steps that are neither `hard` nor `engineering`. `apply` defaults to `false` as well, so
+  a draw is a shadow by default: recorded in `/state.experiments.last`, aggregated in `/stats.totals.experiments` and the
+  `experiment` field of the decision event, with the route untouched. `seed` reproduces a run, `epsilon` (0.1) is the
+  exploration share, and an applied draw resets the hysteresis streak so the explored arm is judged on its own merits.
+- **Panel.** A feedback row with the three labels and what the next step did, an exploration line naming the arm (shadow
+  or applied), and a classifier line for a raised tier or an open breaker — all localized, all silent when the host sends
+  nothing to say.
+- **Not flipped:** `costAware` still defaults to `false`. The flip wants G3/G4 (seven days, 300 priced shadow steps, one
+  restart on a build that records the shadow); this release records the threshold instead of claiming it.
+
+Tests: 413. Upgrade note: additive — the new config keys default to off/lazy, no state migration, and the feedback file
+is created on first use inside the telemetry directory.
+
 ## 0.17.0
 
 **An effort-economics release that changes no route: the eight-tier ladder becomes a module, every step records how its

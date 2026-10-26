@@ -434,6 +434,47 @@ telemetry never stores, so the recorded `stepClass` is taken as given and preset
 steps, at least one restart on a build that records the shadow). The feedback loop, the classifier v2 and ε-greedy are
 0.17.1, together with the L2 experiment that decides whether the cost term becomes the default.
 
+## A feedback loop, a classifier that admits doubt, and exploration (v0.17.1)
+
+Quality routing needs a signal the user can give in one press. The panel now carries three labels under the route they
+judge (`data-mr-feedback`, the labels of `FEEDBACK_LABELS`: too expensive, too weak, just right), and pressing one posts
+`/model-router/feedback` with `{ sessionId, label }`. Nothing leaves the machine: the verdict is appended to
+`<storages>/model-router/telemetry/feedback.v1.jsonl` beside the decision ledger, and the next routed step answers it —
+`outcome: "stayed"` when the route that followed is the one the label judged, `"moved"` when it is not. That pair is the
+weak signal the L2 experiment needs: a user who says "too expensive" and is then routed to the cheap model has answered
+whether the label was a complaint or a request.
+
+`/stats.feedback` aggregates the file rather than the session — totals and per-label counts, `overrides` (every label that
+is not `just-right`) with their share, `outcomes` (how many were answered, and how many of those changed the route), and
+`byClass`, so a class that keeps earning "too weak" is visible next to the class that keeps earning "too expensive".
+
+**The classifier is allowed to say "I am not sure" (`lib/classifier2.js`).** `parseVerdict` reads a structured answer
+(`{ class, confidence, family, evidence, signals }`) out of the model's prose and `decideVerdict` turns it into a decision
+that carries a `source`: the model's classification is used only when its confidence clears `classifierMinConfidence`
+(0.6); below that the tier is raised one step instead of guessed, and the panel says so (`data-mr-classifier`). The call is
+bounded — `classifierAttempts` (2), `classifierTimeoutMs` (2000) — and a circuit breaker opens after three failures and
+leaves the router on pure rules for ten minutes. `/state.classifier` publishes the verdict, the `escalate` flag and the
+breaker's snapshot: a classifier that is failing is a fact, never a silent fall back to `unknown`.
+
+**Exploration is opt-in and reproducible (`lib/experiments.js`).** `experiments.enabled` is `false`; with it on,
+`planExperiment` draws once per step and only on steps that are neither `hard` nor `engineering` — a step the router is
+sure about is not a place to learn. `apply` is `false` too, so the default draw is a shadow: it is recorded
+(`/state.experiments.last`, `/stats.totals.experiments`, the `experiment` field of the decision event) and the route does
+not move. `seed` makes a run reproducible, `epsilon` (0.1) is the exploration share, and the panel names the arm when a
+draw actually took the step.
+
+```yaml
+classifier: llm            # rules by default
+classifierMinConfidence: 0.6
+classifierTimeoutMs: 2000
+classifierAttempts: 2
+experiments: { enabled: false, apply: false, epsilon: 0.1, seed: null }
+```
+
+**What is not in this version.** `costAware` still defaults to `false`: the flip wants G3/G4 (seven days and 300 priced
+shadow steps, one restart on a build that records the shadow), and this repository records the threshold rather than
+pretending to have met it. `npm run replay` is the honest way to answer the flip question on real traffic meanwhile.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -625,7 +666,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-382 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+413 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
@@ -654,7 +695,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (51)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (56)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -669,7 +710,7 @@ silence of a host that sends no `costAware` block), the spend guard (a near-budg
 overspent bar clamping to 100%, token rows, a zero limit and a malformed block staying silent), the peak note
 under `inform` and `shift` (and its silence when off or off-peak), the benched/quarantined channel line in both
 languages, the effort-mapping line (an alias, a nearest tier, a model that takes none, the silence of an exact
-mapping and of a malformed block, and English), and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
+mapping and of a malformed block, and English), the feedback row (three labels posting the verdict, the recorded one marked, the next step's answer in both languages, and the silence of a host with no feedback report), the exploration line (a shadow draw, an applied draw, an exploit draw that says nothing, and English), the classifier line (a raised tier with its confidence, an open breaker outranking it, and the silence of a confident verdict), and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
 read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
@@ -682,7 +723,7 @@ PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decis
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
 costs nothing), a once-only error, the off switch, and the effort-mapping counters;
-`test/observation.test.js` (18) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
+`test/observation.test.js` (23) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
 `/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`, and the cost
 shadow: the model a cost-aware router would have picked, the agreement a cheap-live route records, the flag
 actually moving the route, and a pool the catalog cannot price recording neither a rate nor a shadow; plus the
@@ -692,7 +733,7 @@ proposal appearing only when the switch is clearly better or cheaper);
 `test/pricing2.test.js` (15) covers the blended rate (peak, off-peak and the weekend, cache-only and output-only
 mixes), the long-context tiers (the largest threshold wins, `effectiveFrom` is respected, `whole_request` vs
 `excess`), `stepCost` matching the catalog price at three instants, and the per-call rows before and after
-their `effectiveFrom`; `test/effort.test.js` (7) covers the eight-tier ladder and its points, the unknown word ranking as `high`,
+their `effectiveFrom`; `test/feedback.test.js` (8) covers the three labels and their aliases, the normalized record (note folding, length caps, absent provider), the outcome pair, a reader that skips bad lines, the aggregate (per label, per class, the override share, the answered outcomes), and a log that is switched off writing nothing; `test/classifier2.test.js` (6) covers the structured verdict behind prose, the confidence gate, the raise-instead-of-guess answer, the bounded retries and the breaker that opens after three failures; `test/experiments.test.js` (7) covers which step classes may be explored, a seeded draw, every reason a draw is refused, exploit vs explore, the epsilon clamp and the per-arm report; `test/effort.test.js` (7) covers the eight-tier ladder and its points, the unknown word ranking as `high`,
 the budget table and its per-model overrides, the `maxOutput` cap, the four `why` answers, the per-class and per-pair
 summary and malformed input; `test/replay.test.js` (5) drives `lib/replay.js` over a frozen ledger (an unchanged
 replay, a step that would route elsewhere today, `--fail-on-change`, a config exposing an alias collapse, the
