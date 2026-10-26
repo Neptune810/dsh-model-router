@@ -107,7 +107,7 @@ apply/inject/name, and node_modules\@neptune810\dsh-model-router\lib has all 9 f
 
 Action needed outside this session: restart the desktop app so the new version is loaded.
 
-## 0.14.4 — in progress
+## 0.14.4 — released 2026-10-26
 
 Theme: the release train itself. No runtime routing change; the deliverable is that a version can be
 produced and verified mechanically. PLAN.md section 5.2, six PRs at 0.5-1 person-day each.
@@ -128,6 +128,34 @@ Release gate commands:
     python scripts/build-catalog.py --check   # lib/catalog.js matches the YAML
 
 All three must pass before 'git tag v0.14.4'.
+
+### Commits on baseline/0.14.2
+
+| commit | subject |
+| --- | --- |
+| 7901499 | ci(release): run the suite on node 20/22/24 and gate every tag |
+| b548237 | feat(catalog): ship a validated model catalog and its generated module |
+| 01968fc | test(smoke): add a panel smoke script, fixtures and a fake host |
+| d9a16a2 | docs: catalog workflow, release checks and the execution log |
+| 28beedb | chore(release): 0.14.4 |
+
+### Publish evidence
+
+- Pushed baseline/0.14.2 -> main (de0b847..28beedb), annotated tag v0.14.4 object d44c99f -> 28beedb.
+- Run 40275700887 (tag): test (node 20/22/24) and publish all success; the node 24 leg ran the release
+  gate, the catalog generator check and the catalog validator.
+- Run 40275691783 (main): same matrix, success.
+- registry: 0.14.4 visible on 2026-10-26T05:42Z after npm's staging window; 22 files, shasum
+  130332ac7c677b9f03dbcce143db90326bba5a74, integrity
+  sha512-24iRtwsiegYkv5wq715+DLcb51xFXbnQLzqBkwc6Lm/uUm6aZrV0q6h8WRDfgYR+g84M+Z0hatHP8gqKFfUGcQ==,
+  publish + SLSA provenance attestations attached, _npmUser GitHub Actions. Note that the npm *document*
+  for the whole package can lag a fresh publish ("npm view version" showed 0.14.3 while /-/package/.../dist-tags
+  already said 0.14.4); the version document (0.14.4) and the tarball were correct.
+- Tarball unpacked to C:\DSH\routing-plan-2026-10\npm-0.14.4\package: 22 files, version 0.14.4, ships
+  catalog/model-catalog.yaml and schema/model-catalog.schema.json, docs/*.png and docs/ui-preview.html intact.
+- Profile: 'pnpm add @neptune810/dsh-model-router@0.14.4 --save-exact' in profiles\web (12.2 s, 173
+  entries checked); dependencies and node_modules both report 0.14.4. A restart of the desktop app is
+  required before the running session loads it (same caveat as every upgrade).
 
 Freeze evidence (2026-10-26, local):
 

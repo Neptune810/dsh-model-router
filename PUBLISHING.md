@@ -85,13 +85,14 @@ made 0.10.0 fail the page boot audit (see the 0.11.0 changelog entry).
 
 ## npm
 
-Current release: **`@neptune810/dsh-model-router@0.14.3`** (2026-10-26). The 0.7.0–0.10.1 line was
+Current release: **`@neptune810/dsh-model-router@0.14.4`** (2026-10-26). The 0.7.0–0.10.1 line was
 developed in the working tree and never tagged, so 0.11.0 (2026-10-01) was the first registry release
-that carries it; 0.11.1, 0.12.0, 0.13.0, 0.14.0–0.14.2 (2026-10-04) and 0.14.3 followed. Earlier
-releases: 0.6.12, 0.6.11, 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1,
-0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15). `0.14.3` is the first release gated by
-[`scripts/check-release.mjs`](scripts/check-release.mjs) and published from the Test matrix, and the
-first whose tarball the release gate checked before upload.
+that carries it; 0.11.1, 0.12.0, 0.13.0, 0.14.0–0.14.2 (2026-10-04), 0.14.3 and 0.14.4 followed.
+Earlier releases: 0.6.12, 0.6.11, 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2,
+0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15). `0.14.3` was the first release gated by
+[`scripts/check-release.mjs`](scripts/check-release.mjs) and published from the Test matrix;
+`0.14.4` is the first to run that gate on three Node lines and to ship the checked model catalog
+(`catalog/model-catalog.yaml` → `lib/catalog.js`).
 
 Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
@@ -169,8 +170,11 @@ Before tagging:
 After the workflow is green:
 
 1. `npm view @neptune810/dsh-model-router version` and `dist-tags.latest` both show the new version.
-2. `npm view @neptune810/dsh-model-router dist.attestations` (or the package page's Provenance
-   badge) shows an attestation whose commit is the tagged one.
+   A fresh publish can be visible in `/-/package/<name>/dist-tags` and in the version document before
+   the package document catches up, so check the version document, not the cached whole-package doc.
+2. The registry document for the version carries `dist.attestations` with a
+   `https://slsa.dev/provenance/v1` predicate (or the package page's Provenance badge), and the
+   attestation's commit is the tagged one.
 3. The tarball contains the expected file count and no sources that should stay private.
 4. The GitHub Release for the tag is drafted from the CHANGELOG section.
 5. `pnpm add @neptune810/dsh-model-router@X.Y.Z --save-exact` in the user profile, then restart the
