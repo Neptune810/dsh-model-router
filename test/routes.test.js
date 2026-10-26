@@ -25,7 +25,7 @@ function boot(api) {
 
 /** A fake req/res pair: enough for readJson and sendJson. */
 async function invoke(handlers, path, { method = 'GET', headers = {}, body } = {}) {
-  const handler = handlers.get(path)
+  const handler = handlers.get(path.split('?')[0])
   assert.ok(handler, 'route is registered: ' + path)
   const req = new EventEmitter()
   req.method = method
@@ -158,6 +158,64 @@ test('DSH_MODEL_ROUTER_NO_TOKEN disables the token but not the origin check', as
     headers: { host: '127.0.0.1:49833', 'sec-fetch-site': 'cross-site' },
   })
   assert.equal(cross.status, 403)
+})
+
+test('GET /state carries an ETag and a matching If-None-Match gets a bodyless 304', async () => {
+  let revision = 1
+  const { api } = fakeApi({ state() { return { ok: true, sessions: [], revision } } })
+  const { handlers } = boot(api)
+  const headers = { host: '127.0.0.1:49833', 'sec-fetch-site': 'same-origin' }
+  const first = await invoke(handlers, BASE + '/state', { headers })
+  assert.equal(first.status, 200)
+  assert.match(String(first.headers.etag), /^W\/"[0-9a-f]{16}"$/)
+  const second = await invoke(handlers, BASE + '/state', { headers: { ...headers, 'if-none-match': first.headers.etag } })
+  assert.equal(second.status, 304)
+  assert.equal(second.json, null)
+  assert.equal(second.headers.etag, first.headers.etag)
+  revision = 2
+  const third = await invoke(handlers, BASE + '/state', { headers: { ...headers, 'if-none-match': first.headers.etag } })
+  assert.equal(third.status, 200)
+  assert.equal(third.json.revision, 2)
+  assert.notEqual(third.headers.etag, first.headers.etag)
+})
+
+test('DSH_MODEL_ROUTER_NO_ETAG disables the state validator but not the route', async () => {
+  process.env.DSH_MODEL_ROUTER_NO_ETAG = '1'
+  try {
+    const { api } = fakeApi()
+    const { handlers } = boot(api)
+    const headers = { host: '127.0.0.1:49833', 'sec-fetch-site': 'same-origin' }
+    const first = await invoke(handlers, BASE + '/state', { headers })
+    assert.equal(first.status, 200)
+    assert.equal(first.headers.etag, undefined)
+    const second = await invoke(handlers, BASE + '/state', { headers: { ...headers, 'if-none-match': 'W/"stale"' } })
+    assert.equal(second.status, 200)
+    assert.equal(second.json.ok, true)
+  } finally {
+    delete process.env.DSH_MODEL_ROUTER_NO_ETAG
+  }
+})
+
+test('GET /stats forwards the window to the host aggregator', async () => {
+  let seen
+  const { api } = fakeApi({
+    stats(query) {
+      seen = query
+      return { ok: true, window: { since: 1, until: 2, steps: 0 }, byClass: [], byModel: [], byEffort: [], totals: {} }
+    },
+  })
+  const { handlers } = boot(api)
+  const res = await invoke(handlers, BASE + '/stats?since=2026-11-01&until=2026-11-02&limit=10', {
+    headers: { host: '127.0.0.1:49833', 'sec-fetch-site': 'same-origin' },
+  })
+  assert.equal(res.status, 200)
+  assert.deepEqual(seen, { since: '2026-11-01', until: '2026-11-02', limit: '10' })
+  assert.equal(res.json.ok, true)
+  const empty = await invoke(handlers, BASE + '/stats', {
+    headers: { host: '127.0.0.1:49833', 'sec-fetch-site': 'same-origin' },
+  })
+  assert.equal(empty.status, 200)
+  assert.deepEqual(seen, { since: undefined, until: undefined, limit: undefined })
 })
 
 test('isSameOrigin keeps allowing a present-but-missing proxied header set', () => {

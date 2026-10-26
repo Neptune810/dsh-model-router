@@ -18,6 +18,8 @@
 `high` 是默认上限。V4.1-Flash 底层是一个 1–100 的标量，对外只暴露三个预设名；`high` 约等于 75，
 正是公开曲线仍然陡峭的位置。再往上拉，输出 token 多花约 1.6–1.8 倍，换来的提升却很边际。
 
+v0.15.0 起 `routes.<class>.effort` 可以写任意一档九词词表（`off`、`none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`、`ultra`）；目标模型不认识某个词时取最近的一档，等距时向上取（质量优先）。`off` 与 max 类词仍受规则 5 与 `allowMax` 两道闸门约束。
+
 ## 授权模式、模型池与任务预设（v0.5）
 
 `control` 决定插件能改什么，而且**手调只在拥有它的那个模式里算数**：改思考等级会让
@@ -182,10 +184,39 @@ effort 为 `null` 表示默认档由适配器决定，这行就显示本地化�
 
 每个决策都会记录它看到的信号，所以 `/router` 和输入栏控件都能解释「为什么这么选」。
 
-**`/router`**：打印当前授权模式、是否接管、模型池、任务类型、最近若干次决策以及本任务强档花费。
+**`/router`**：打印当前授权模式、是否接管、模型池、任务类型、最近若干次决策以及本任务强档花费；`/router replay [n]` 打印磁盘上最近 n 条持久化决策（v0.15.0）。
 
 **语义分类**：`classifier: llm` 每轮做一次很小的模型调用挑预设（`classifierModel`、effort off、
 `classifierTimeoutMs`），当轮缓存，任何失败都静默回落到关键词规则；默认仍是 `rules`。
+
+## 观测基线：遥测、/stats、/router replay 与 ETag（v0.15.0）
+
+v0.15.0 不改变任何一条路由结果，只先让每个被路由的步骤可观测。
+
+**决策遥测。** 每个被路由的步骤写一条 `router.decision/1` 事件到
+`<DSH_HOME>/storages/model-router/telemetry/decisions-YYYY-MM.jsonl`（按月分文件，单文件超过 8 MB 轮转）。事件包含
+turn/step、`stepClass`、`score` 与 `scoreParts` 分项、前 5 名候选与分数、实际 `chosen`
+（provider/model/effort/tier/cost）、`reason`、`cross` 结果、本步 token 增量与 `costUnits`、分类器
+`{used,type,confidence}`。不写任何提示词、消息正文或绝对路径；会话 id 先哈希成 `sha256:` 加 16 位十六进制。
+写入按 setImmediate 合并，失败只报一次并关闭遥测，永远不会影响请求返回。`DSH_MODEL_ROUTER_TELEMETRY=0` 可关闭。
+
+**成本口径。** `costUnits = 本步 token 增量 × 该模型在池里的 cost / 1e6`。这是插件自己的记账单位（便于跨模型
+比较与看趋势），不是账单货币；`/state.cost` 给出 `sessionCostUnits` 与 `taskCostUnits` 两个累加值。
+
+**`GET /model-router/stats?since=&until=&limit=`。** 把 JSONL 聚合成固定形状：
+`window{since,until,steps}`、`byClass`、`byModel`、`byEffort`、
+`totals{costUnits,strongSteps,overrideRate,failedEscalations}`。默认窗口最近 7 天。它读磁盘上的记录，所以重启不丢、
+也能覆盖已经关闭的会话。
+
+**`/router replay [n]`。** 打印最近 n 条持久化决策（默认 10，最多 50），每条一行：
+时间/turn/step/模型/effort/类别/score/tokens/costUnits/原因。不带 `replay` 的 `/router` 仍然打印当前方案。
+
+**更省的面板轮询。** 面板轮询从 700 ms 改为 1200 ms，并带 `ETag` + `If-None-Match`：`/state` 未变化时返回
+304 空 body，不再重复解析大 JSON；`/state.stateVersion` 是单调计数器，客户端只在它变化时更新视图。旧宿主没有
+ETag 时退化为无条件轮询（0.14 行为）。调试可用 `DSH_MODEL_ROUTER_NO_ETAG=1` 关闭 ETag。
+
+**宿主兼容自检。** 启动后插件检查宿主契约：`sessionProjections` 是必需的，`webServer`/`commands`/`llm`
+缺失只降级不崩。缺失项以一条 warn 记录，并出现在 `GET /state.compat.missing`，面板据此提示「当前宿主不完整」。
 
 ## 五条规则
 
@@ -265,13 +296,14 @@ engineering 的任务再靠证据升级也没有任何变化。
       preferCheap: true   # 子 agent 默认走廉价档，除非预设权重更高
     classifier: rules     # rules | llm —— llm 每轮做一次小调用
     classifierModel: null # llm 分类用的模型（默认池里第一个）
+    classifierMinConfidence: 0 # 低于该置信度的 LLM 分类结果被忽略，回退关键词（0 = 全部接受）
     escalateOnErrors: 2   # 多少个失败工具结果升一档
     escalateOnRepeats: 3  # 同一工具同参数重试多少次升一档
     routes:
       trivial:     { effort: low }   # 这里写 off 也会被抬到 low，除非 allowThinkingOff
       standard:    { effort: low }
       engineering: { effort: high }
-      hard:        { effort: max }
+      hard:        { effort: max }   # 九词任选；目标不支持时取最近档，等距向上
 ```
 
 环境变量 `DSH_MODEL_ROUTER=off|auto` 可在启动时覆盖 `mode`。
@@ -297,6 +329,7 @@ engineering 的任务再靠证据升级也没有任何变化。
 | `hysteresis.downAfter` | `2` | 降档前的安静步数 |
 | `classifier` | `rules` | `rules` 或 `llm`（每轮一次小调用，失败回落规则） |
 | `classifierModel` | 池中第一个 | LLM 分类使用的模型 |
+| `classifierMinConfidence` | `0` | 低于该置信度的 LLM 分类答案被忽略并回退关键词规则；没有 confidence 的旧式散文答案总是接受 |
 | `imagePolicy` | `keep` | `vision` 时带图任务路由到视觉模型 |
 | `visionModel` | `null` | 显式视觉模型 id |
 | `signals.todos` | `true` | 当前 todo 是否参与任务类型匹配 |
@@ -308,6 +341,7 @@ engineering 的任务再靠证据升级也没有任何变化。
 | `escalateOnRepeats` | `3` | 重复调用阈值 |
 | `maxEscalations` | `2` | 单任务最多升几档 |
 | `carryUnresolved` | `true` | 未解决的失败是否带一档到下一个任务 |
+| `routes.<class>.effort` | `low`/`low`/`high`/`high` | 九词 effort 词表任选（v0.15.0）；目标模型不支持时取最近档，等距向上；`off` 与 max 类词仍受两道闸门约束 |
 
 ## 安装
 
@@ -361,9 +395,9 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-222 个用例。`test/policy.test.js`（36 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+267 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
-`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（14 个）覆盖模型池、
+`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（17 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（19 个）用 ctx/agent 替身
 驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（34 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
 任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令、
@@ -375,12 +409,12 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（33 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（38 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
 分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（7 个）覆盖面板 token、同源读校验与路径脱敏；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（20 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现并覆盖 `findModel`；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态。
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（20 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现并覆盖 `findModel`；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（12 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、只报一次的错误与关闭开关；`test/observation.test.js`（7 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 
 ## 模型目录
 
@@ -395,8 +429,8 @@ py -3 scripts/build-catalog.py --check  # 两者不一致就失败
 node scripts/check-catalog.mjs          # 结构校验，不需要 Python
 ```
 
-路由器目前还不读这份目录：0.15 接入遥测，0.16 才把目录里的价格变成成本估算。先把 schema 和生成器
-交付出来，那两版才会是改数据，而不是重写。
+路由器目前还不读这份目录：0.15 已经接入遥测与按池内 `cost` 记账的成本单位，0.16 才把目录里的真实价格变成成本估算。
+先把 schema 和生成器交付出来，那两版才会是改数据，而不是重写。
 
 ## 发布检查
 

@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.15.0
+
+**An observation release: every routed step now persists one decision event, `/stats` aggregates them, `/router replay`
+prints them, the panel polls conditionally on an ETag, `routes.<class>.effort` accepts the full nine-word vocabulary, the
+LLM classifier returns a structured type + confidence, and the host contracts are checked at boot. Routing results are
+unchanged — the golden snapshots are byte-identical to 0.14.4.**
+
+- **Decision telemetry (`lib/telemetry.js`).** Every routed step appends one `router.decision/1` event to
+  `<DSH_HOME>/storages/model-router/telemetry/decisions-YYYY-MM.jsonl`: month files, rotated past 8 MB, writes batched on
+  `setImmediate` (never on the request path), a corrupt line isolated instead of breaking the file. The event carries
+  turn/step, `stepClass`, `score` and its `scoreParts` breakdown, the top-5 candidate scores, the actual `chosen`
+  provider/model/effort/tier/cost, `reason`, the `cross` outcome, the step's token delta and `costUnits`, and the
+  classifier's `{used,type,confidence}`. No prompt text, no message text, no absolute paths; the session id is hashed to
+  `sha256:` plus 16 hex characters. The first write failure is reported once and disables telemetry rather than throwing.
+  `DSH_MODEL_ROUTER_TELEMETRY=0` turns it off.
+- **`GET /model-router/stats?since=&until=&limit=`.** Aggregates the JSONL into a fixed shape —
+  `window{since,until,steps}`, `byClass`, `byModel`, `byEffort`, `totals{costUnits,strongSteps,overrideRate,failedEscalations}` —
+  from disk, so it survives a restart and covers sessions that are no longer open.
+- **Cost units in `/state.cost`.** `costUnits = token delta × the model's pool cost / 1e6`, accumulated per session and
+  per task. This is the plugin's own comparison unit, not a billed amount; 0.16 will replace the pool's relative `cost` with
+  prices from the shipped catalog.
+- **`/router replay [n]`.** Prints the last n persisted decisions (default 10, max 50), one line each:
+  time/turn/step/model/effort/class/score/tokens/costUnits/reason. `/router` without `replay` still prints the live plan.
+- **Conditional polling (ETag + 304).** `GET /state` now returns an `ETag` and honours `If-None-Match` with a bodyless
+  304; `stateVersion` is a monotonic counter. The panel polls every 1200 ms (was 700), sends `if-none-match` and skips
+  the state update on 304, and on a host without ETag falls back to unconditional polling (0.14 behaviour).
+  `DSH_MODEL_ROUTER_NO_ETAG=1` disables the ETag for debugging.
+- **Nine-word effort vocabulary.** `routes.<class>.effort` accepts `off`, `none`, `minimal`, `low`, `medium`, `high`,
+  `xhigh`, `max` and `ultra`; `mapEffort` picks the nearest tier a target advertises and breaks ties upward, so a
+  mid-ladder word never silently collapses downward. The `off` and max-class words still pass rule 5 and `allowMax`
+  unchanged. The classifier now asks for `{"type":...,"confidence":...}`, falls back to the old prose matching, and
+  `classifierMinConfidence` (default 0) ignores a low-confidence answer in favour of the keyword rules.
+- **Host self-check.** At boot the router verifies its contracts: `sessionProjections` is required; `webServer`,
+  `commands` and `llm` only degrade features. Missing pieces are logged once and exposed as `/state.compat`
+  (`missing`, `optional`, `checkedAt`), so an incomplete host is visible instead of mysterious.
+- **Golden snapshots and a local gate.** `test/golden.test.js` freezes ten representative routing outcomes (trivial,
+  cheap intent, engineering brief, clamped hard, image step, poisoned history, frugal subagent, strong pool pick,
+  hysteresis and cross-brand confirm); rewrites only with `GOLDEN_UPDATE=1`. `scripts/gate.mjs` (`npm run test:gate`) runs
+  the suite plus the release and catalog checks, and `scripts/smoke.md` lists five checks against a real `dsh web`.
+- **Tests.** 267 tests (222 in 0.14.4): telemetry 12, observation 7, golden 11 new; policy 40, routing 17, routes 10 and
+  client 38 after their additions.
+- **Upgrade note:** no state-file migration is needed. `state.json` keeps its version 2 shape; the telemetry directory is
+  created on first write. `DSH_MODEL_ROUTER_TELEMETRY=0` and `DSH_MODEL_ROUTER_NO_ETAG=1` are the two new escape hatches.
+
 ## 0.14.4
 
 **A release-engineering release: the version, the tag, the CHANGELOG and the tarball are now checked against each

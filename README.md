@@ -20,6 +20,8 @@ off.
 three preset names; `high` corresponds to roughly 75, which is where the published effort curve is
 still steep. Pushing past it costs about 1.6–1.8x the output tokens for a marginal gain.
 
+Since v0.15.0 `routes.<class>.effort` accepts any of the nine effort words (`off`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`); a target that does not know a word gets the nearest tier, breaking ties upward (quality first). `off` and the max-class words still go through rule 5 and `allowMax`.
+
 ## Authorization scopes, the model pool and task presets (v0.5)
 
 `control` decides what the router owns, and a manual pick only counts in the scope that owns it: an
@@ -222,11 +224,44 @@ command without one goes back to the normal tier.
 Every decision records the signals it saw, so `/router` and the composer control can explain it.
 
 **`/router`** prints the scope, engagement, pool, task type, the recent decisions and the task's
-strong-tier spend.
+strong-tier spend; `/router replay [n]` prints the last n persisted decisions from disk (v0.15.0).
 
 **Classifier.** `classifier: llm` makes one small call per turn to pick a preset
 (`classifierModel`, effort off, `classifierTimeoutMs`), caches it for the turn and falls back to the
 keyword rules on any failure. The default stays `rules`.
+
+## The observation baseline: telemetry, /stats, /router replay and ETag (v0.15.0)
+
+v0.15.0 changes no routing result. It makes every routed step observable first.
+
+**Decision telemetry.** Every routed step appends one `router.decision/1` event to
+`<DSH_HOME>/storages/model-router/telemetry/decisions-YYYY-MM.jsonl` (one file per month, rotated at 8 MB). The event
+carries turn/step, `stepClass`, `score` and its `scoreParts`, the top-5 candidate scores, the actual `chosen`
+provider/model/effort/tier/cost, `reason`, the `cross` outcome, the step's token delta and `costUnits`, and the
+classifier's `{used,type,confidence}`. No prompt text, no message text and no absolute paths are stored; the session id
+is hashed to `sha256:` plus 16 hex characters. Writes are batched on setImmediate, a failure is reported once and
+disables telemetry, and a write can never affect the request path. `DSH_MODEL_ROUTER_TELEMETRY=0` turns it off.
+
+**Cost units.** `costUnits = token delta × the model's pool cost / 1e6`. It is the plugin's own accounting unit for
+comparing steps and spotting trends, not a billed amount; `/state.cost` exposes `sessionCostUnits` and
+`taskCostUnits`.
+
+**`GET /model-router/stats?since=&until=&limit=`.** Aggregates the JSONL into a fixed shape:
+`window{since,until,steps}`, `byClass`, `byModel`, `byEffort`,
+`totals{costUnits,strongSteps,overrideRate,failedEscalations}`. The default window is the last 7 days. It reads the
+records from disk, so it survives restarts and covers sessions that are no longer open.
+
+**`/router replay [n]`.** Prints the last n persisted decisions (default 10, max 50), one line each:
+time/turn/step/model/effort/class/score/tokens/costUnits/reason. `/router` without `replay` still prints the live plan.
+
+**Cheaper panel polling.** The panel now polls every 1200 ms (was 700) and uses `ETag` + `If-None-Match`: an unchanged
+`/state` answers 304 with an empty body instead of re-parsing a large JSON document; `/state.stateVersion` is a
+monotonic counter the client watches. On a host with no ETag it degrades to unconditional polling (0.14 behaviour).
+`DSH_MODEL_ROUTER_NO_ETAG=1` disables ETag for debugging.
+
+**Host self-check.** At boot the plugin verifies its host contracts: `sessionProjections` is required, while a missing
+`webServer`/`commands`/`llm` only degrades features. Missing pieces are logged once and surfaced in
+`GET /state.compat.missing`, so the panel can say the host is incomplete.
 
 ## The five rules
 
@@ -312,13 +347,14 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
       preferCheap: true   # delegated work stays cheap unless a preset says otherwise
     classifier: rules     # rules | llm — llm makes one small call per turn
     classifierModel: null # model used by the llm classifier (defaults to the first pool entry)
+    classifierMinConfidence: 0 # ignore an LLM answer below this confidence; fall back to keywords (0 = accept all)
     escalateOnErrors: 2   # failed tool results needed to step up
     escalateOnRepeats: 3  # identical retries needed to step up
     routes:
       trivial:     { effort: low }   # "off" here is raised to low unless allowThinkingOff
       standard:    { effort: low }
       engineering: { effort: high }
-      hard:        { effort: max }
+      hard:        { effort: max }   # any of nine words; nearest tier when unsupported, ties go up
 ```
 
 `DSH_MODEL_ROUTER=off|auto` overrides `mode` at boot.
@@ -344,6 +380,7 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `hysteresis.downAfter` | `2` | quiet steps before a downgrade applies |
 | `classifier` | `rules` | `rules` or `llm` (one small call per turn, rules as fallback) |
 | `classifierModel` | first pool entry | model the LLM classifier uses |
+| `classifierMinConfidence` | `0` | ignore an LLM classifier answer below this confidence and fall back to keywords; prose answers without a confidence field are always accepted |
 | `imagePolicy` | `keep` | `vision` routes a task carrying an image to a vision model |
 | `visionModel` | `null` | explicit vision model id |
 | `signals.todos` | `true` | let the active todo feed task-type matching |
@@ -355,6 +392,7 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `escalateOnRepeats` | `3` | repeated-call threshold |
 | `maxEscalations` | `2` | most classes a single task may climb |
 | `carryUnresolved` | `true` | carry one step up from an unresolved failure |
+| `routes.<class>.effort` | `low`/`low`/`high`/`high` | any of the nine effort words (v0.15.0); a target gets the nearest tier, ties go up; `off` and max-class words still pass the two guards |
 
 ## Install
 
@@ -416,10 +454,10 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-222 tests. `test/policy.test.js` (36) covers classification, the absence of a ratchet, the
+267 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
-restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (14) covers the pool, preset
+restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (17) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
 `test/plugin.test.js` (19) drives the host wiring with ctx/agent doubles, including a quiet tool loop
 that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (34)
@@ -438,7 +476,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (33)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (38)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -450,12 +488,17 @@ order), the router half's control/pool/settings payloads and the `/effort-model`
 control that collapses the list and reopens it, and the declared `ui-chat` seat and `uiConversation`
 service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
-map is capped by least-recently-seen); `test/routes.test.js` (7) covers the panel token, the same-origin
-read guard and path redaction; `test/release.test.js` (8) covers the release gate (tag, version and
+map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
+read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
 CHANGELOG agreement plus tarball contents); `test/catalog.test.js` (20) validates the shipped catalog
 against its schema, pins the documented completeness warnings, proves the generator is deterministic and
 covers `findModel`; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
-PASS / WARN / SKIP / FAIL exit codes.
+PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (12) covers decision events landing on disk, monthly
+files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, a once-only error and the off switch;
+`test/observation.test.js` (7) walks the v0.15 surface end to end (/state fields, ETag 304, `/stats` aggregation,
+`/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`);
+`test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only with `GOLDEN_UPDATE=1`), so
+unintended drift fails.
 
 ## The model catalog
 
@@ -472,8 +515,8 @@ py -3 scripts/build-catalog.py --check  # fail if the two disagree
 node scripts/check-catalog.mjs          # structural validation, no Python needed
 ```
 
-The router does not read the catalog yet: 0.15 wires telemetry, 0.16 turns catalog prices into cost
-estimates. Shipping the schema and the generator first is what makes those releases data changes rather
+The router still does not read the catalog: 0.15 wires telemetry and cost units based on each pool entry's `cost`,
+and 0.16 turns catalog prices into cost estimates. Shipping the schema and the generator first is what makes those releases data changes rather
 than rewrites.
 
 ## Release checks

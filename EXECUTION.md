@@ -170,8 +170,63 @@ Docs updated with the release: README + README.zh gain "The model catalog" / "�
 "发布检查" sections and the new test counts; CHANGELOG gets the 0.14.4 section; PUBLISHING.md and package.json
 were updated with PR-144-2/144-5.
 
-## 0.15.0 — not started
+## 0.15.0 — the observation baseline (2026-10-26/27)
 
-Theme: make the router observable before making it cleverer (PLAN.md section 5.3, T1-T12:
-telemetry v1 JSONL, /stats, /router replay, usage -> costUnits, incremental /state, effort
-vocabulary, classifier confidence, startup self-check, golden decisions).
+Theme: make the router observable before making it cleverer (PLAN.md section 5.3, T1-T12). The routing
+result is unchanged; this release records what the router decided, what it cost and why, and closes the
+three silent-degradation points the audit found.
+
+Branch: release/0.15.0, forked from 29bf8df (v0.14.4, main). Four isolated worktrees were used so
+teammates could work in parallel without touching each other:
+wt/telemetry (feat/150-telemetry), wt/client (feat/150-client-etag), wt/vocab (feat/150-effort-vocab)
+and wt/golden (feat/150-golden). Lead-owned files (lib/index.js, lib/routes.js, lib/policy.js scoreParts,
+README/CHANGELOG/EXECUTION) were changed only in the main worktree; every branch was merged with
+--no-ff after its own tests passed.
+
+### What landed, by spec
+
+| PR | theme | result |
+| --- | --- | --- |
+| 150-1 | decision telemetry | lib/telemetry.js (v1 JSONL, month files, 8 MB rotation, setImmediate batching, corrupt-line isolation, summarize, health, readRecentSync) + test/telemetry.test.js 12 tests |
+| 150-2 | /stats route | GET /model-router/stats?since=&until=&limit= aggregates the JSONL into window/byClass/byModel/byEffort/totals |
+| 150-3 | /router replay | command parses "replay [n]" and prints the last n persisted decisions; a bare /router still prints the live plan |
+| 150-4 | usage -> costUnits | /state.cost {sessionTokens,lastStepCostUnits,sessionCostUnits,taskCostUnits}, token delta x pool cost / 1e6, flushed into each event |
+| 150-5 | conditional polling | /state ETag + If-None-Match -> 304, stateVersion counter, panel polls 1200 ms and skips the state update on 304, old-host fallback kept (commit e792547) |
+| 150-6 | nine-word vocabulary | routes accept off/none/minimal/low/medium/high/xhigh/max/ultra; mapEffort picks the nearest tier and breaks ties upward; off and max-class still pass rule 5 and allowMax (commit 22d917c) |
+| 150-7 | classifier confidence | classifier asks for {"type":...,"confidence":...}, keeps prose fallback, classifierMinConfidence filters low-confidence answers |
+| 150-8 | startup self-check | /state.compat {missing,optional,checkedAt}; sessionProjections required, webServer/commands/llm optional; one warn at boot |
+| 150-9 | golden + gate | test/golden.test.js 11 tests (10 scenarios + fixture integrity), scripts/gate.mjs (npm run test:gate), scripts/smoke.md (commit e34e118) |
+
+Lead-side additions not in a spec file: scoreParts breakdown in lib/policy.js scoreOf (the same score,
+itemized), hashSessionId/parseClassifierAnswer/normalizeWindow/commandArgs helpers, telemetryStatus()
+that never leaks the absolute directory, and a boot-time warn for cfg.effortWarnings.
+
+### Commits on release/0.15.0 (before the release commit)
+
+| commit | subject |
+| --- | --- |
+| c082fa4 | feat(telemetry): persist routing decisions to JSONL |
+| e792547 | feat(panel): conditional /state polling with ETag and a 1200 ms cadence |
+| 22d917c | feat(effort): accept the full 9-word effort vocabulary in route config |
+| 9e668ee | Merge branch 'feat/150-effort-vocab' |
+| 6e34206 | Merge branch 'feat/150-client-etag' |
+| e34e118 | test(golden): freeze routing decisions and add the local release gate |
+| fb720c7 | merge: 0.15.0 golden snapshots and local release gate (150-9) |
+
+### Freeze evidence (local, before the tag)
+
+| check | result |
+| --- | --- |
+| node --test | 267 tests / 267 pass / 0 fail (222 in 0.14.4) |
+| node scripts/gate.mjs | PASS: tests 6.0 s, release checks 0.0 s, catalog checks 0.1 s |
+| node scripts/check-release.mjs --pack | ok: version 0.15.0 = changelog 0.15.0, tarball contents match the whitelist |
+| node scripts/check-catalog.mjs | exit 0: 19 models, 15 channels, 4 calendar entries, 1 pinned warning |
+| py -3 scripts/build-catalog.py --check | OK: lib/catalog.js matches the YAML, sha256 f674741e375050b6 |
+
+Docs updated with the release: README + README.zh gain the "observation baseline" section (telemetry,
+cost units, /stats, /router replay, ETag, self-check), the nine-word route note, classifierMinConfidence,
+updated test counts and the catalog note; CHANGELOG gets the 0.15.0 section; package.json is 0.15.0.
+
+### Publish evidence
+
+(pending: push, tag, CI run and profile upgrade are recorded here after they happen)
