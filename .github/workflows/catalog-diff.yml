@@ -1,0 +1,45 @@
+name: catalog-diff
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/catalog-diff.mjs
+      - .github/workflows/catalog-diff.yml
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-diff:
+    name: Catalog drift report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Generate catalog drift report
+        continue-on-error: true
+        run: node scripts/catalog-diff.mjs --out "$RUNNER_TEMP/catalog-pending.diff.md"
+
+      - name: Append report to job summary
+        run: |
+          {
+            echo "## Catalog drift report"
+            echo
+            cat "$RUNNER_TEMP/catalog-pending.diff.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-pending-diff
+          path: ${{ runner.temp }}/catalog-pending.diff.md
+          if-no-files-found: warn
