@@ -134,6 +134,27 @@ test('a history poisoned by a thinking-off tool call is pinned to off, and warns
   assert.equal(logs.filter((l) => l[1].includes('without a thinking block')).length, 1)
 })
 
+test('poisoned history applies effort off on the same step, bypassing hysteresis downgrade delay', async () => {
+  const { ctx, handlers } = makeCtx()
+  apply(ctx, {})
+  const { agent, state } = makeAgent()
+
+  emit(handlers, 'agent/inbox/claimed', { agent, turn: 1, message: { content: 'refactor the parser architecture' } })
+  state.messages = [userText('refactor the parser architecture')]
+  const first = await request(handlers, { agent, turn: 1, step: 0 }, async () => resolved())
+  // Hard/engineering work raises effort immediately; that high tier is the one
+  // the downgrade guard would otherwise keep for downAfter steps.
+  assert.ok(first.reasoningEffort === 'high' || first.reasoningEffort === 'max')
+
+  state.messages = [
+    userText('refactor the parser architecture'),
+    toolCall('c2', 'pwsh', '{"command":"node --test"}', { thinkingOff: true }),
+    toolResult('c2', 'ok', undefined),
+  ]
+  const poisoned = await request(handlers, { agent, turn: 1, step: 1 }, async () => resolved())
+  assert.equal(poisoned.reasoningEffort, 'off')
+})
+
 test('compaction that drops the poisoned turn restores thinking', async () => {
   const { ctx, handlers } = makeCtx()
   apply(ctx, {})
