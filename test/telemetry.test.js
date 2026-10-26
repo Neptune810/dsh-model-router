@@ -258,8 +258,9 @@ test('summarize returns the fixed shape with class/model/effort aggregates', asy
     { key: 'low', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 1 },
   ])
   assert.deepEqual(Object.keys(summary.totals).sort(), [
-    'cacheReadTokens', 'cacheWriteTokens', 'costUnits', 'costUsd', 'failedEscalations', 'inputTokens',
-    'outputTokens', 'overrideRate', 'pricedSteps', 'reasoningTokens', 'strongSteps', 'tokens', 'unpricedSteps',
+    'cacheReadTokens', 'cacheWriteTokens', 'costUnits', 'costUsd', 'failedEscalations', 'failoverSteps', 'inputTokens',
+    'outputTokens', 'overrideRate', 'peakCostUsd', 'peakShare', 'peakSteps', 'pricedSteps', 'reasoningTokens',
+    'strongSteps', 'tokens', 'unpricedSteps',
   ])
   assert.equal(summary.totals.costUnits, 0.04)
   assert.equal(summary.totals.strongSteps, 1)
@@ -336,6 +337,11 @@ test('summarize sums the token split and USD cost, and counts unpriced steps', a
     costUsd: 0.000579,
     pricedSteps: 2,
     unpricedSteps: 2,
+    // v0.16.1: no event here ran at a peak rate or after a failover.
+    peakSteps: 0,
+    peakCostUsd: 0,
+    peakShare: 0,
+    failoverSteps: 0,
   })
 
   const byEffort = summary.byEffort.find((row) => row.key === 'high')
@@ -357,6 +363,58 @@ test('summarize sums the token split and USD cost, and counts unpriced steps', a
     { tokens: gemini.tokens, priced: gemini.pricedSteps, unpriced: gemini.unpricedSteps },
     { tokens: 830, priced: 1, unpriced: 0 },
   )
+})
+
+test('summarize counts peak-rate steps and channel failovers (v0.16.1)', async (t) => {
+  const dir = tempDir(t)
+  const nowMs = Date.UTC(2026, 10, 3, 9)
+  const tel = createTelemetry({ dir, now: () => nowMs })
+  const events = [
+    {
+      ts: nowMs - 3000,
+      stepClass: 'engineering',
+      score: 60,
+      chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+      // Inside the provider's peak window, so the step paid the higher rate.
+      peak: true,
+      usage: { tokens: 100, costUnits: 0.01, split: { input: 100 }, costUsd: 0.0002 },
+    },
+    {
+      ts: nowMs - 2000,
+      stepClass: 'standard',
+      score: 70,
+      chosen: { provider: 'relay-b', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+      // Served after the router moved off the channel that had just failed.
+      failoverFrom: 'deepseek-official',
+      peak: true,
+      usage: { tokens: 50, costUnits: 0.01, split: { input: 50 }, costUsd: 0.0001 },
+    },
+    {
+      ts: nowMs - 1000,
+      stepClass: 'standard',
+      score: 80,
+      chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+      peak: false,
+      usage: { tokens: 25, costUnits: 0.01, split: { input: 25 }, costUsd: 0.00005 },
+    },
+  ]
+  for (const event of events) assert.equal(tel.writeDecision(event), true)
+  await tel.flush()
+
+  const summary = await tel.summarize()
+  assert.equal(summary.totals.peakSteps, 2)
+  assert.equal(summary.totals.peakCostUsd, 0.0003)
+  assert.equal(summary.totals.peakShare, 0.6667)
+  assert.equal(summary.totals.failoverSteps, 1)
+  // The pre-0.16.1 totals keep their meaning.
+  assert.equal(summary.totals.costUsd, 0.00035)
+
+  // Both numbers follow the window like every other total.
+  const recent = (await tel.summarize({ since: nowMs - 2000 })).totals
+  assert.equal(recent.peakSteps, 1, 'only the failover step of the window paid the peak rate')
+  assert.equal(recent.peakCostUsd, 0.0001)
+  assert.equal(recent.peakShare, 0.5)
+  assert.equal(recent.failoverSteps, 1, 'the failover step is inside this window too')
 })
 
 test('summarize keeps the fixed shape with zero events and accepts no/empty/explicit windows', async (t) => {
@@ -382,6 +440,10 @@ test('summarize keeps the fixed shape with zero events and accepts no/empty/expl
       costUsd: 0,
       pricedSteps: 0,
       unpricedSteps: 0,
+      peakSteps: 0,
+      peakCostUsd: 0,
+      peakShare: 0,
+      failoverSteps: 0,
     },
     shadow: {
       steps: 0,

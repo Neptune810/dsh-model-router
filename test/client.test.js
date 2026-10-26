@@ -1450,3 +1450,156 @@ test('the shadow line follows agreement, the enabled flag and the chat language'
   await legacy.rt.flush()
   assert.equal(byProp(legacy.holder.tree, 'data-mr-shadow', 'true').length, 0)
 })
+
+
+/** A state carrying the 0.16.1 spend guard, peak window and channel health. */
+function spendState(overrides = {}) {
+  return Object.assign(catalogState([]), {
+    budget: {
+      mode: 'block', softRatio: 0.8, exceeded: false, soft: true, over: [], ledgerAgeMs: 1200,
+      rows: [{ id: 'sessionUsd', unit: 'usd', limit: 0.5, used: 0.42, ratio: 0.84, active: true, remaining: 0.08, soft: true, over: false }],
+    },
+    peak: { policy: 'inform', atPeak: true },
+    channels: { enabled: true, coolingDown: [], quarantined: [], entries: [] },
+  }, overrides)
+}
+
+test('the spend guard raises a near-budget dot and a bar inside the panel', async () => {
+  const app = await openControl({ state: spendState() })
+  const dot = byProp(app.holder.tree, 'data-budget', 'near')
+  assert.equal(dot.length, 1, 'the closed trigger carries the near-budget dot')
+  assert.match(dot[0].props.title, /^预算/)
+  assert.match(dot[0].props.title, /本会话 \$0\.42 \/ \$0\.50/)
+
+  openPanel(app.holder)
+  await app.rt.flush()
+  const block = byProp(app.holder.tree, 'data-mr-budget', 'true')[0]
+  assert.ok(block, 'the panel lists the limits that are set')
+  assert.equal(block.props['data-tone'], 'near')
+  assert.equal(block.props['data-mode'], 'block')
+  assert.equal(textOf(byProp(app.holder.tree, 'data-mr-budget-head', 'true')[0]), '预算 · 接近预算')
+
+  const row = byProp(app.holder.tree, 'data-mr-budget-row', 'sessionUsd')[0]
+  assert.match(textOf(row), /本会话/)
+  assert.match(textOf(row), /\$0\.42 \/ \$0\.50/)
+  assert.equal(byClass(row, 'mr-bar-fill')[0].props.style.width, '84%', 'the bar is the ratio of the limit')
+})
+
+test('an exhausted limit turns the block red and the dot with it', async () => {
+  const app = await openControl({
+    state: spendState({
+      budget: {
+        mode: 'block', softRatio: 0.8, exceeded: true, soft: true, over: ['sessionUsd'],
+        rows: [{ id: 'sessionUsd', unit: 'usd', limit: 0.5, used: 0.52, ratio: 1.04, active: true, remaining: 0, soft: false, over: true }],
+      },
+    }),
+  })
+  assert.equal(byProp(app.holder.tree, 'data-budget', 'over').length, 1)
+
+  openPanel(app.holder)
+  await app.rt.flush()
+  const block = byProp(app.holder.tree, 'data-mr-budget', 'true')[0]
+  assert.equal(block.props['data-tone'], 'over')
+  assert.equal(textOf(byProp(app.holder.tree, 'data-mr-budget-head', 'true')[0]), '预算 · 超预算')
+  assert.equal(byClass(block, 'mr-bar-fill')[0].props.style.width, '100%', 'an overspent bar is clamped')
+})
+
+test('token limits render as counts and a zero limit is not a limit', async () => {
+  const app = await openControl({
+    state: spendState({
+      budget: {
+        mode: 'inform', softRatio: 0.8, exceeded: false, soft: false, over: [], rows: [
+          { id: 'sessionTokens', unit: 'tokens', limit: 1000, used: 640.4, ratio: 0.64, active: true, remaining: 359.6, soft: false, over: false },
+          { id: 'dayUsd', unit: 'usd', limit: 0, used: 0, ratio: 0, active: false, remaining: 0, soft: false, over: false },
+        ],
+      },
+    }),
+  })
+  openPanel(app.holder)
+  await app.rt.flush()
+  const rows = byProp(app.holder.tree, 'data-mr-budget-row', 'sessionTokens')
+  assert.equal(rows.length, 1)
+  assert.match(textOf(rows[0]), /本会话 tokens/)
+  assert.match(textOf(rows[0]), /640 \/ 1000/)
+  assert.equal(byProp(app.holder.tree, 'data-mr-budget-row', 'dayUsd').length, 0)
+  assert.equal(byProp(app.holder.tree, 'data-budget', 'near').length + byProp(app.holder.tree, 'data-budget', 'over').length, 0, 'a healthy spend keeps the trigger clean')
+})
+
+test('a host without spend limits renders neither dot nor block', async () => {
+  const legacy = await openControl({ state: { effectiveControl: 'full', engaged: true, current: null, pool: [], decisions: [] } })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-budget', 'true').length, 0)
+
+  const none = await openControl({ state: spendState({ budget: { mode: 'inform', softRatio: 0.8, rows: [] } }) })
+  openPanel(none.holder)
+  await none.rt.flush()
+  assert.equal(byProp(none.holder.tree, 'data-mr-budget', 'true').length, 0, 'no active limit means no block')
+
+  const odd = await openControl({ state: spendState({ budget: { mode: 'block' } }) })
+  openPanel(odd.holder)
+  await odd.rt.flush()
+  assert.equal(byProp(odd.holder.tree, 'data-mr-budget', 'true').length, 0, 'a malformed block is ignored')
+})
+
+test('the peak window is announced under inform and shift, never when off or off-peak', async () => {
+  const inform = await openControl({ state: spendState() })
+  openPanel(inform.holder)
+  await inform.rt.flush()
+  assert.match(textOf(byProp(inform.holder.tree, 'data-mr-peak', 'true')[0]), /当前高峰时段，单价更高/)
+
+  const shift = await openControl({ state: spendState({ peak: { policy: 'shift', atPeak: true } }) })
+  openPanel(shift.holder)
+  await shift.rt.flush()
+  assert.match(textOf(byProp(shift.holder.tree, 'data-mr-peak', 'true')[0]), /空闲时段/)
+
+  const offPeak = await openControl({ state: spendState({ peak: { policy: 'inform', atPeak: false } }) })
+  openPanel(offPeak.holder)
+  await offPeak.rt.flush()
+  assert.equal(byProp(offPeak.holder.tree, 'data-mr-peak', 'true').length, 0)
+
+  const off = await openControl({ state: spendState({ peak: { policy: 'off', atPeak: true } }) })
+  openPanel(off.holder)
+  await off.rt.flush()
+  assert.equal(byProp(off.holder.tree, 'data-mr-peak', 'true').length, 0)
+})
+
+test('a benched channel is named on the panel in the chat language', async () => {
+  const benched = {
+    enabled: true,
+    coolingDown: ['deepseek-official'],
+    quarantined: [{ channel: 'relay-x' }],
+    entries: [],
+  }
+  const zh = await openControl({ state: spendState({ channels: benched }) })
+  openPanel(zh.holder)
+  await zh.rt.flush()
+  const note = byProp(zh.holder.tree, 'data-mr-channels', 'true')[0]
+  assert.ok(note, 'the panel says which channel is out of rotation')
+  assert.match(textOf(note), /渠道冷却中：deepseek-official/)
+  assert.match(textOf(note), /渠道已隔离：relay-x/)
+
+  const en = await openControl({ state: spendState({ channels: benched }), globals: { navigator: { language: 'en-US' } } })
+  openPanel(en.holder)
+  await en.rt.flush()
+  assert.equal(
+    textOf(byProp(en.holder.tree, 'data-mr-channels', 'true')[0]),
+    'channel benched: deepseek-official · channel quarantined: relay-x',
+  )
+
+  // The fingerprint verifier speaks through the same line when it fails.
+  const verified = await openControl({
+    state: spendState({
+      channels: { enabled: true, coolingDown: [], quarantined: [], entries: [] },
+      lastVerify: { ok: false, channel: 'relay-y', reasons: ['usage_missing'] },
+    }),
+  })
+  openPanel(verified.holder)
+  await verified.rt.flush()
+  assert.match(textOf(byProp(verified.holder.tree, 'data-mr-channels', 'true')[0]), /渠道冷却中：relay-y/)
+
+  const quiet = await openControl({ state: spendState({ channels: { enabled: false, coolingDown: [], quarantined: [], entries: [] } }) })
+  openPanel(quiet.holder)
+  await quiet.rt.flush()
+  assert.equal(byProp(quiet.holder.tree, 'data-mr-channels', 'true').length, 0)
+})

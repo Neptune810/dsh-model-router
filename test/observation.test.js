@@ -354,3 +354,221 @@ test('a pool the catalog cannot price records no shadow and no rate', async () =
   assert.equal(state.costAware.shadow, null)
   assert.deepEqual(state.costAware.entries.map((e) => e.priced), [false, false])
 })
+
+/** Drive a host waterfall: each listener gets a next() that runs the rest. */
+function waterfall(host, name, payload, seedValue) {
+  const fns = host.handlers.get(name) || []
+  const inner = () => Promise.resolve(seedValue)
+  const run = (index) => (index >= fns.length ? inner() : fns[index](payload, () => run(index + 1)))
+  return run(0)
+}
+
+const CROSS_POOL = [
+  { id: 'deepseek-official/deepseek-v4-pro', cost: 8, tier: 'strong' },
+  { id: 'google-official/gemini-3.8-flash', cost: 1, tier: 'cheap' },
+]
+const HAIKU_POOL = [
+  { id: 'deepseek-official/deepseek-v4-pro', cost: 8, tier: 'strong' },
+  { id: 'anthropic-official/claude-haiku-5-5', cost: 1, tier: 'cheap' },
+]
+const CHANNEL_POOL = [
+  { id: 'deepseek-official/deepseek-flash', cost: 1, tier: 'cheap' },
+  { id: 'google-official/gemini-3.8-flash', cost: 1, tier: 'cheap' },
+]
+const CHANNEL_PRESETS = {
+  api: { match: ['接口'], weights: { 'deepseek-official/deepseek-flash': 95, 'google-official/gemini-3.8-flash': 80 } },
+}
+const crossPresets = (weights) => ({ api: { match: ['接口'], weights } })
+
+// --- v0.16.1: the spend guard -----------------------------------------------
+
+test('the budget guard refuses a synthetic step, and one release lets it through', async () => {
+  const usage = tokenUsage({ input: 0, output: 0, cacheRead: 0, reasoning: 0 })
+  // A limit a single step blows past: the arithmetic is what is under test here.
+  const host = makeHost({ pool: POOL, routes: ROUTES, budget: { mode: 'block', sessionUsd: 5e-7 } }, { sessionProjections: usage.service })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('refactor the parser') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+  usage.add(1_000_000)
+  await request(host, { agent, turn: 1, step: 1 }, seed())
+
+  let state = await stateOf(host)
+  assert.ok(state.cost.sessionUsd > 0, 'the routed step booked real money')
+  assert.equal(state.budget.mode, 'block')
+  assert.equal(state.budget.exceeded, true)
+  assert.deepEqual(state.budget.over, ['sessionUsd'])
+  const row = state.budget.rows.find((entry) => entry.id === 'sessionUsd')
+  assert.equal(row.over, true)
+  assert.equal(row.limit, 5e-7)
+  assert.ok(row.used > row.limit)
+
+  // A step carrying the user's own text always runs: swallowing a message is
+  // worse than paying for one.
+  const withUser = await waterfall(host, 'agent/pre-step', { agent, messages: [{ role: 'user', content: 'hello' }], turn: 2, step: 0, signal: {} }, { kind: 'enter' })
+  assert.deepEqual(withUser, { kind: 'enter' })
+
+  // A synthetic step is refused, and the refusal is recorded for the panel.
+  const synthetic = await waterfall(host, 'agent/pre-step', { agent, messages: [{ role: 'assistant', content: 'tool result' }], turn: 2, step: 1, signal: {} }, { kind: 'enter' })
+  assert.deepEqual(synthetic, { kind: 'reject' })
+  state = await stateOf(host)
+  assert.ok(state.budget.blocked.at > 0)
+  assert.deepEqual(state.budget.blocked.over, ['sessionUsd'])
+  assert.match(state.budget.blocked.line, /sessionUsd/)
+  assert.equal(state.budget.once, false)
+
+  // One release: the next step runs, then the gate arms itself again.
+  const released = await call(host.routes.get('/model-router/budget'), { method: 'POST', url: '/model-router/budget', body: { sessionId: 's1', action: 'once' } })
+  assert.equal(released.status, 200)
+  assert.equal(JSON.parse(released.payload).ok, true)
+  assert.equal((await stateOf(host)).budget.once, true)
+
+  const allowed = await waterfall(host, 'agent/pre-step', { agent, messages: [{ role: 'assistant' }], turn: 2, step: 2, signal: {} }, { kind: 'enter' })
+  assert.deepEqual(allowed, { kind: 'enter' })
+  const again = await waterfall(host, 'agent/pre-step', { agent, messages: [{ role: 'assistant' }], turn: 2, step: 3, signal: {} }, { kind: 'enter' })
+  assert.deepEqual(again, { kind: 'reject' })
+})
+
+test('a budget in inform mode warns without ever refusing a step', async () => {
+  const usage = tokenUsage({ input: 0, output: 0, cacheRead: 0, reasoning: 0 })
+  const host = makeHost({ pool: POOL, routes: ROUTES, budget: { mode: 'inform', sessionUsd: 5e-7, softRatio: 0.5 } }, { sessionProjections: usage.service })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('refactor the parser') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+  usage.add(1_000_000)
+  await request(host, { agent, turn: 1, step: 1 }, seed())
+
+  const state = await stateOf(host)
+  assert.equal(state.budget.mode, 'inform')
+  assert.ok(state.budget.over.includes('sessionUsd'), 'the spend is still reported')
+
+  const step = await waterfall(host, 'agent/pre-step', { agent, messages: [{ role: 'assistant' }], turn: 2, step: 0, signal: {} }, { kind: 'enter' })
+  assert.deepEqual(step, { kind: 'enter' }, 'inform never blocks')
+  assert.ok(host.logs.some((line) => /budget/i.test(line)), 'the overrun is logged once')
+})
+
+// --- v0.16.1: channel health and failover -----------------------------------
+
+test('a failed channel is benched and the next attempt moves to another one', async () => {
+  const host = makeHost({ pool: CHANNEL_POOL, routes: ROUTES, presets: CHANNEL_PRESETS, channels: { failover: true } })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  const first = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(first.provider, 'deepseek-official')
+
+  let state = await stateOf(host)
+  assert.equal(state.channels.enabled, true)
+  assert.equal(state.channels.maxFailoversPerStep, 1)
+  assert.deepEqual(state.channels.coolingDown, [])
+  assert.deepEqual(state.channels.channels.map((row) => row.channel), ['deepseek-official', 'google-official'])
+  assert.deepEqual(state.channels.channels[0].entries, ['deepseek-official/deepseek-flash'])
+
+  const failure = { agent, turn: 1, step: 0, provider: 'deepseek-official', failure: { code: 'SERVER', status: 503, message: 'upstream exploded' }, signal: {} }
+  const retry = await waterfall(host, 'agent/request-error', failure, undefined)
+  assert.deepEqual(retry, { kind: 'retry' })
+
+  state = await stateOf(host)
+  assert.equal(state.lastError.channel, 'deepseek-official')
+  assert.equal(state.lastError.code, 'SERVER')
+  assert.equal(state.lastError.action, 'failover')
+  assert.deepEqual(state.channels.coolingDown, ['deepseek-official'])
+  const benched = state.channels.channels.find((row) => row.channel === 'deepseek-official')
+  assert.equal(benched.available, false)
+  assert.ok(benched.cooldownUntilInMs > 0)
+  assert.match(benched.lastError, /SERVER/)
+
+  // One failover per step: the second failure hands the turn back to the host.
+  assert.equal(await waterfall(host, 'agent/request-error', failure, undefined), undefined)
+
+  // The retry takes the same step again, and lands on the only healthy channel
+  // even though it is another brand — the review is skipped because leaving the
+  // brand is not a downgrade here, it is the only way the step runs.
+  const second = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(second.provider, 'google-official')
+  assert.equal(second.model, 'gemini-3.8-flash')
+
+  state = await stateOf(host)
+  assert.match(state.current.reason, /failing over from deepseek-official/)
+  assert.equal(state.cross.proposal, null, 'a benched brand does not ask for review')
+
+  await tick()
+  const stats = JSON.parse((await call(host.routes.get('/model-router/stats'))).payload)
+  assert.equal(stats.totals.failoverSteps >= 1, true)
+})
+
+test('with failover off a failure is reported and the route is left alone', async () => {
+  const host = makeHost({ pool: CHANNEL_POOL, routes: ROUTES, presets: CHANNEL_PRESETS })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  const failure = { agent, turn: 1, step: 0, provider: 'deepseek-official', failure: { code: 'RATE_LIMIT', status: 429, message: 'slow down' }, signal: {} }
+  assert.equal(await waterfall(host, 'agent/request-error', failure, undefined), undefined)
+
+  const state = await stateOf(host)
+  assert.equal(state.channels.enabled, false)
+  assert.deepEqual(state.channels.coolingDown, [], 'an observe-only router benches nothing')
+  assert.equal(state.lastError.action, 'rotate')
+  assert.equal(state.lastError.status, 429)
+
+  const again = await request(host, { agent, turn: 1, step: 1 }, seed())
+  assert.equal(again.provider, 'deepseek-official', 'the route is unchanged by a failure')
+
+  await tick()
+  const stats = JSON.parse((await call(host.routes.get('/model-router/stats'))).payload)
+  assert.equal(stats.totals.failoverSteps, 0)
+})
+
+// --- v0.16.1: crossing a brand needs a reason -------------------------------
+
+test('a cross-brand switch is proposed only when it is clearly better or cheaper', async () => {
+  // Better fit: the candidate wins on score by more than the margin.
+  const fit = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: crossPresets({ 'deepseek-official/deepseek-v4-pro': 90, 'google-official/gemini-3.8-flash': 96 }) })
+  const fitAgent = agentWith()
+  emit(fit, 'agent/inbox/claimed', { agent: fitAgent, ...claimed('接口文档') })
+  const fitOut = await request(fit, { agent: fitAgent, turn: 1, step: 0 }, seed())
+  assert.equal(fitOut.model, 'deepseek-v4-pro', 'the step stays on the brand until the review happens')
+  const fitState = await stateOf(fit)
+  assert.equal(fitState.cross.costMultiple, 3)
+  assert.equal(fitState.cross.scoreMargin, 5)
+  assert.equal(fitState.cross.proposal.why, 'fit')
+  assert.equal(fitState.cross.proposal.id, 'google-official/gemini-3.8-flash')
+  assert.ok(fitState.cross.proposal.scoreDelta >= 5)
+  assert.equal(fitState.cross.proposal.savingMultiple, null, 'gemini is not a multiple cheaper')
+  assert.match(fitState.current.reason, /awaits confirmation \(fit\)/)
+
+  // Cheaper: the candidate saves a multiple, so the review is worth asking for
+  // even though it only wins on score by a hair.
+  const cheap = makeHost({ pool: HAIKU_POOL, routes: ROUTES, presets: crossPresets({ 'deepseek-official/deepseek-v4-pro': 88, 'anthropic-official/claude-haiku-5-5': 88 }) })
+  const cheapAgent = agentWith()
+  emit(cheap, 'agent/inbox/claimed', { agent: cheapAgent, ...claimed('接口文档') })
+  await request(cheap, { agent: cheapAgent, turn: 1, step: 0 }, seed())
+  const cheapState = await stateOf(cheap)
+  assert.equal(cheapState.cross.proposal.why, 'cost')
+  assert.equal(cheapState.cross.proposal.savingMultiple, 9.6)
+  assert.ok(cheapState.cross.proposal.scoreDelta < 5)
+  assert.ok(cheapState.cross.proposal.usdPerMTok < cheapState.cross.proposal.sameUsdPerMTok)
+})
+
+test('a switch that saves a few percent is not worth interrupting the user', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: crossPresets({ 'deepseek-official/deepseek-v4-pro': 88, 'google-official/gemini-3.8-flash': 90 }) })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(out.model, 'deepseek-v4-pro')
+
+  const state = await stateOf(host)
+  assert.equal(state.cross.proposal, null)
+  assert.match(state.current.reason, /is not worth a review/)
+})
+
+test('cross-provider routing turned off keeps every step on the brand', async () => {
+  const host = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: crossPresets({ 'deepseek-official/deepseek-v4-pro': 90, 'google-official/gemini-3.8-flash': 96 }), crossProvider: 'never' })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(out.model, 'deepseek-v4-pro')
+
+  const state = await stateOf(host)
+  assert.equal(state.cross.proposal, null)
+  assert.match(state.current.reason, /cross-provider routing is off/)
+})

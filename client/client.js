@@ -97,6 +97,13 @@ window.__ModuleLoader__.load({
 				catalogDays: "{n} 天后", catalogToday: "今天", catalogEvidence: "目录核对日期 {d}",
 				shadowLabel: "成本影子", shadowHint: "若打开成本感知路由，本步会选哪个模型（仅记录，不影响当前路由）",
 				shadowAgree: "成本路由也选 {m}", shadowDiverge: "成本路由会选 {m} 而不是 {c}", shadowSaved: "便宜约 {n}%",
+				budgetLabel: "预算", budgetHint: "本会话 / 今日 / 本月的用量与上限；到硬阈值后路由器会拒绝合成的工具步骤（带新输入的一步永远放行）",
+				budgetRow: "{id} {used} / {limit}", budgetSessionTokens: "本会话 tokens", budgetSessionUsd: "本会话", budgetDayUsd: "今日", budgetMonthUsd: "本月",
+				budgetOver: "超预算", budgetNear: "接近预算", budgetOff: "只提示",
+				peakInform: "当前高峰时段，单价更高", peakShift: "高峰时段：可延后的后台步骤已排到空闲时段",
+				peakHint: "DeepSeek 工作日 9-12 点、14-18 点为高峰价，空闲时段单价约为高峰的一半",
+				channelCooling: "渠道冷却中：{c}", channelQuarantined: "渠道已隔离：{c}",
+				channelHint: "失败的渠道会短暂停用；重试会换到健康渠道，价格未知的中转绝不自动进入"
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -166,6 +173,13 @@ window.__ModuleLoader__.load({
 				catalogDays: "in {n}d", catalogToday: "today", catalogEvidence: "catalog evidence {d}",
 				shadowLabel: "cost shadow", shadowHint: "which model a cost-aware router would pick for this step (recorded only; the live route is unchanged)",
 				shadowAgree: "cost routing agrees on {m}", shadowDiverge: "cost routing would pick {m} over {c}", shadowSaved: "~{n}% cheaper",
+				budgetLabel: "budget", budgetHint: "spend and limits for this chat / today / this month; at the hard limit the router refuses synthetic tool steps (a step carrying new user input always runs)",
+				budgetRow: "{id} {used} / {limit}", budgetSessionTokens: "chat tokens", budgetSessionUsd: "chat", budgetDayUsd: "today", budgetMonthUsd: "month",
+				budgetOver: "over budget", budgetNear: "near budget", budgetOff: "inform only",
+				peakInform: "peak hours: this provider is charging double", peakShift: "peak hours: deferred background steps were moved to the off-peak window",
+				peakHint: "DeepSeek charges peak rates on weekdays 09:00-12:00 and 14:00-18:00; off-peak is about half price",
+				channelCooling: "channel benched: {c}", channelQuarantined: "channel quarantined: {c}",
+				channelHint: "a failing channel is benched for a while; the retry moves to a healthy one, and a relay of unknown price is never entered automatically"
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -240,7 +254,7 @@ window.__ModuleLoader__.load({
 			".mr-cross-hint{flex:1;min-width:0;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:15px}",
 			".mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}",
 			".mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
-			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
+			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}.mr-budget{display:flex;flex-direction:column;gap:2px;padding:6px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:1.35}.mr-budget[data-tone=near]{color:var(--dsw-alias-state-warn-label,#d29922)}.mr-budget[data-tone=over]{color:var(--dsw-alias-state-error-primary,#f85149)}.mr-budget-row{display:flex;align-items:center;gap:6px}.mr-budget-name{flex:none}.mr-budget-value{flex:none;font-variant-numeric:tabular-nums}.mr-bar{flex:1;height:4px;border-radius:2px;background:var(--dsw-alias-bg-base,rgba(127,127,127,.25));overflow:hidden;min-width:40px}.mr-bar-fill{display:block;height:100%;background:currentColor}.mr-dot[data-budget=near]{background:var(--dsw-alias-state-warn-label,#d29922)}.mr-dot[data-budget=over]{background:var(--dsw-alias-state-error-primary,#f85149)}",
 			// The per-conversation confirmation: a warn-tinted bar because it wants an answer,
 			// plus the pulsing dot that announces it on the composer trigger.
 			".mr-confirm{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-warn-label,rgba(210,153,34,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-warn,rgba(210,153,34,.12))}",
@@ -606,6 +620,34 @@ window.__ModuleLoader__.load({
 					: t.shadowDiverge.replace("{m}", String(shadow.candidate || "?")).replace("{c}", String(shadow.current || "?"))
 						+ (Number(shadow.savedRatio) > 0 ? " \u00b7 " + t.shadowSaved.replace("{n}", String(Math.round(Number(shadow.savedRatio) * 100))) : ""))
 				: ""
+			// v0.16.1 spend guard, peak window and channel health: a host that
+			// predates them sends none of these fields and every block below stays
+			// silent, exactly like the catalog and cost-shadow blocks.
+			const budgetInfo = state && state.budget && Array.isArray(state.budget.rows) ? state.budget : null
+			const budgetRows = budgetInfo ? budgetInfo.rows.filter((row) => row.active) : []
+			const usd = (value) => "$" + Number(value || 0).toFixed(2)
+			const amount = (row, key) => (row.unit === "usd" ? usd(row[key]) : String(Math.round(Number(row[key]) || 0)))
+			const budgetTone = !budgetInfo ? "ok" : budgetInfo.exceeded ? "over" : budgetInfo.soft ? "near" : "ok"
+			const budgetMode = !budgetInfo ? "" : budgetInfo.mode === "block" ? "block" : budgetInfo.mode === "inform" ? "inform" : "off"
+			const budgetRow = (row) => t.budgetRow
+				.replace("{id}", t["budget" + row.id.charAt(0).toUpperCase() + row.id.slice(1)] || row.id)
+				.replace("{used}", amount(row, "used"))
+				.replace("{limit}", amount(row, "limit"))
+			const budgetNote = budgetRows.length > 0 ? budgetRows.map(budgetRow).join(" \u00b7 ") : ""
+			const budgetTitle = t.budgetHint + (budgetMode === "off" ? " \u00b7 " + t.budgetOff : "")
+			const peakInfo = state && state.peak && typeof state.peak === "object" ? state.peak : null
+			const peakNote = peakInfo && peakInfo.atPeak && peakInfo.policy && peakInfo.policy !== "off"
+				? (peakInfo.policy === "shift" ? t.peakShift : t.peakInform)
+				: ""
+			const channelInfo = state && state.channels && typeof state.channels === "object" ? state.channels : null
+			const cooling = channelInfo && Array.isArray(channelInfo.coolingDown) ? channelInfo.coolingDown : []
+			const quarantined = channelInfo && Array.isArray(channelInfo.quarantined) ? channelInfo.quarantined.map((entry) => entry && entry.channel).filter(Boolean) : []
+			const channelNote = [
+				cooling.length > 0 ? t.channelCooling.replace("{c}", cooling.join(", ")) : "",
+				quarantined.length > 0 ? t.channelQuarantined.replace("{c}", quarantined.join(", ")) : "",
+			].filter(Boolean).join(" \u00b7 ")
+			const verifier = state && state.lastVerify && state.lastVerify.ok === false ? state.lastVerify : null
+			const verifyNote = verifier ? t.channelCooling.replace("{c}", String(verifier.channel || "")) : ""
 			const shadowNote = costInfo && (shadowLine || costInfo.enabled)
 				? t.shadowLabel + (costInfo.enabled ? " (on)" : " (off)") + (shadowLine ? " \u00b7 " + shadowLine : "")
 				: ""
@@ -903,6 +945,9 @@ window.__ModuleLoader__.load({
 						: null))),
 					officialBusy ? h("span", { className: "mr-spin" }) : null,
 					needsConfirm ? h("span", { className: "mr-attn", title: t.confirmAttn }) : null,
+					budgetRows.length > 0 && budgetTone !== "ok"
+						? h("span", { className: "mr-dot", "data-budget": budgetTone, title: t.budgetLabel + " \u00b7 " + budgetNote })
+						: null,
 					catalogAlerts.length > 0 ? h("span", { className: "mr-dot", "data-catalog": "true", title: catalogTitle }) : null,
 					h("span", { className: "mr-dot", "data-yielded": String(yielded) })
 				),
@@ -1035,6 +1080,31 @@ window.__ModuleLoader__.load({
 							key: "catalog", className: "mr-catalog", "data-mr-catalog": "true",
 							title: catalogInfo.evidenceDate ? t.catalogEvidence.replace("{d}", catalogInfo.evidenceDate) : undefined,
 						}, catalogAlerts.map((alert, index) => h("div", { key: String(index) }, catalogLine(alert)))))
+					}
+					// Spend guard (v0.16.1): the limits that are actually set, with the
+					// spend bar the panel can read at a glance.
+					if (budgetRows.length > 0) {
+						body.push(h("div", {
+							key: "budget", className: "mr-budget", "data-mr-budget": "true", "data-tone": budgetTone,
+							"data-mode": budgetMode, title: budgetTitle,
+						},
+							h("div", { className: "mr-budget-head", "data-mr-budget-head": "true" },
+								t.budgetLabel + (budgetTone === "over" ? " \u00b7 " + t.budgetOver : budgetTone === "near" ? " \u00b7 " + t.budgetNear : "")),
+							budgetRows.map((row) => h("div", { key: row.id, className: "mr-budget-row", "data-mr-budget-row": row.id },
+								h("span", { className: "mr-budget-name" }, t["budget" + row.id.charAt(0).toUpperCase() + row.id.slice(1)] || row.id),
+								h("span", { className: "mr-budget-value" }, amount(row, "used") + " / " + amount(row, "limit")),
+								h("span", { className: "mr-bar" }, h("span", { className: "mr-bar-fill", style: { width: Math.max(0, Math.min(100, Math.round(Number(row.ratio) * 100))) + "%" } }))
+					))))
+					}
+					// Peak window (v0.16.1): said out loud because "inform" is the
+					// shipped default and the saving only exists if the user sees it.
+					if (peakNote) {
+						body.push(h("div", { key: "peak", className: "mr-note", "data-mr-peak": "true", title: t.peakHint }, peakNote))
+					}
+					// Channel health (v0.16.1): what is benched and why the retry moved.
+					if (channelNote || verifyNote) {
+						body.push(h("div", { key: "channels", className: "mr-note", "data-mr-channels": "true", title: t.channelHint },
+							channelNote || verifyNote))
 					}
 					// --- Per-conversation confirmation, before anything else can be touched ---
 					if (needsConfirm) {

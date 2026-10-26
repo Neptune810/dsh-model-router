@@ -314,6 +314,45 @@ test('cost awareness flips the winner when the cheaper unit cost is dearer in mo
   assert.equal(chooseEntry(pool, COST_CFG(), COST_SIGNALS()).entry.id, 'a/frugal')
 })
 
+test('a cooling channel sinks behind a healthy one even with a higher score (v0.16.1)', () => {
+  const pool = [
+    { id: 'relay-a/strong-model', cost: 1, tier: 'strong' },
+    { id: 'relay-b/weak-model', cost: 1, tier: 'cheap' },
+  ]
+  // The hard bonus gives the strong entry the higher score ...
+  assert.equal(chooseEntry(pool, cfg(), { stepClass: 'hard' }).entry.id, 'relay-a/strong-model')
+  // ... but a channel in cooldown goes behind whatever is healthy.
+  const choice = chooseEntry(pool, cfg(), { stepClass: 'hard', channelBlocked: { 'relay-a/strong-model': true } })
+  assert.equal(choice.entry.id, 'relay-b/weak-model')
+  assert.equal(choice.channelBlocked, false)
+})
+
+test('the channel rank breaks a score tie (v0.16.1)', () => {
+  const pool = [
+    { id: 'relay-a/model', cost: 1, tier: 'cheap' },
+    { id: 'relay-b/model', cost: 1, tier: 'cheap' },
+  ]
+  // Equal score and equal pool cost: the id decides by default.
+  assert.equal(chooseEntry(pool, cfg(), {}).entry.id, 'relay-a/model')
+  // The health ledger promotes the better channel instead.
+  const choice = chooseEntry(pool, cfg(), { channelRank: { 'relay-a/model': 2, 'relay-b/model': 1 } })
+  assert.equal(choice.entry.id, 'relay-b/model')
+  assert.equal(choice.channelBlocked, false)
+})
+
+test('a pool whose channels are all cooling still routes to the best of them (v0.16.1)', () => {
+  const pool = [
+    { id: 'only/a', cost: 1, tier: 'cheap' },
+    { id: 'only/b', cost: 1, tier: 'cheap' },
+  ]
+  const choice = chooseEntry(pool, cfg(), {
+    channelBlocked: { 'only/a': true, 'only/b': true },
+    channelRank: { 'only/a': 1001, 'only/b': 1002 },
+  })
+  assert.equal(choice.entry.id, 'only/a', 'cooldown reorders, it never removes')
+  assert.equal(choice.channelBlocked, true)
+})
+
 test('a cost filter that empties the pool falls back to the old choice', () => {
   const pool = [
     { id: 'a/spent', cost: 1, tier: 'strong', maxPerTask: 1 },
