@@ -533,3 +533,54 @@ also stay in 1.0.0 scope.
 Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.17.0 latest` and `pnpm add` 0.17.0 in
 the profile; 0.17.1 adds fields and a new log file rather than changing state, so 0.17.0 reads the same store
 without migration (the feedback log is simply absent until the first label).
+
+## 1.0.0 — commitable stability, shipped as an honest slice (2026-10-26)
+
+**Goal.** Make the surface the panel (and any other client) talks to versioned, documented and tested
+against the code — and name a degraded host instead of looking fine. No routing decision changes.
+
+**What landed.**
+
+- `API_SCHEMA_VERSION = 1` and `withSchemaVersion` in `lib/routes.js`, stamped inside `sendJson` so the
+  transport's own 400/403/405/500 answers carry it as well, and stamped before the `/state` ETag is
+  computed so the version is inside the hash the response advertises.
+- `test/contract.test.js` (7 cases): the routes in `docs/api.md` are exactly the registered ones (and no
+  registered path is undocumented); every `agent/*` event the plugin listens to appears in
+  `docs/compat.md`; every `package.json#exports` target resolves and lives in a published directory;
+  `engines.node` / `engines.dsh` are declared and `peerDependencies` stays undeclared; the 1.0
+  documentation set exists; both panel languages still render the compat note.
+- The panel renders `/state.compat.missing` as a `data-mr-compat` note in the chat language, silent when
+  the list is empty or the block is malformed.
+- Documentation that ships: `docs/api.md`, `docs/compat.md`, `docs/migration-0.14-to-1.0.md`,
+  `CONTRIBUTING.md`, `SECURITY.md` — all added to `package.json` `files` (packed files 33 → 38).
+
+**Freeze evidence.** `node --test` 421/421 pass (413 in 0.17.1: +7 contract, +1 client);
+`scripts/check-release.mjs --pack` green (38 packed files); golden snapshots untouched, because nothing in
+the routing path changed.
+
+**Deferred on purpose.** Splitting `client/client.js` into `client/src/*` behind a build step (it
+conflicts with the "the repo commits the built artifact, DSH builds nothing" constraint) and a CI matrix
+against a second host version (there is no second installable host yet; the contract test plus
+`docs/compat.md` cover the same ground for the version that exists). Both are recorded in `PLAN.md` §5.9
+and `ROADMAP.en.md` instead of being implied by the version number. The `costAware` flip remains a 1.x
+decision: the shadow gate (G3/G4: ≥7 days and ≥300 priced steps) is still unmet.
+
+**Commits.** `dce2c1b` the envelope, the contract test, the compat note and the documentation set;
+`f0ee45c` `chore(release): 1.0.0`.
+
+### Publish evidence (2026-10-26)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/1.0.0` from `e46cd21` (the 0.17.1 evidence commit), two commits |
+| push to main | `git push origin release/1.0.0:main` -> `e46cd21..f0ee45c` (fast-forward) |
+| tag | annotated `v1.0.0` (object `23f482b`) -> commit `f0ee45c` |
+| CI (tag) | Actions publish run [40297361418](https://github.com/Neptune810/dsh-model-router/actions/runs/40297361418) success: test node 20/22/24, node 24 release gate `--pack`, catalog regeneration and validator, then the OIDC publish job (`Publish` step success) |
+| CI (main) | Actions publish run 40297356379 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 40297361450 success, report uploaded as an artifact |
+| npm | `dist-tags.latest = 1.0.0`, tarball shasum `80bbe1e9f2455d38b544a4ba5201036249ac0e1a`, integrity `sha512-Nk18zsT3f53YlwioLhCRoiunFfa6fc4Vub+B62FdvNLvYNewAqMfl2HmJUvyHvAeAzAHqdSV+LrjvPLhI8r6Uw==`, 38 files (up from 33), provenance attestation `https://registry.npmjs.org/-/npm/v1/attestations/@neptune810%2fdsh-model-router@1.0.0`, published from the tag run with `engines.node >=20` / `engines.dsh >=0.1.7-rc.2 <0.2.0` |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@1.0.0 --save-exact` — dependency now `1.0.0` (dsh-better-sidebar 0.24.1, dsh-cost-meter 1.7.45, dshmarket ^1.66.5 unchanged); pnpm added the version to `minimumReleaseAgeExclude`; the desktop app must be restarted to load it |
+
+Rollback if needed: `npm dist-tag add `neptune810/dsh-model-router`0.17.1 latest` and `pnpm add` 0.17.1 in
+the profile; 1.0.0 changes no state shape, so 0.17.1 reads the same store, and a 1.0.0 client simply loses
+the `schemaVersion` field it was already told to tolerate.
