@@ -1776,3 +1776,27 @@ test('a raised tier for lack of confidence, and an open breaker, are said out lo
   await legacy.rt.flush()
   assert.equal(byProp(legacy.holder.tree, 'data-mr-classifier', 'true').length, 0)
 })
+
+test('a missing host capability is named on the panel instead of silently degrading', async () => {
+  const degraded = await openControl({ state: Object.assign(catalogState([]), { compat: { missing: ['sessionProjections'], optional: ['webServer'], checkedAt: 1 } }) })
+  openPanel(degraded.holder)
+  await degraded.rt.flush()
+  const notes = byProp(degraded.holder.tree, 'data-mr-compat', 'true')
+  assert.equal(notes.length, 1)
+  assert.equal(textOf(notes[0]), '宿主能力缺失：sessionProjections')
+
+  const en = await openControl({ state: Object.assign(catalogState([]), { compat: { missing: ['sessionProjections', 'webServer'] } }), globals: { navigator: { language: 'en-US' } } })
+  openPanel(en.holder)
+  await en.rt.flush()
+  assert.equal(textOf(byProp(en.holder.tree, 'data-mr-compat', 'true')[0]), 'missing host capability: sessionProjections, webServer')
+
+  const healthy = await openControl({ state: Object.assign(catalogState([]), { compat: { missing: [], optional: [] } }) })
+  openPanel(healthy.holder)
+  await healthy.rt.flush()
+  assert.equal(byProp(healthy.holder.tree, 'data-mr-compat', 'true').length, 0, 'a healthy host says nothing')
+
+  const malformed = await openControl({ state: Object.assign(catalogState([]), { compat: { missing: 'nope' } }) })
+  openPanel(malformed.holder)
+  await malformed.rt.flush()
+  assert.equal(byProp(malformed.holder.tree, 'data-mr-compat', 'true').length, 0, 'a malformed report is ignored')
+})

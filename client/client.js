@@ -110,7 +110,8 @@ window.__ModuleLoader__.load({
 				feedbackTooExpensive: "太贵", feedbackTooWeak: "太弱", feedbackJustRight: "正好",
 				feedbackPending: "等下一步验证", feedbackStayed: "下一步留在原路由", feedbackMoved: "下一步换了路由",
 				experimentNote: "探索实验：这一步试了 {arm}", experimentShadow: "探索影子：抽到 {arm}，未改路由", experimentHint: "epsilon-greedy 只在非 hard、非 engineering 的步骤抽签；默认关闭",
-				classifierEscalated: "分类器低置信（{c}）已上调一档", classifierBreaker: "分类器连续失败，暂时只用规则", classifierHint: "分类器给不出高置信结论时宁可上调一档，也不猜"
+				classifierEscalated: "分类器低置信（{c}）已上调一档", classifierBreaker: "分类器连续失败，暂时只用规则", classifierHint: "分类器给不出高置信结论时宁可上调一档，也不猜",
+				compatLabel: "宿主能力缺失：{c}", compatHint: "缺少的宿主能力对应的功能不可用；路由本身仍在运行，不会静默假装正常"
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -193,7 +194,8 @@ window.__ModuleLoader__.load({
 				feedbackTooExpensive: "too expensive", feedbackTooWeak: "too weak", feedbackJustRight: "just right",
 				feedbackPending: "waiting for the next step", feedbackStayed: "the next step stayed on the route", feedbackMoved: "the next step moved to another route",
 				experimentNote: "experiment: this step tried {arm}", experimentShadow: "experiment shadow: drew {arm}, route unchanged", experimentHint: "epsilon-greedy draws only on steps that are neither hard nor engineering; off by default",
-				classifierEscalated: "classifier confidence low ({c}), tier raised", classifierBreaker: "the classifier keeps failing, rules only for now", classifierHint: "when the classifier cannot be confident it raises the tier instead of guessing"
+				classifierEscalated: "classifier confidence low ({c}), tier raised", classifierBreaker: "the classifier keeps failing, rules only for now", classifierHint: "when the classifier cannot be confident it raises the tier instead of guessing",
+				compatLabel: "missing host capability: {c}", compatHint: "features that need that capability are unavailable; routing still runs and never pretends to be fine"
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -637,6 +639,11 @@ window.__ModuleLoader__.load({
 			// v0.16.1 spend guard, peak window and channel health: a host that
 			// predates them sends none of these fields and every block below stays
 			// silent, exactly like the catalog and cost-shadow blocks.
+			// Host-contract self-check (v1.0.0): a degraded host still routes, but the panel
+			// names the missing capability instead of pretending everything is fine.
+			const compatInfo = state && state.compat && Array.isArray(state.compat.missing) ? state.compat : null
+			const compatMissing = compatInfo ? compatInfo.missing.filter((name) => typeof name === "string" && name.length > 0) : []
+			const compatNote = compatMissing.length > 0 ? t.compatLabel.replace("{c}", compatMissing.join(", ")) : ""
 			const budgetInfo = state && state.budget && Array.isArray(state.budget.rows) ? state.budget : null
 			const budgetRows = budgetInfo ? budgetInfo.rows.filter((row) => row.active) : []
 			const usd = (value) => "$" + Number(value || 0).toFixed(2)
@@ -1169,6 +1176,11 @@ window.__ModuleLoader__.load({
 					}
 					if (classifierNote) {
 						body.push(h("div", { key: "classifier", className: "mr-note", "data-mr-classifier": "true", title: t.classifierHint }, classifierNote))
+					}
+					// Host-contract self-check (v1.0.0): a yellow note when a required host
+					// capability is missing, so a degraded install is visible, not silent.
+					if (compatNote) {
+						body.push(h("div", { key: "compat", className: "mr-note", "data-mr-compat": "true", title: t.compatHint }, compatNote))
 					}
 					// --- Per-conversation confirmation, before anything else can be touched ---
 					if (needsConfirm) {
