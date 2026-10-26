@@ -429,3 +429,51 @@ days of data.
 Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.16.0 latest` and `pnpm add` 0.16.0 in
 the profile; 0.16.1 reads 0.16.0 state without migration, and with `channels.failover`, `budget.mode` and
 `crossProvider` left at their defaults the routing is byte-identical to 0.16.0.
+
+## 0.17.0 — effort economics, part one: the ladder becomes auditable (2026-10-26)
+
+**Goal.** Turn "the thinking tier did something, but what?" into a recorded, countable, replayable fact — without
+flipping any default. Part one of the 0.17.0 scope in `PLAN.md` §5.7; the feedback loop, classifier v2, ε-greedy
+and the L2 economics run moved to 0.17.1 because their gates need shadow samples and labels that cannot exist yet.
+
+**What landed.**
+1. `lib/effort.js` — the eight-step ladder (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`)
+   with points matching `policy`, `ladderRank` (unknown words land on `high`, never `off`), and deterministic
+   `DEFAULT_BUDGETS` (low 2048 … max 32768) that a model can override through `effort.budgets` in the catalog;
+   `budgetForTier` clamps to `maxOutput`.
+2. `explainMapping(tier, applied, meta)` returns `{from, to, why}` with `why` in `exact | alias | nearest | none`.
+   The four outcomes are the contract: a request is either taken verbatim, aliased onto a shorter vocabulary,
+   moved to the nearest tier, or the model does not take tiers at all. Nothing collapses silently.
+3. Every decision event carries `effortMapped`; `/state.effort` publishes the ladder, the points and the last
+   mapping; a non-`exact` outcome is appended to the route `reason`.
+4. `/stats` counts it: `totals.mappedSteps`, `totals.mappedShare`, `effort.byClass` and `effort.top`
+   (the `from->to:why` pairs).
+5. `lib/replay.js` (npm script `replay`, bin `dsh-model-router-replay`) reads `decisions*.jsonl`, re-runs
+   `chooseEntry` and the ladder mapping with the code and pool you have now, and reports which routes or efforts
+   would move. It ships inside the package; keeping it out of `scripts/` keeps the release gate's rule intact
+   (no test or CI scaffold in the tarball).
+6. The client adds one line (`data-mr-effort`) only when the last tier was not taken verbatim — silent on
+   `exact`, on hosts predating the field, and on a malformed block.
+
+**Freeze evidence.** `node --test` 382/382 pass (368 in 0.16.1: +7 effort, +5 replay, +2 client), `node --check`
+clean on every touched file, `scripts/check-release.mjs --pack` green (29 packed files, up from 27) and
+`scripts/check-catalog.mjs` unchanged (19 models / 15 channels / 4 calendar entries / 1 watchlist entry).
+Routing behaviour is untouched: `costAware` stays `false` and `peakPolicy` stays where 0.16.1 left it.
+
+**Commits.** `2c9827e` the ladder, replay, telemetry, client and tests; `c76ced3` `chore(release): 0.17.0`.
+
+### Publish evidence (2026-10-26)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/0.17.0` from `34aaade` (the 0.16.1 evidence commit), two commits |
+| push to main | `git push origin release/0.17.0:main` -> `34aaade..c76ced3` (fast-forward) |
+| tag | annotated `v0.17.0` -> commit `c76ced3` |
+| CI (tag) | Actions publish run [40292108050](https://github.com/Neptune810/dsh-model-router/actions/runs/40292108050) success: test node 20/22/24, release gate `--pack`, catalog regeneration, catalog validator, then the OIDC publish job |
+| CI (main) | Actions publish run 40292086066 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 40292108061 success, report uploaded as an artifact |
+| npm | `dist-tags.latest = 0.17.0`, tarball shasum `3296e8b04355aabc46ba2551aecab63a7de6c2ae`, integrity `sha512-oDDOiLOfiTTjRhdjh90MjgCzAMegYcP2WkY4cf0Wx97Bn9ZGveq97TD38nbIeWUsNu82SR4RSNxSg6lJB2YikQ==`, 29 files, published with provenance from the tag run |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.17.0 --save-exact`, dependency pinned to `0.17.0` (the desktop app must be restarted to load it) |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.16.1 latest` and `pnpm add` 0.16.1 in
+the profile; 0.17.0 adds fields rather than changing state, so 0.16.1 reads the same store without migration.
