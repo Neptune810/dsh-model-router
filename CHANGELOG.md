@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.14.4
+
+**A release-engineering release: the version, the tag, the CHANGELOG and the tarball are now checked against each
+other by a script, CI runs the suite on Node 20, 22 and 24, the model catalog gets a schema and a generated module,
+and the smoke script can tell a live panel from a dead port. Routing results are unchanged — no router code was
+touched.**
+
+- **Release gate (`scripts/check-release.mjs`).** One script checks that the package version, the newest CHANGELOG
+  heading and `GITHUB_REF` agree, then packs the tarball and compares its file list with the `files` whitelist:
+  missing promised files, stray test sources and a version/tag mismatch all fail. It runs locally as
+  `npm run release:gate` and in CI for every tag, so a release cannot ship a version that the tag or the notes
+  disagree with.
+- **CI matrix.** The test job runs on Node 20, 22 and 24 (fail-fast off), syntax-checks every shipped file first,
+  and on failure re-runs each test file and emits `::error file=...::` annotations with the tail of the failing
+  output. A tag run publishes through npm trusted publishing with a provenance attestation, and an E409 from a
+  staging race is tolerated.
+- **The model catalog is now a checked artifact.** `catalog/model-catalog.yaml` (19 models, 15 channels, evidence date 2026-10-26) documents price, effort
+  vocabulary, context window, channels and scheduled changes per model, with
+  `unknown` kept explicit instead of guessed. `schema/model-catalog.schema.json` validates it,
+  `scripts/build-catalog.py` compiles it into the committed `lib/catalog.js`, and `scripts/check-catalog.mjs`
+  validates the source and the generated module without Python. `lib/catalog.js` exports a frozen list plus
+  `findModel`, which accepts an id, a canonical id, an official model id, an OpenRouter id or a qualified id.
+  The router does not read the catalog yet; 0.15 adds telemetry and 0.16 turns its prices into cost estimates.
+- **Smoke script and fixtures.** `scripts/smoke.mjs` checks a live panel (/state shape, decisions appearing after
+  a request, control -> resume round trip) and exits PASS/WARN/SKIP/FAIL; `--check` probes a port without touching
+  a running session. `test/fixtures/` adds a documented 108-line decision sample, 18 host-event samples and a fake
+  panel host for tests that must not need a real DSH.
+- **Docs.** `PUBLISHING.md` gains a release checklist and rollback steps (`npm dist-tag add` the previous version,
+  restore the profile backup, fix forward instead of re-tagging); README covers the catalog workflow and the release
+  gate in both languages; `EXECUTION.md` records the baseline recovery, every 0.14.3/0.14.4 commit, the CI
+  diagnosis and the release evidence.
+- **Upgrade note:** no profile or state migration is needed. Stored `settings.json`/state files from 0.14.3 load
+  unchanged.
+- 222 tests (`test/release.test.js` 8 new, `test/catalog.test.js` 20 new, `test/smoke.test.js` 11 new; 182 in
+  0.14.3). Routing-result golden snapshots are unchanged.
 ## 0.14.3
 
 **A hardening release: the panel no longer trusts any page that can reach the port, a conversation whose history is
