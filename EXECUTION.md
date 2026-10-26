@@ -307,3 +307,61 @@ money and dates, but still scores by pool-relative `cost`); CHANGELOG gets the 0
 
 Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.15.0 latest` and `pnpm add` 0.15.0 in the
 profile; 0.15.1 reads 0.15.0 state without migration, so a downgrade is safe.
+
+## 0.16.0 — the cost-aware shadow (2026-10-26)
+
+**Goal.** Price the decision, not just the bill: give every pool entry one blended USD-per-million-token rate
+from the shipped catalog at the step's own instant, let a cost term join the score, and ship both **dark**. The
+route must not move until the shadow shows what moving would save, so the ten golden snapshots stay
+byte-identical to 0.15.1.
+
+**What landed.**
+- `lib/pricing2.js` (new, 19 KB, pure, zero dependency, subpath export `./pricing2`): `DEFAULT_MIX`,
+  `mixFromSplit`, `blendedUsdPerMTok`, `promptTokensOf`, `longContextRates`, `stepCost`, `perCallCost`.
+  Peak/off-peak windows, long-context tiers (`whole_request` and `excess`, largest matching threshold, own
+  `effectiveFrom`) and per-1000-call rows (DeepSeek Search/Fetch from 2026-11-01) all come from the catalog;
+  an unknown price is `null`, never zero.
+- `lib/routing.js`: `scoring.costWeight` 0.15, `costGuard {maxMultiple: 8, unknownPricing: 'exclude'}`,
+  `routing.costAware: false`, `costAllows()` and the `costFallback` retry - a guard that empties the pool
+  re-runs the choice with cost awareness off, so cost can never leave a session unrouted.
+- `lib/index.js`: `costBasis()` builds the per-entry rates and the floor once per decision, the cost signals
+  feed both `chooseEntry` calls (cross-brand proposal and main choice), the shadow block records the nine
+  fields when `costAware` is off, and `GET /state.costAware` publishes `{enabled, costWeight, guard, mix,
+  floorUsdPerMTok, entries, shadow}`.
+- `lib/telemetry.js`: the `router.decision/1` event carries the shadow, and `summarize` adds `shadow:
+  {steps, agreeSteps, divergedSteps, agreementRate, pricedSteps, currentUsd, candidateUsd, savedUsd,
+  savedRatio}` (a malformed shadow is skipped; a step with no priced pair counts but costs nothing).
+- `client/client.js`: one caption under the price note - divergence with the saved ratio, the agreement form,
+  `(on)` once the flag is on, English, and nothing at all on a host that sends no `costAware` block.
+- Docs: CHANGELOG 0.16.0, both READMEs (a new cost section plus the real test counts), PLAN §3.1/§5.5/§5.6
+  re-baselined (channels deferred to 0.16.1, the default flip to 0.17.0), ROADMAP.en.md and
+  release-calendar.csv marked up to 0.16.0.
+
+**Freeze evidence.** `node --test` 333/333 pass (305 in 0.15.1: +15 pricing2, +6 routing, +4 observation,
++1 telemetry, +2 client), `node --check` clean, golden snapshots untouched, `scripts/check-release.mjs --pack`
+green locally before the tag.
+
+**Deferred on purpose.** C4 budget gate, C5 peak policy, C6 channel health/failover and C7 cross-brand cost
+guard moved to 0.16.1 as a whole: they change routing behaviour or stability, which is a different risk class
+from "let the cost data speak first", and a separate minor lets them carry a full mock-failover suite and a
+budget drill as their gate.
+
+**Commits.** `d57c464` the pricing basis, `5340121` the wiring (scoring, shadow, telemetry, client, tests),
+`0193c7b` `chore(release): 0.16.0` (version, CHANGELOG, both READMEs).
+
+### Publish evidence (2026-10-26)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/0.16.0` from `ec0e67c` (the 0.15.1 evidence commit), three commits |
+| push to main | `git push origin release/0.16.0:main` -> `ec0e67c..0193c7b` (fast-forward) |
+| tag | annotated `v0.16.0` -> commit `0193c7b` |
+| CI (tag) | Actions publish run [40282986365](https://github.com/Neptune810/dsh-model-router/actions/runs/40282986365) success: test node 20/22/24, release gate `--pack`, catalog regeneration, catalog validator, then the OIDC publish job |
+| CI (main) | Actions publish run 40282982504 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 40282986335 success, report uploaded as an artifact |
+| npm | `dist-tags.latest = 0.16.0`, tarball shasum `12ae33b51ec586c32cdc2b4816791057536c8817`, published with provenance from the tag run |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.16.0 --save-exact`, dependency pinned to `0.16.0` (the desktop app must be restarted to load it) |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.15.1 latest` and `pnpm add` 0.15.1 in the
+profile; 0.16.0 reads 0.15.1 state without migration and its routing is byte-identical with `costAware` off, so
+a downgrade changes nothing but the shadow fields.
