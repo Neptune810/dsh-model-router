@@ -387,6 +387,53 @@ peakPolicy: inform    # off | inform | shift
 crossCost: { maxMultiple: 3, scoreMargin: 5 }
 ```
 
+## Effort economics, part one: the ladder is auditable (v0.17.0)
+
+The tier ladder used to live inside the scoring code. It is now a module (`lib/effort.js`, subpath `./effort`) so the
+question "did I ask for `high` and get `high`?" has an answer for every step.
+
+`LADDER` is the documented eight tiers — `off(0) minimal(25) low(50) medium(62) high(75) xhigh(86) max(100) ultra(105)` —
+and `budgetForTier(tier, meta)` turns one into a token budget (low 2048 … max 32768) from `DEFAULT_BUDGETS`, overridable
+per model through `effort.budgets` in the catalog and always capped by `maxOutput`. Hosts that express depth as a token
+budget can use it directly; the DeepSeek wire takes words, so the budget stays a capability statement there.
+
+**Every decision records how the tier arrived.** `explainMapping(tier, applied, meta)` distinguishes four outcomes:
+
+| `why` | meaning | example |
+|---|---|---|
+| `exact` | the model accepts the word itself | `low` → `low` |
+| `alias` | the model documents a shorter vocabulary and aliases the word | `medium` → `high` on DeepSeek |
+| `nearest` | the vocabulary has no such tier, so the closest one (ties go up) runs | `xhigh` → `max` on Kimi |
+| `none` | the model advertises no reasoning effort at all | `high` → nothing |
+
+The result is written to the decision event as `effortMapped`, published on `/state.effort` with the ladder and its
+points, and appended to the route's `reason` whenever it is not `exact` — a collapse is never silent. `/stats` counts
+them: `totals.mappedSteps` and `totals.mappedShare` at the top, `effort.byClass` for the mapped share per step class,
+and `effort.top` for the most common `from->to:why` pairs. The panel adds one line (`data-mr-effort`) when the last
+step's tier was not taken verbatim, and says nothing when it was.
+
+**Offline replay.** `/router replay [n]` prints what was recorded. `npm run replay` re-derives what the current code and
+pool would do with that same traffic:
+
+```sh
+node lib/replay.js                       # ~/.dsh/storages/model-router
+node lib/replay.js --since 2026-10-20    # a window
+node lib/replay.js --config pool.json     # a pool you are considering
+node lib/replay.js --json                 # a report to diff
+node lib/replay.js --fail-on-change       # exit 1 when a route or an effort moves
+```
+
+The CLI travels with the package (`npx dsh-model-router-replay`, or `node node_modules/@neptune810/dsh-model-router/lib/replay.js` after an install); `npm run replay` is just the repo shortcut.
+
+The pool defaults to the one the traffic actually used, so a run of "no changes" proves the current code reproduces the
+recorded routes; pointing `--config` at a pool with different weights answers "how much of last week would have routed
+elsewhere?". Two things it cannot replay, on purpose: classification and presets both read the prompt text, which
+telemetry never stores, so the recorded `stepClass` is taken as given and presets are not re-applied.
+
+**What is not in this version.** `costAware` still defaults to `false`: the flip wants G3/G4 (≥7 days and ≥300 shadow
+steps, at least one restart on a build that records the shadow). The feedback loop, the classifier v2 and ε-greedy are
+0.17.1, together with the L2 experiment that decides whether the cost term becomes the default.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -578,7 +625,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-368 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+382 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
@@ -607,7 +654,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (49)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (51)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -621,7 +668,8 @@ sends no `catalog` block), the cost shadow's caption (a divergence with its savi
 silence of a host that sends no `costAware` block), the spend guard (a near-budget dot and its bar, an
 overspent bar clamping to 100%, token rows, a zero limit and a malformed block staying silent), the peak note
 under `inform` and `shift` (and its silence when off or off-peak), the benched/quarantined channel line in both
-languages, and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
+languages, the effort-mapping line (an alias, a nearest tier, a model that takes none, the silence of an exact
+mapping and of a malformed block, and English), and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
 read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
@@ -633,7 +681,7 @@ on its day, the peak/off-peak windows), the token split, the null-not-zero price
 PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decision events landing on disk, monthly
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
-costs nothing), a once-only error and the off switch;
+costs nothing), a once-only error, the off switch, and the effort-mapping counters;
 `test/observation.test.js` (18) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
 `/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`, and the cost
 shadow: the model a cost-aware router would have picked, the agreement a cheap-live route records, the flag
@@ -644,7 +692,11 @@ proposal appearing only when the switch is clearly better or cheaper);
 `test/pricing2.test.js` (15) covers the blended rate (peak, off-peak and the weekend, cache-only and output-only
 mixes), the long-context tiers (the largest threshold wins, `effectiveFrom` is respected, `whole_request` vs
 `excess`), `stepCost` matching the catalog price at three instants, and the per-call rows before and after
-their `effectiveFrom`; `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only
+their `effectiveFrom`; `test/effort.test.js` (7) covers the eight-tier ladder and its points, the unknown word ranking as `high`,
+the budget table and its per-model overrides, the `maxOutput` cap, the four `why` answers, the per-class and per-pair
+summary and malformed input; `test/replay.test.js` (5) drives `lib/replay.js` over a frozen ledger (an unchanged
+replay, a step that would route elsewhere today, `--fail-on-change`, a config exposing an alias collapse, the
+`--since` / `--until` window, and the two exit-2 paths); `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only
 with `GOLDEN_UPDATE=1`), so unintended drift fails.
 
 ## The model catalog

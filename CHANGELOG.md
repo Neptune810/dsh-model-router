@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.17.0
+
+**An effort-economics release that changes no route: the eight-tier ladder becomes a module, every step records how its
+tier reached the wire (exact / alias / nearest / none), `/stats` counts the collapses per step class, and `npm run replay`
+re-derives a recorded ledger against the code and the pool you have now. `costAware` stays off.**
+
+- **The ladder as data (`lib/effort.js`, new subpath export `./effort`).** `LADDER` is the documented eight tiers
+  (`off minimal low medium high xhigh max ultra`) with `LADDER_POINTS`; `budgetTable(meta)` and
+  `budgetForTier(tier, meta)` turn a tier into a token budget from `DEFAULT_BUDGETS` (low 2048 … max 32768),
+  overridable per model through `effort.budgets` in the catalog and always capped by `maxOutput`.
+- **Every decision says how its tier arrived.** `explainMapping(tier, applied, meta)` answers `exact`, `alias`
+  (`effort.aliases` — DeepSeek maps medium to high), `nearest` (the vocabulary has no such tier) or `none` (the model
+  advertises no effort at all). It lands in the decision event as `effortMapped`, on `/state.effort` together with the
+  ladder and its points, and in the route's `reason` whenever it is not exact.
+- **`/stats` counts the collapses.** `totals.mappedSteps` / `totals.mappedShare`, plus `effort.byClass` (the mapped
+  share per step class) and `effort.top` (the most common `from->to:why` pairs).
+- **Offline replay (`lib/replay.js`, `npm run replay`).** Reads `decisions*.jsonl`, re-runs `chooseEntry` and the
+  ladder mapping with the code you have now, and prints the steps whose model or effort would change; `--config` replays a
+  pool you are considering, `--since` / `--until` narrow the window, `--json` is machine readable and
+  `--fail-on-change` exits 1. `/router replay [n]` still prints what was recorded; this re-derives what would happen now.
+  Classification and presets are out of reach on purpose: both need the prompt text, which telemetry never stores.
+- **Panel.** One line naming a tier the model cannot take verbatim (`data-mr-effort`), and nothing at all when the tier
+  is exact, when the host sends no `effort` block, or when the block is malformed.
+- **Tests.** 382 tests (368 in 0.16.1): `effort` 7, `replay` 5, `client` 51 (the effort line, its silence, English),
+  `telemetry` 15 (the mapped counters), `observation` 18.
+- **Upgrade note:** no state migration and no config change. The new decision field, the `/state` block and the two
+  `/stats` counters are additive, and the shipped DeepSeek routes take low / high / max verbatim, so the panel stays quiet.
+- **Deferred on purpose:** `costAware` still defaults to `false` (G3/G4 want ≥7 days and ≥300 shadow steps, and the
+  desktop only loads the shadow from the next restart); the feedback loop, the classifier v2 and ε-greedy move to 0.17.1
+  together with the L2 experiment that decides the flip.
+
 ## 0.16.1
 
 **A stability release that stays inert by default: channels are scored by health and can fail over on a 429, a

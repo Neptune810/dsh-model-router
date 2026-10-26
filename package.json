@@ -1,6 +1,6 @@
 {
   "name": "@neptune810/dsh-model-router",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "publishConfig": {
     "access": "public"
   },

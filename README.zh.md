@@ -320,6 +320,45 @@ peakPolicy: inform    # off | inform | shift
 crossCost: { maxMultiple: 3, scoreMargin: 5 }
 ```
 
+## 思考等级经济学（一）：阶梯可审计（v0.17.0）
+
+档位阶梯原先藏在打分代码里，现在独立成模块（`lib/effort.js`，子路径 `./effort`），于是「我要的是 `high`、实际跑的是不是 `high`」对每一步都有答案。
+
+`LADDER` 是文档化的八档——`off(0) minimal(25) low(50) medium(62) high(75) xhigh(86) max(100) ultra(105)`；
+`budgetForTier(tier, meta)` 把档位换算成 token 预算（low 2048 … max 32768），默认表 `DEFAULT_BUDGETS` 可被模型通过 catalog 的
+`effort.budgets` 覆盖，并始终受 `maxOutput` 夹取。以 token 预算表达深度的宿主可直接使用；DeepSeek 的线上只认词表，所以预算在那里是一句能力声明。
+
+**每一步都记录档位是怎么落地的。** `explainMapping(tier, applied, meta)` 区分四种结果：
+
+| `why` | 含义 | 例子 |
+|---|---|---|
+| `exact` | 模型原样接受该档位 | `low` → `low` |
+| `alias` | 模型词表更短并有别名 | DeepSeek 的 `medium` → `high` |
+| `nearest` | 词表里没有这个档位，取最近的（同距取更高） | Kimi 的 `xhigh` → `max` |
+| `none` | 模型根本不声明思考等级 | `high` → 无 |
+
+结果写进决策事件 `effortMapped`，随阶梯与分值发布在 `/state.effort`，并在不是 `exact` 时追加到路由的 `reason` —— 塌缩绝不静默。
+`/stats` 会统计它：顶层 `totals.mappedSteps` 与 `totals.mappedShare`，按任务类型的 `effort.byClass`，以及最常见的 `from->to:why` 组合
+`effort.top`。面板在「上一步的档位不是原样落地」时补一行（`data-mr-effort`），原样落地时完全不显示。
+
+**离线回放。** `/router replay [n]` 打印已记录的决策；`npm run replay` 则用当前代码与当前池，对同一批流量重新求解：
+
+```sh
+node lib/replay.js                       # 默认 ~/.dsh/storages/model-router
+node lib/replay.js --since 2026-10-20    # 指定窗口
+node lib/replay.js --config pool.json     # 试算一个新池
+node lib/replay.js --json                 # 机器可读报告
+node lib/replay.js --fail-on-change       # 有路由或档位变化时退出 1
+```
+
+这个命令行随包发布（`npx dsh-model-router-replay`，或安装后 `node node_modules/@neptune810/dsh-model-router/lib/replay.js`）；`npm run replay` 只是仓库内的快捷方式。
+
+默认池取自流量本身，所以「零变化」就等于证明当前代码能复现历史路由；把 `--config` 指向权重不同的池，回答的是「上周有多少步会路由到别处」。
+有两件事它按设计不做：分类与预设都要读提示词原文，而遥测从不存提示词，因此回放把记录下来的 `stepClass` 当作已知条件，且不重新套用预设。
+
+**本版不做的事。** `costAware` 默认仍是 `false`：翻默认要等 G3/G4（≥7 天且 ≥300 步影子样本，且至少重启到记录影子的构建上）。
+反馈闭环、分类器 v2 与 ε-greedy 放到 0.17.1，与决定要不要翻默认的 L2 实验一起做。
+
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -497,7 +536,7 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-368 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+382 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（26 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞，以及成本项（加权扣分与上限）、成本守卫的四种拒绝
@@ -515,17 +554,17 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（49 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（51 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
 分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，目录黄点与它下面的最多三行说明（宿主不发 `catalog` 块时完全安静）、成本影子的那一行（分叉时带节省比例、一致时的
 写法、开关状态、英文界面，以及宿主不发 `costAware` 块时的安静）、预算闸门（临近上限的圆点与用量条、超支时长度
 夹到 100%、token 行、限制为 0 与畸形块都保持安静）、`inform` 与 `shift` 下的峰谷提示（关闭或非高峰时安静）、
-中英双语的渠道冷却/隔离行，以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误与关闭开关；`test/observation.test.js`（18 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
+中英双语的渠道冷却/隔离行、档位映射那一行（别名、就近取档、模型不接档位、原样落地与畸形块都安静、英文界面），以及声明的 `ui-chat` 座位与
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误、关闭开关与档位映射计数；`test/observation.test.js`（18 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
 放行一次、inform 模式只警告不拦、被停用的渠道让重试换到另一供应商、关闭故障转移时路由保持不动，以及跨品牌
-提案只在明显更好或更便宜时出现；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
+提案只在明显更好或更便宜时出现；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/effort.test.js`（7 个）覆盖八档阶梯与分值、未知词按 `high` 归类、预算表与按模型覆盖、`maxOutput` 夹取、四种 `why`、按类型/组合的汇总与畸形输入；`test/replay.test.js`（5 个）用冻结账本驱动 `lib/replay.js`（原样回放、今天会换路由的一步、`--fail-on-change`、暴露别名塌缩的配置、`--since`/`--until` 窗口、两条 exit 2 路径）；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 
 ## 模型目录
 
