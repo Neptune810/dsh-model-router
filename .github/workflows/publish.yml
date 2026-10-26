@@ -44,8 +44,32 @@ jobs:
           echo "tag=v$tag package=$pkg"
           [ "$tag" = "$pkg" ] || { echo "::error::tag v$tag does not match package.json version $pkg"; exit 1; }
 
+      # Keep the published artifact gated on the whole suite, but make a failure
+      # readable: raw Actions logs need admin rights, while check-run
+      # annotations are public. On failure each broken file is re-run alone and
+      # its tail lands in an annotation, so a red run can be diagnosed from the
+      # public API without re-running anything.
       - name: Test
-        run: npm test
+        run: |
+          set -u
+          if npm test > /tmp/test.log 2>&1; then
+            cat /tmp/test.log
+            exit 0
+          fi
+          echo "npm test failed; full log follows"
+          tail -120 /tmp/test.log
+          annotated=0
+          for f in test/*.test.js; do
+            if node --test "$f" > /tmp/one.log 2>&1; then continue; fi
+            msg="$(tail -80 /tmp/one.log | tr '\n' ' ' | tr -s ' ' | cut -c1-3800)"
+            echo "::error file=$f::TEST FAILED in $f :: $msg"
+            annotated=$((annotated + 1))
+          done
+          if [ "$annotated" -eq 0 ]; then
+            msg="$(grep -E '^.?✖|AssertionError|expected|actual|Error:' /tmp/test.log | head -20 | tr '\n' ' ' | cut -c1-3800)"
+            echo "::error::npm test failed while every test file passed alone :: $msg"
+          fi
+          exit 1
 
       # No registry-url and no NODE_AUTH_TOKEN on purpose: with id-token: write,
       # npm finds the OIDC identity by itself.
