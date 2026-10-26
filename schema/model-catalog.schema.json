@@ -1,0 +1,1032 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Neptune810/dsh-model-router/schema/model-catalog.schema.json",
+  "title": "dsh-model-router model catalog",
+  "description": "机器可读模型目录。人工源 catalog/model-catalog.yaml 经 scripts/build-catalog.py 生成 lib/catalog.js；本 schema 是该 YAML 的结构契约。未核实的值允许为 null、字符串 unknown 或省略（价格未知另用 priceUnknown: true 标注），不要求编造数字。",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "evidenceDate",
+    "fxRate",
+    "aaVersion",
+    "modelCount",
+    "channels",
+    "models",
+    "calendar"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([+-]\\d{2}:\\d{2}|Z)$"
+    },
+    "evidenceDate": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "evidenceTool": {
+      "type": "string"
+    },
+    "fxRate": {
+      "type": "object",
+      "required": [
+        "base",
+        "quote",
+        "rate"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "base": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        },
+        "rate": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "aaVersion": {
+      "type": "string",
+      "pattern": "^v\\d+(\\.\\d+)*$"
+    },
+    "modelCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "channels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "kind",
+          "billingMode"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "official",
+              "accountPool",
+              "relay",
+              "aggregator",
+              "regionalOfficial"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "billingMode": {
+            "type": "string",
+            "enum": [
+              "token",
+              "per_call",
+              "subscription",
+              "quota_pack",
+              "unknown"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CNY",
+              "unknown"
+            ]
+          },
+          "priceBasis": {
+            "type": "string",
+            "enum": [
+              "official",
+              "official_like",
+              "unknown"
+            ]
+          },
+          "priceMultiplier": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "数字或字符串 unknown"
+          },
+          "priceUnknown": {
+            "type": "boolean"
+          },
+          "machineReadablePricing": {
+            "type": "boolean"
+          },
+          "api": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "display",
+          "releasedAt",
+          "contextWindow",
+          "pricing",
+          "effort",
+          "channels",
+          "sources"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "display": {
+            "type": "string",
+            "minLength": 1
+          },
+          "releasedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deprecatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retirementAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contextWindow": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxOutput": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "input": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "text",
+                "image",
+                "audio",
+                "video",
+                "pdf"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "output": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "text",
+                "image"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "pricing": {
+            "type": "object",
+            "required": [
+              "currency",
+              "unit",
+              "input",
+              "output",
+              "effectiveFrom"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "USD",
+                  "CNY"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "per_1m_tokens"
+                ]
+              },
+              "effectiveFrom": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "string",
+                    "enum": [
+                      "unknown"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "input": {
+                "type": "number",
+                "minimum": 0
+              },
+              "output": {
+                "type": "number",
+                "minimum": 0
+              },
+              "cacheRead": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "cacheWrite": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "cacheWriteTtl": {
+                "type": "string"
+              },
+              "cacheWrite1h": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "batch": {
+                "type": "object",
+                "required": [
+                  "input",
+                  "output"
+                ],
+                "additionalProperties": true,
+                "properties": {
+                  "input": {
+                    "type": "number"
+                  },
+                  "output": {
+                    "type": "number"
+                  },
+                  "cacheRead": {
+                    "type": "number"
+                  }
+                }
+              },
+              "fastMode": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "priority": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "longContext": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "thresholdTokens",
+                    "mode"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "thresholdTokens": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "whole_request",
+                        "excess"
+                      ],
+                      "description": "whole_request: 超过阈值后整单按长上下文档位计价（OpenAI >272K, Grok >=200K, Haiku >100K）; excess: 仅超出部分按阶梯价"
+                    },
+                    "input": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "output": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "cacheRead": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "cacheWrite": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "priceUnknown": {
+                      "type": "boolean"
+                    },
+                    "notes": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "peakOffpeak": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "tz",
+                      "offpeakMultiplier",
+                      "offpeakRates"
+                    ],
+                    "additionalProperties": true,
+                    "properties": {
+                      "tz": {
+                        "type": "string"
+                      },
+                      "peakWindows": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "excludes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "peakMultiplier": {
+                        "type": "number"
+                      },
+                      "offpeakMultiplier": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "offpeakRates": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                ]
+              },
+              "perCall": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "unit",
+                    "price",
+                    "currency",
+                    "effectiveFrom"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "per_1000_calls",
+                        "per_call",
+                        "per_container_hour",
+                        "per_mtoken_hour"
+                      ]
+                    },
+                    "price": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "USD",
+                        "CNY"
+                      ]
+                    },
+                    "effectiveFrom": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        {
+                          "type": "string",
+                          "enum": [
+                            "unknown"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "statusBefore": {
+                      "type": "string",
+                      "enum": [
+                        "free"
+                      ]
+                    },
+                    "freeTierPerMonth": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "notes": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "next": {
+                "type": "object",
+                "required": [
+                  "effectiveFrom"
+                ],
+                "additionalProperties": true,
+                "properties": {
+                  "effectiveFrom": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "input": {
+                    "type": "number"
+                  },
+                  "output": {
+                    "type": "number"
+                  },
+                  "cacheRead": {
+                    "type": "number"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              },
+              "usdApprox": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "alternatePriceList": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "cacheStoragePerMTokenHour": {
+                "type": "number",
+                "minimum": 0
+              },
+              "notes": {
+                "type": "string"
+              }
+            }
+          },
+          "effort": {
+            "type": "object",
+            "required": [
+              "vocab",
+              "aliases",
+              "default",
+              "disable",
+              "alwaysReasoning",
+              "reasoningBilling",
+              "reasoningPassthrough"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "param": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "vocab": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "off",
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                    "ultra"
+                  ]
+                },
+                "uniqueItems": true,
+                "description": "真实档位；空数组表示暂无档位/未核实，下游须 capability-probe"
+              },
+              "aliases": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "off",
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                    "ultra"
+                  ]
+                }
+              },
+              "default": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "off",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra",
+                  "unknown",
+                  "always_on"
+                ]
+              },
+              "disable": {
+                "type": "string",
+                "enum": [
+                  "supported",
+                  "levelGated",
+                  "never",
+                  "unknown"
+                ]
+              },
+              "disableParam": {
+                "type": "string"
+              },
+              "alwaysReasoning": {
+                "type": [
+                  "boolean",
+                  "string"
+                ],
+                "enum": [
+                  true,
+                  false,
+                  "unknown"
+                ]
+              },
+              "reasoningBilling": {
+                "type": "string",
+                "enum": [
+                  "included_in_output",
+                  "separate"
+                ]
+              },
+              "reasoningPassthrough": {
+                "type": "string",
+                "enum": [
+                  "required_with_tools",
+                  "optional",
+                  "encrypted_required",
+                  "none"
+                ]
+              },
+              "notes": {
+                "type": "string"
+              }
+            }
+          },
+          "caps": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "tools": {
+                "type": "boolean"
+              },
+              "parallelTools": {
+                "type": "boolean"
+              },
+              "structuredOutput": {
+                "type": "boolean"
+              },
+              "prefixCompletion": {
+                "type": "boolean"
+              },
+              "responsesApi": {
+                "type": "boolean"
+              },
+              "anthropicApi": {
+                "type": "boolean"
+              },
+              "vision": {
+                "type": "boolean"
+              },
+              "audio": {
+                "type": "boolean"
+              },
+              "video": {
+                "type": "boolean"
+              },
+              "pdf": {
+                "type": "boolean"
+              },
+              "fim": {
+                "type": "boolean"
+              }
+            }
+          },
+          "quality": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "aaIndex": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 100
+              },
+              "aaVersion": {
+                "type": "string"
+              },
+              "aaVariant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "aaCostPerTaskUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "swebenchVerified": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "terminalBench4": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "otherBenchmarks": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              }
+            }
+          },
+          "perf": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "speedTps": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "ttftMs": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "verbosityMTokensPerIndexRun": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              }
+            }
+          },
+          "channels": {
+            "type": "object",
+            "required": [
+              "official",
+              "accountPool",
+              "relay"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "official": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "channel": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "qualifiedId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "modelId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              "accountPool": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "channel"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "channel": {
+                      "type": "string"
+                    },
+                    "qualifiedId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "billingMode": {
+                      "type": "string",
+                      "enum": [
+                        "token",
+                        "per_call",
+                        "subscription",
+                        "quota_pack",
+                        "unknown"
+                      ]
+                    },
+                    "priceUnknown": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "relay": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "channel"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "channel": {
+                      "type": "string"
+                    },
+                    "qualifiedId": {
+                      "type": "string"
+                    },
+                    "billingMode": {
+                      "type": "string",
+                      "enum": [
+                        "token",
+                        "per_call",
+                        "subscription",
+                        "quota_pack",
+                        "unknown"
+                      ]
+                    },
+                    "priceUnknown": {
+                      "type": "boolean"
+                    },
+                    "availability": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    }
+                  }
+                }
+              },
+              "openrouterId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "openrouterPriceUsd": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "quirks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "url",
+                "checkedAt",
+                "confidence"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "checkedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "calendar": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "date",
+          "type",
+          "models",
+          "description"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "release",
+              "price_increase",
+              "price_decrease",
+              "billing_start",
+              "retirement"
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

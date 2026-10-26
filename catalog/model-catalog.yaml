@@ -1,0 +1,1489 @@
+# model-catalog.yaml
+# 机器可读模型目录 · @neptune810/dsh-model-router 0.16 成本引擎与每日目录更新流水线消费
+# 证据时点（evidenceDate）：2026-10-26。价格一律「每 1,000,000 tokens」，货币见 pricing.currency。
+# 数据来源与置信度逐条写在 sources[]；unknown 表示未核实，禁止推断成数字（下游必须显式处理）。
+# 本文件为手写 + 校验产物；生成/校验见 model-catalog.README.md。
+
+schemaVersion: "1.0.0"
+generatedAt: "2026-10-26T12:30:00+08:00"
+evidenceDate: "2026-10-26"
+evidenceTool: "web_fetch / OpenRouter models API / PyYAML 6.0.3 校验"
+fxRate: { base: CNY, quote: USD, rate: 7.0, note: "由 OpenRouter 对 DeepSeek 的挂牌价反推，仅用于 usdApprox 参考" }
+aaVersion: "v4.3.2"
+modelCount: 19
+
+# ── 渠道注册表 ───────────────────────────────────────────────────────────────
+# kind: official | accountPool | relay | aggregator | regionalOfficial
+# billingMode: token | per_call | subscription | quota_pack | unknown
+channels:
+  deepseek-official:
+    kind: official
+    provider: deepseek
+    billingMode: token
+    currency: CNY
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "api.deepseek.com 直连；按 token 计费，峰谷价差 2x；每个账号独立并发配额"
+    confidence: high
+  deepseek-account:
+    kind: accountPool
+    provider: deepseek
+    billingMode: subscription
+    currency: CNY
+    priceBasis: unknown
+    priceMultiplier: unknown
+    priceUnknown: true
+    machineReadablePricing: false
+    notes: "本机 DSH 侧的多账号池（账号池轮换）。单价/额度以各账号后台为准，未公开 → priceUnknown。可作为路由输入的只有：账号可用性、剩余并发、429 率、延迟分布"
+    confidence: low
+  qiyue:
+    kind: relay
+    billingMode: unknown
+    currency: unknown
+    priceBasis: unknown
+    priceMultiplier: unknown
+    priceUnknown: true
+    notes: "第三方中转。行业通行三种模式：官方价 x 倍率 / 按次数-额度包 / 包月。本环境无法访问其公开定价页 → 全部 unknown，禁止填数"
+    confidence: low
+  qy:
+    kind: relay
+    billingMode: unknown
+    currency: unknown
+    priceBasis: unknown
+    priceMultiplier: unknown
+    priceUnknown: true
+    notes: "同上（qy 中转）"
+    confidence: low
+  sub2:
+    kind: relay
+    billingMode: unknown
+    currency: unknown
+    priceBasis: unknown
+    priceMultiplier: unknown
+    priceUnknown: true
+    notes: "同上（sub2 中转）"
+    confidence: low
+  openrouter:
+    kind: aggregator
+    billingMode: token
+    currency: USD
+    priceBasis: official_like
+    priceMultiplier: 1.0
+    machineReadablePricing: true
+    api: "https://openrouter.ai/api/v1/models"
+    notes: "唯一可机器读取的全景价目源；含 context_length / pricing / supported_parameters / expiration_date"
+    confidence: high
+
+  # ── 官方直连渠道（2026-10-26 证据；价格单位 每 1,000,000 tokens）────────────────
+  openai-official:
+    kind: official
+    provider: openai
+    billingMode: token
+    currency: USD
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "api.openai.com 直连，USD。本表四档：gpt-6-astra 10/50、gpt-6.1-sol 2/10、gpt-6-sol 2/10、gpt-6-luna 0.1/0.5。函数工具必须走 Responses API（chat_completions + tools 会 400）；长对话整单按最高上下文档计价；astra 缓存写 12.5 / 读 1"
+    confidence: high
+  anthropic-official:
+    kind: official
+    provider: anthropic
+    billingMode: token
+    currency: USD
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "api.anthropic.com 直连，USD。claude-opus-5-5 4/20（1M 上下文无长上下文档溢价，US-only inference +10%）、claude-sonnet-5-5 2/10（缓存读 0.05x）、claude-haiku-5-5 0.1/0.5；缓存写 1.25x"
+    confidence: high
+  google-official:
+    kind: official
+    provider: google
+    billingMode: token
+    currency: USD
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "generativelanguage.googleapis.com 直连，USD。gemini-4-argon 2/10（2026-12-01 起 4/20）、gemini-3.8-flash 0.825/4.125（2027-01-01 促销结束 1.5/7.5）；仅隐式缓存、无创建费；flash 另有按 token-hour 计的缓存存储费。涨价日见 calendar"
+    confidence: high
+  xai-official:
+    kind: official
+    provider: xai
+    billingMode: token
+    currency: USD
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "api.x.ai 直连，USD。grok-4.7 2/6；prompt >=200K 时整单按 4/12 计费；US 区域端点 +10%；无 Batch API"
+    confidence: high
+  moonshot-official:
+    kind: official
+    provider: moonshot
+    billingMode: token
+    currency: USD
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "Moonshot 官方平台，本表按国际站 platform.kimi.ai 的 USD 挂牌记录：kimi-k3.1-pro 2/10（比 K3 全线低 33%）。国内站 platform.kimi.com 的人民币价与额度未核实 → 不推断"
+    confidence: high
+  minimax-official:
+    kind: official
+    provider: minimax
+    billingMode: token
+    currency: USD
+    priceBasis: official_like
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "MiniMax 官方渠道，本表 USD 价与 OpenRouter 挂牌一致：minimax-m3.1-flash 0.15/0.6；百炼侧人民币价见该模型 alternatePriceList（CNY 1/4/0.1，RPM 200 · TPM 10,000,000）。官方独立价目页未核实"
+    confidence: medium
+  aliyun-bailian:
+    kind: official
+    provider: alibaba
+    billingMode: token
+    currency: unknown
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "阿里云百炼（DashScope，国内区域）。币种按模型而异、无法在渠道级单一断言 → currency unknown：qwen3.8-flash 0.113/0.382 USD（华北2北京价，YAML 模型项）、qwen3.8-max-prime 4/12 USD（OpenRouter 挂牌，百炼人民币价未核实）、minimax-m3.1-flash CN¥1/4/0.1（alternatePriceList）。人民币价目以百炼控制台为准"
+    confidence: medium
+  aliyun-bailian-singapore:
+    kind: regionalOfficial
+    provider: alibaba
+    billingMode: token
+    currency: USD
+    priceBasis: official
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    region: SG
+    notes: "百炼新加坡区域（regionalOfficial），USD。唯一证据是 qwen3.8-flash 的 alternatePriceList：0.15/0.47、缓存读 0.016；其余模型在该区域的价目未核实"
+    confidence: medium
+  zhipu-official:
+    kind: official
+    provider: zhipu
+    billingMode: token
+    currency: USD
+    priceBasis: official_like
+    priceMultiplier: 1.0
+    machineReadablePricing: false
+    notes: "智谱官方渠道。本表 USD 价取自 OpenRouter 挂牌：glm-5.3-prime 2.8/8.8、glm-5.3-flashx 0.37/1.25；百炼侧同系列 GLM-5 为 CN¥6/¥22/¥1.5，GLM-5.3 的中文渠道价未核实"
+    confidence: medium
+
+# ── 模型 ─────────────────────────────────────────────────────────────────────
+models:
+
+  # ── DeepSeek（官方价：人民币；峰谷价差 2x）────────────────────────────────
+  - id: deepseek-flash
+    provider: deepseek
+    display: "DeepSeek-V4.1-Flash-1017"
+    releasedAt: "2026-10-17"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 393216
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: CNY
+      unit: per_1m_tokens
+      effectiveFrom: "2026-10-17"
+      input: 2
+      output: 8
+      cacheRead: 0.04
+      cacheWrite: null
+      peakOffpeak:
+        tz: Asia/Shanghai
+        peakWindows: ["Mon-Fri 09:00-12:00", "Mon-Fri 14:00-18:00"]
+        excludes: ["法定节假日全天", "周六周日全天"]
+        peakMultiplier: 1.0
+        offpeakMultiplier: 0.5
+        offpeakRates: { input: 1, output: 4, cacheRead: 0.02 }
+      longContext: []
+      perCall:
+        - name: search
+          unit: per_1000_calls
+          price: 5
+          currency: CNY
+          effectiveFrom: "2026-11-01"
+          statusBefore: free
+          notes: "server 端工具调用的 Search/Fetch；2026-11-01 00:00 (Asia/Shanghai) 起计费，此前免费"
+        - name: web_fetch
+          unit: per_1000_calls
+          price: 5
+          currency: CNY
+          effectiveFrom: "2026-11-01"
+          statusBefore: free
+      usdApprox:
+        peak: { input: 0.29, output: 1.14, cacheRead: 0.006 }
+        offpeak: { input: 0.14, output: 0.57, cacheRead: 0.003 }
+        note: "OpenRouter 对 deepseek-v4.1-flash-1017 挂 0.3/1.2/0.006（=高峰价），据此折算"
+        confidence: medium
+    effort:
+      param: reasoning_effort
+      vocab: [none, low, high, max]
+      aliases: { minimal: low, medium: high, xhigh: high, ultra: max }
+      default: high
+      disable: supported
+      disableParam: "thinking.type=disabled 或 reasoning_effort=none"
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: required_with_tools
+      notes: "词表只有 3 个实档 + 别名塌缩：medium/xhigh 实际等于 high，minimal 等于 low（发这两个值会「看起来生效实则同档」）"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: true
+      responsesApi: true
+      anthropicApi: true
+      vision: true
+      fim: true
+      fimNote: "FIM 仅非思考模式可用"
+    quality:
+      aaIndex: 45
+      aaVersion: "v4.3.2"
+      aaVariant: "max"
+      aaCostPerTaskUsd: 0.26
+      swebenchVerified: null
+      terminalBench4: 42.3
+      otherBenchmarks:
+        hleNoTools: 42.6
+        deepSWEv1_1: 77.0
+        nl2Repo: 68.2
+        automationBench: 60.5
+        agentsLastExam: 35.4
+      confidence: medium
+    perf:
+      speedTps: 169.1
+      ttftMs: null
+      verbosityMTokensPerIndexRun: 210
+      confidence: medium
+    channels:
+      official:
+        channel: deepseek-official
+        qualifiedId: deepseek-official/deepseek-flash
+        modelId: deepseek-flash
+      accountPool:
+        - channel: deepseek-account
+          qualifiedId: deepseek-account/deepseek-flash
+          modelId: deepseek-flash
+          billingMode: subscription
+          priceUnknown: true
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/deepseek-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/deepseek-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/deepseek-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: deepseek/deepseek-v4.1-flash-1017
+      openrouterPriceUsd: { input: 0.3, output: 1.2, cacheRead: 0.006 }
+    quirks:
+      - "带 tools 的请求：历史轮 reasoning_content 必须完整回传，否则 400"
+      - "思考模式忽略 temperature / presence_penalty / frequency_penalty（不报错但不生效）"
+      - "flash 的 top_p 仅在思考模式生效且有效区间 0.95-1.0（<0.95 按 0.95 处理），非思考恒 1.0"
+      - "旧 id deepseek-v4-flash / deepseek-v4-flash-vision-exp 仍可调用，但已被静默路由到 V4.1-Flash 并按 Flash 计费"
+      - "reasoning_effort=max 时 max_tokens 默认 128K；思考模式默认 64K；非思考默认 8K"
+    sources:
+      - { url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://api-docs.deepseek.com/api/create-chat-completion", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/deepseek-v4-1-flash-1017", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: deepseek-v4-pro
+    provider: deepseek
+    display: "DeepSeek-V4-Pro-0813"
+    releasedAt: "2026-08-13"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 393216
+    input: [text]
+    output: [text]
+    pricing:
+      currency: CNY
+      unit: per_1m_tokens
+      effectiveFrom: "2026-08-17"
+      input: 9.0
+      output: 27.0
+      cacheRead: 0.30
+      cacheWrite: null
+      peakOffpeak:
+        tz: Asia/Shanghai
+        peakWindows: ["Mon-Fri 09:00-12:00", "Mon-Fri 14:00-18:00"]
+        excludes: ["法定节假日全天", "周六周日全天"]
+        peakMultiplier: 1.0
+        offpeakMultiplier: 0.5
+        offpeakRates: { input: 4.5, output: 13.5, cacheRead: 0.15 }
+      longContext: []
+      perCall: []
+      usdApprox:
+        peak: { input: 1.29, output: 3.86, cacheRead: 0.043 }
+        offpeak: { input: 0.64, output: 1.93, cacheRead: 0.021 }
+        confidence: medium
+    effort:
+      param: reasoning_effort
+      vocab: [none, low, high, max]
+      aliases: { minimal: low, medium: high, xhigh: high, ultra: max }
+      default: high
+      disable: supported
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: required_with_tools
+      notes: "与 flash 同词表；思考模式下 top_p 被忽略（带 tools 固定 0.95，否则 1.0）"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: true
+      responsesApi: true
+      anthropicApi: true
+      vision: false
+      fim: true
+      fimNote: "FIM 仅非思考模式可用"
+    quality:
+      aaIndex: null
+      aaVersion: "v4.3.2"
+      swebenchVerified: null
+      terminalBench4: null
+      otherBenchmarks:
+        hleNoTools: 42.7
+        hleWithTools: 60.0
+        tb2_1: 87.9
+        deepSWE: 62.7
+        toolathlonVerified: 74.1
+        nl2Repo: 61.5
+      confidence: medium
+    perf:
+      speedTps: null
+      ttftMs: null
+      verbosityMTokensPerIndexRun: null
+      confidence: low
+    channels:
+      official:
+        channel: deepseek-official
+        qualifiedId: deepseek-official/deepseek-v4-pro
+        modelId: deepseek-v4-pro
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/deepseek-v4-pro", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/deepseek-v4-pro", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/deepseek-v4-pro", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: null
+      openrouterPriceUsd: null
+    quirks:
+      - "官方口径冲突：英文稿曾称 2026-09-14 起 V4-Pro 请求整体路由到 V4.1-Flash 且按 Flash 计费；中文 updates 与现行 pricing 页仍单列 Pro 及 Pro 价 → 以 pricing 页为准，并在运行期用响应 model 字段探测实际模型"
+      - "不支持图像输入（只有 flash 支持）"
+      - "并发上限 500（flash 为 2500）"
+    sources:
+      - { url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://api-docs.deepseek.com/zh-cn/updates", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://api-docs.deepseek.com/api/create-chat-completion", checkedAt: "2026-10-26", confidence: high }
+
+  # ── OpenAI GPT-6 家族（USD）──────────────────────────────────────────────
+  - id: gpt-6-astra
+    provider: openai
+    display: "GPT-6 Astra"
+    releasedAt: "2026-09-04"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1050000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-04"
+      input: 10
+      output: 50
+      cacheRead: 1
+      cacheWrite: 12.5
+      cacheWriteTtl: "5m"
+      longContext:
+        - thresholdTokens: 272000
+          mode: whole_request          # 超过阈值后「整单」按长上下文价计费
+          input: 20
+          output: 75
+          cacheRead: 2
+          cacheWrite: 25
+      peakOffpeak: null
+      perCall: []
+    effort:
+      param: reasoning.effort
+      vocab: [low, medium, high, xhigh, max]
+      aliases: {}
+      default: low
+      disable: never
+      alwaysReasoning: true
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "官方未收 none/minimal；显式传 reasoning_effort=none 返回 400。默认档按 API 文档为 low（与 UI 默认可能不同）"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: true
+      responsesApi: true
+      anthropicApi: false
+      vision: true
+      fim: false
+    quality:
+      aaIndex: 53
+      aaVersion: "v4.3.2"
+      aaVariant: "max"
+      aaCostPerTaskUsd: 3.26
+      swebenchVerified: null
+      terminalBench4: null
+      confidence: medium
+    perf:
+      speedTps: 66.4
+      ttftMs: null
+      verbosityMTokensPerIndexRun: 60
+      confidence: medium
+    channels:
+      official: { channel: openai-official, qualifiedId: "openai-official/gpt-6-astra", modelId: gpt-6-astra }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/gpt-6-astra", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/gpt-6-astra", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/gpt-6-astra", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: openai/gpt-6-astra
+      openrouterPriceUsd: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 }
+    quirks:
+      - "函数工具必须走 Responses API；在 chat_completions 里带 tools 返回 400"
+      - "长上下文阶梯是「整单计价」而非超额计价：输入 >272K 时全部 token 按 20/75 计"
+      - "knowledge cutoff 2026-04-30"
+    sources:
+      - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gpt-6-astra", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: gpt-6.1-sol
+    provider: openai
+    display: "GPT-6.1 Sol"
+    releasedAt: "2026-09-29"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1050000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-29"
+      input: 2
+      output: 10
+      cacheRead: 0.10
+      cacheWrite: 2.5
+      cacheWriteTtl: "5m"
+      longContext:
+        - thresholdTokens: 272000
+          mode: whole_request
+          input: 4
+          output: 15
+          cacheRead: 0.20
+          cacheWrite: 5
+      peakOffpeak: null
+      perCall: []
+    effort:
+      param: reasoning.effort
+      vocab: [low, medium, high, xhigh, max]
+      aliases: {}
+      default: medium
+      disable: never
+      alwaysReasoning: true
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "none 与 minimal 均不支持（400）；复杂编码/计算机使用/专业工作定位"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: true
+      responsesApi: true
+      anthropicApi: false
+      vision: true
+      fim: false
+    quality:
+      aaIndex: 52
+      aaVersion: "v4.3.2"
+      aaVariant: "max"
+      aaCostPerTaskUsd: 0.72
+      swebenchVerified: null
+      terminalBench4: null
+      confidence: medium
+    perf:
+      speedTps: 58.8
+      ttftMs: null
+      verbosityMTokensPerIndexRun: 67
+      confidence: medium
+    channels:
+      official: { channel: openai-official, qualifiedId: "openai-official/gpt-6.1-sol", modelId: gpt-6.1-sol }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/gpt-6.1-sol", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/gpt-6.1-sol", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/gpt-6.1-sol", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: openai/gpt-6.1-sol
+      openrouterPriceUsd: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 }
+    quirks:
+      - "函数工具必须走 Responses API（chat_completions + tools → 400）"
+      - "与 gpt-6.1-sol-pro 同价同上下文，pro 为同族变体"
+      - "长上下文整单计价（>272K → 4/15）"
+    sources:
+      - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gpt-6.1-sol", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: gpt-6-sol
+    provider: openai
+    display: "GPT-6 Sol"
+    releasedAt: "2026-09-22"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1050000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-22"
+      input: 2
+      output: 10
+      cacheRead: 0.20
+      cacheWrite: 2.5
+      cacheWriteTtl: "5m"
+      longContext:
+        - thresholdTokens: 272000
+          mode: whole_request
+          input: 4
+          output: 15
+          cacheRead: 0.40
+          cacheWrite: 5
+      peakOffpeak: null
+      perCall: []
+    effort:
+      param: reasoning.effort
+      vocab: [none, low, medium, high, xhigh, max]
+      aliases: {}
+      default: medium
+      disable: supported
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "6.1 的前代；仍支持 none（可关思考），这是它与 6.1-sol 的关键差异"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: true
+      responsesApi: true
+      anthropicApi: false
+      vision: true
+      fim: false
+    quality:
+      aaIndex: null
+      aaVersion: "v4.3.2"
+      swebenchVerified: null
+      terminalBench4: null
+      confidence: low
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: openai-official, qualifiedId: "openai-official/gpt-6-sol", modelId: gpt-6-sol }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/gpt-6-sol", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/gpt-6-sol", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/gpt-6-sol", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: openai/gpt-6-sol
+      openrouterPriceUsd: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 }
+    quirks:
+      - "knowledge cutoff 2026-04-20"
+      - "缓存读比 6.1-sol 贵一倍（0.20 vs 0.10），长会话成本更高"
+    sources:
+      - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  - id: gpt-6-luna
+    provider: openai
+    display: "GPT-6 Luna"
+    releasedAt: "2026-09-22"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1050000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-22"
+      input: 0.10
+      output: 0.50
+      cacheRead: 0.01
+      cacheWrite: 0.125
+      cacheWriteTtl: "5m"
+      longContext:
+        - thresholdTokens: 272000
+          mode: whole_request
+          input: 0.20
+          output: 0.75
+          cacheRead: 0.02
+          cacheWrite: 0.25
+      peakOffpeak: null
+      perCall: []
+    effort:
+      param: reasoning.effort
+      vocab: [none, low, medium, high, xhigh, max]
+      aliases: {}
+      default: medium
+      disable: supported
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "低价高并发档；支持 none 关思考"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: true
+      responsesApi: true
+      anthropicApi: false
+      vision: true
+      fim: false
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: openai-official, qualifiedId: "openai-official/gpt-6-luna", modelId: gpt-6-luna }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/gpt-6-luna", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/gpt-6-luna", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/gpt-6-luna", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: openai/gpt-6-luna
+      openrouterPriceUsd: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }
+    quirks:
+      - "knowledge cutoff 2026-05-18"
+      - "函数工具必须走 Responses API"
+    sources:
+      - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  # ── Anthropic Claude 5.x（USD）───────────────────────────────────────────
+  - id: claude-opus-5-5
+    provider: anthropic
+    display: "Claude Opus 5.5"
+    releasedAt: "2026-09-22"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-22"
+      input: 4
+      output: 20
+      cacheRead: 0.20
+      cacheWrite: 5
+      cacheWriteTtl: "5m"
+      cacheWrite1h: 8
+      batch: { input: 2, output: 10 }
+      fastMode: { input: 8, output: 40, cacheRead: 0.40, cacheWrite: 10, cacheWrite1h: 16, status: research_preview }
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "1M 上下文按标准价（无长上下文溢价）；US-only inference 加 10%"
+    effort:
+      param: output_config.effort
+      vocab: [low, medium, high, xhigh, max]
+      aliases: {}
+      default: medium
+      disable: never
+      alwaysReasoning: true
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "Opus 5.5 在所有 effort 档强制开思考（含 API），无法关闭；thinking_tokens 是 output_tokens 的子集，按 output 价计费"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: false
+      prefixCompletion: false
+      responsesApi: false
+      anthropicApi: true
+      vision: true
+      fim: false
+    quality:
+      aaIndex: 58
+      aaVersion: "v4.3.2"
+      aaVariant: "max with fallback"
+      aaCostPerTaskUsd: 5.98
+      swebenchVerified: null
+      terminalBench4: null
+      confidence: medium
+    perf: { speedTps: 96.2, ttftMs: null, verbosityMTokensPerIndexRun: 260, confidence: medium }
+    channels:
+      official: { channel: anthropic-official, qualifiedId: "anthropic-official/claude-opus-5-5", modelId: claude-opus-5-5 }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/claude-opus-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/claude-opus-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/claude-opus-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: anthropic/claude-opus-5.5
+      openrouterPriceUsd: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 }
+    quirks:
+      - "tool_choice=any/tool 返回 400（不支持强制工具选择）"
+      - "fast mode 需 extra_body {speed: fast} + header anthropic-beta: fast-mode-2026-02-01"
+      - "流中断（无 message_delta）仍收 prompt 侧费用，output 不计费"
+      - "aaIndex 58 为全球第一；verbosity 260M 输出 token（最啰嗦之一）→ 长任务成本高"
+    sources:
+      - { url: "https://docs.timbal.ai/models/anthropic", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/claude-opus-5-5", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: claude-sonnet-5-5
+    provider: anthropic
+    display: "Claude Sonnet 5.5"
+    releasedAt: "2026-09-28"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-28"
+      input: 2
+      output: 10
+      cacheRead: 0.10
+      cacheWrite: 2.5
+      cacheWriteTtl: "5m"
+      cacheWrite1h: 4
+      batch: { input: 1, output: 5 }
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "缓存读 0.05x；与 GPT-6.1 Sol 同价（2/10）"
+    effort:
+      param: output_config.effort
+      vocab: [low, medium, high, xhigh, max]
+      aliases: {}
+      default: medium
+      disable: never
+      alwaysReasoning: true
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "thinking=disabled 直接 400；要省 upfront 思考用 between_tools 设置（只在工具调用之间思考）"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: false
+      prefixCompletion: false
+      responsesApi: false
+      anthropicApi: true
+      vision: true
+      fim: false
+    quality: { aaIndex: 56, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: medium }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: anthropic-official, qualifiedId: "anthropic-official/claude-sonnet-5-5", modelId: claude-sonnet-5-5 }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/claude-sonnet-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/claude-sonnet-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/claude-sonnet-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: anthropic/claude-sonnet-5.5
+      openrouterPriceUsd: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 }
+    quirks:
+      - "thinking=disabled → 400；需改用 between_tools"
+      - "AA 56 分 @ 2/10，是本表里 $/分的第二优（仅次于 DeepSeek）"
+    sources:
+      - { url: "https://docs.timbal.ai/models/anthropic", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  - id: claude-haiku-5-5
+    provider: anthropic
+    display: "Claude Haiku 5.5"
+    releasedAt: "2026-10-07"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 128000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-10-07"
+      input: 0.10
+      output: 0.50
+      cacheRead: 0.01
+      cacheWrite: 0.125
+      cacheWriteTtl: "5m"
+      cacheWrite1h: 0.2
+      batch: { input: 0.05, output: 0.25 }
+      longContext:
+        - thresholdTokens: 100000
+          mode: whole_request
+          input: null
+          output: null
+          cacheRead: null
+          priceUnknown: true
+          notes: "官方称 >100,000 prompt tokens 整单按长上下文更高价；阈值 = input+cache_read+cache_creation 之和，恰好 100,000 仍按低价。具体数字未抓到 → unknown"
+      peakOffpeak: null
+      perCall: []
+    effort:
+      param: output_config.effort
+      vocab: [low, medium, high, xhigh, max]
+      aliases: {}
+      default: unknown
+      disable: levelGated
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "可在 effort <= high 时关思考；在 xhigh/max 下请求关思考会报错。默认档官方未在可抓取页面写明 → unknown"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: false
+      prefixCompletion: false
+      responsesApi: false
+      anthropicApi: true
+      vision: true
+      fim: false
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: anthropic-official, qualifiedId: "anthropic-official/claude-haiku-5-5", modelId: claude-haiku-5-5 }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/claude-haiku-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/claude-haiku-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/claude-haiku-5-5", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: anthropic/claude-haiku-5.5
+      openrouterPriceUsd: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }
+    quirks:
+      - "唯一带长上下文阶梯的 Claude 5.x（>100K 整单涨价，数字 unknown）"
+      - "本表最便宜的 Anthropic 档（0.10/0.50），适合分类/摘要类路由"
+    sources:
+      - { url: "https://docs.timbal.ai/models/anthropic", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  # ── Google Gemini（USD；两条已官宣的价格日历）────────────────────────────
+  - id: gemini-4-argon
+    provider: google
+    display: "Gemini 4 Argon"
+    releasedAt: "2026-10-13"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1048576
+    maxOutput: 65536
+    input: [text, image, audio, video, pdf]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-10-13"
+      input: 2
+      output: 10
+      cacheRead: 0.10
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall:
+        - { name: search_grounding, unit: per_1000_calls, price: 14, currency: USD, freeTierPerMonth: 5000, effectiveFrom: "2026-10-13" }
+      next:
+        effectiveFrom: "2026-12-01"
+        input: 4
+        output: 20
+        cacheRead: 0.20
+        notes: "GA 促销价结束，价格翻倍；Batch/Flex 与 Priority 同比上调"
+      batch: { input: 1, output: 5, cacheRead: 0.05 }
+      priority: { multiplier: 1.8 }
+      notes: "仅隐式缓存，无显式缓存创建/存储费；无免费 API 层"
+    effort:
+      param: thinking_level
+      vocab: [low, medium, high]
+      aliases: {}
+      default: medium
+      disable: unknown
+      alwaysReasoning: unknown
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "level 形式（低/中/高），官方文档未提供可抓取的关闭方式；minimal 在 3.8-flash 上被拒，4-argon 是否接受 unknown"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: false
+      responsesApi: false
+      anthropicApi: false
+      vision: true
+      audio: true
+      video: true
+      pdf: true
+      fim: false
+    quality: { aaIndex: 53, aaVersion: "v4.3.2", aaVariant: "high", aaCostPerTaskUsd: 1.99, swebenchVerified: null, terminalBench4: null, confidence: medium }
+    perf: { speedTps: 80.8, ttftMs: null, verbosityMTokensPerIndexRun: 110, confidence: medium }
+    channels:
+      official: { channel: google-official, qualifiedId: "google-official/gemini-4-argon", modelId: gemini-4-argon }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/gemini-4-argon", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/gemini-4-argon", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/gemini-4-argon", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: google/gemini-4-argon
+      openrouterPriceUsd: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 0.1875 }
+    quirks:
+      - "2026-12-01 涨价：2/10 → 4/20（pricing.next），成本引擎必须按日期切换"
+      - "忽略 temperature / top_p"
+      - "原生长解码需后台执行/续传协议；第三方 chat 路由未必实现"
+      - "上下文/输出口径冲突：官方写 1,048,576 / 65,536；OpenRouter 的 top_provider.max_completion_tokens=943,718（疑为异步模式上限）"
+    sources:
+      - { url: "https://docs.timbal.ai/models/google", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  - id: gemini-3.8-flash
+    provider: google
+    display: "Gemini 3.8 Flash"
+    releasedAt: "2026-09-02"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1048576
+    maxOutput: 65536
+    input: [text, image, audio, video, pdf]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-02"
+      input: 0.825
+      output: 4.125
+      cacheRead: 0.0825
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      next:
+        effectiveFrom: "2027-01-01"
+        input: 1.50
+        output: 7.50
+        cacheRead: 0.15
+        notes: "促销结束，回到 post-promotion 价"
+      batch: { input: 0.375, output: 1.875, cacheRead: 0.0375 }
+      cacheStoragePerMTokenHour: 1
+      notes: "缓存按 token-hour 计存储费（唯一在本表里有显式存储费的 Gemini 档）"
+    effort:
+      param: thinking_level
+      vocab: [low, medium, high]
+      aliases: {}
+      default: medium
+      disable: unknown
+      alwaysReasoning: unknown
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "minimal 被拒（400）；level 只有 low/medium/high"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: false
+      responsesApi: false
+      anthropicApi: false
+      vision: true
+      audio: true
+      video: true
+      pdf: true
+      fim: false
+    quality: { aaIndex: 52, aaVersion: "v4.3.2", aaVariant: "high", aaCostPerTaskUsd: 1.24, swebenchVerified: null, terminalBench4: null, confidence: medium }
+    perf: { speedTps: 136.9, ttftMs: null, verbosityMTokensPerIndexRun: 170, confidence: medium }
+    channels:
+      official: { channel: google-official, qualifiedId: "google-official/gemini-3.8-flash", modelId: gemini-3.8-flash }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/gemini-3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/gemini-3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/gemini-3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: google/gemini-3.8-flash
+      openrouterPriceUsd: { input: 0.825, output: 4.125, cacheRead: 0.0825 }
+    quirks:
+      - "2027-01-01 促销结束：0.825/4.125 → 1.50/7.50（pricing.next）"
+      - "minimal thinking level 被拒"
+      - "被 Google 路由的上代 gemini-3.5-flash 会 redirect 到 3.6-flash（弃用前兆，目录需监控）"
+    sources:
+      - { url: "https://docs.timbal.ai/models/google", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gemini-3-8-flash", checkedAt: "2026-10-26", confidence: medium }
+
+  # ── xAI / Meta ──────────────────────────────────────────────────────────
+  - id: grok-4.7
+    provider: xai
+    display: "Grok 4.7"
+    releasedAt: "2026-09-21"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 500000
+    maxOutput: 450000
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-21"
+      input: 2
+      output: 6
+      cacheRead: 0.50
+      cacheWrite: null
+      longContext:
+        - thresholdTokens: 200000
+          mode: whole_request
+          input: 4
+          output: 12
+          cacheRead: 1
+      peakOffpeak: null
+      perCall:
+        - { name: web_search, unit: per_1000_calls, price: 5, currency: USD, effectiveFrom: "2026-09-21" }
+        - { name: x_search_posts, unit: per_1000_calls, price: 5, currency: USD, effectiveFrom: "2026-09-21" }
+    effort:
+      param: reasoning.effort
+      vocab: [low, medium, high, xhigh]
+      aliases: {}
+      default: high
+      disable: unknown
+      alwaysReasoning: unknown
+      reasoningBilling: included_in_output
+      reasoningPassthrough: encrypted_required
+      notes: "Responses API 恒返回加密 reasoning，工具循环内必须保留并回传；Chat Completions 与 Responses 都支持"
+    caps:
+      tools: true
+      parallelTools: true
+      structuredOutput: true
+      prefixCompletion: false
+      responsesApi: true
+      anthropicApi: false
+      vision: true
+      fim: false
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: xai-official, qualifiedId: "xai-official/grok-4.7", modelId: grok-4.7 }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/grok-4.7", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/grok-4.7", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/grok-4.7", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: x-ai/grok-4.7
+      openrouterPriceUsd: { input: 2, output: 6, cacheRead: 0.5 }
+    quirks:
+      - ">=200K prompt 整单按 4/12 计费"
+      - "无 Batch API"
+      - "Grok 4.7 Fast 只在 Cursor / Grok Build 提供，不在公开 API"
+      - "US 区域端点 +10%"
+      - "maxOutput 口径：官方称无独立输出上限，OpenRouter 记 450,000"
+    sources:
+      - { url: "https://docs.timbal.ai/models/xai", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  - id: muse-wonder
+    provider: meta
+    display: "Muse Wonder"
+    releasedAt: "2026-10-12"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1048576
+    maxOutput: 943718
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-10-12"
+      input: 4
+      output: 20
+      cacheRead: 0.20
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "价格取自 OpenRouter 挂牌；Meta 官方价目页未核实"
+    effort:
+      param: reasoning_effort
+      vocab: []
+      aliases: {}
+      default: unknown
+      disable: unknown
+      alwaysReasoning: unknown
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "OpenRouter supported_parameters 含 reasoning_effort，但具体档位词表未核实 → vocab 留空，下游需 capability-probe"
+    caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: false, responsesApi: false, anthropicApi: false, vision: true, fim: false }
+    quality: { aaIndex: 56, aaVersion: "v4.3.2", aaVariant: "full", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: null, qualifiedId: null, modelId: null }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/muse-wonder", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/muse-wonder", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/muse-wonder", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: meta/muse-wonder
+      openrouterPriceUsd: { input: 4, output: 20, cacheRead: 0.2 }
+    quirks:
+      - "AA 称 Muse Wonder Full 56 分（第 3），口径为元宝/Meta 自报 + AA 复测，置信度低"
+      - "无官方直连渠道证据（仅 OpenRouter / 中转）"
+    sources:
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/muse-wonder", checkedAt: "2026-10-26", confidence: low }
+
+  # ── Kimi / MiniMax / Qwen / GLM（中文生态）───────────────────────────────
+  - id: kimi-k3.1-pro
+    provider: moonshot
+    display: "Kimi K3.1 Pro"
+    releasedAt: "2026-10-23"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1048576
+    maxOutput: 943718
+    input: [text, image]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-10-23"
+      input: 2
+      output: 10
+      cacheRead: 0.20
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "比 Kimi K3 三项全线低 33%；平台域名分国际 platform.kimi.ai 与国内 platform.kimi.com"
+    effort:
+      param: reasoning_effort
+      vocab: [low, high, max]
+      aliases: {}
+      default: max
+      disable: never
+      alwaysReasoning: true
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "始终推理、不可关；不传 reasoning_effort 时默认 max（最贵）→ router 必须显式传档"
+    caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: false, responsesApi: false, anthropicApi: false, vision: true, fim: false }
+    quality:
+      aaIndex: 55
+      aaVersion: "v4.3.2"
+      aaVariant: "default(max)"
+      aaCostPerTaskUsd: 2.11
+      swebenchVerified: null
+      terminalBench4: 67.0
+      otherBenchmarks:
+        gdpvalElo: 1846
+        automationBenchAA: 73
+        hle: 52
+        sciCode: 61
+        aaOmniscience: 30
+      confidence: medium
+    perf: { speedTps: 57.5, ttftMs: null, verbosityMTokensPerIndexRun: 150, confidence: medium }
+    channels:
+      official: { channel: moonshot-official, qualifiedId: "moonshot-official/kimi-k3.1-pro", modelId: kimi-k3.1-pro }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/kimi-k3.1-pro", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/kimi-k3.1-pro", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/kimi-k3.1-pro", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: moonshotai/kimi-k3.1-pro
+      openrouterPriceUsd: { input: 2, output: 10, cacheRead: 0.2 }
+    quirks:
+      - "默认档 = max（最贵档），与 DeepSeek/OpenAI 的「不传 = 中间档」相反"
+      - "从 K2.x 迁移：移除 thinking 配置，改用顶层 reasoning_effort"
+      - "权重尚未开放（官方称很快）；开放后将成为最强开放权重模型"
+      - "Terminal-Bench 4.0 = 67%（高于 Opus 5.5 的 64%），agentic 编码是它的强项"
+    sources:
+      - { url: "https://platform.kimi.ai/docs/guide/use-reasoning-effort.md", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/articles/kimi-k3-1-pro-launch-benchmarks", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/kimi-k3-1-pro", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+  - id: minimax-m3.1-flash
+    provider: minimax
+    display: "MiniMax M3.1 Flash"
+    releasedAt: "2026-10-19"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1048576
+    maxOutput: 524288
+    input: [text, image, video]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-10-19"
+      input: 0.15
+      output: 0.60
+      cacheRead: 0.015
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      alternatePriceList:
+        - { channel: aliyun-bailian, currency: CNY, input: 1, output: 4, cacheRead: 0.1 }
+      notes: "百炼人民币价 ¥1/¥4/¥0.1；RPM 200 · TPM 10,000,000"
+    effort:
+      param: null
+      vocab: []
+      aliases: {}
+      default: always_on
+      disable: never
+      alwaysReasoning: true
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "深度思考始终开启，无档位可调（router 侧只能按「开/关思考」都不行，只能整体选/不选）"
+    caps: { tools: true, parallelTools: false, structuredOutput: true, prefixCompletion: false, responsesApi: false, anthropicApi: false, vision: true, video: true, fim: false }
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: minimax-official, qualifiedId: "minimax-official/minimax-m3.1-flash", modelId: minimax-m3.1-flash }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/minimax-m3.1-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/minimax-m3.1-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/minimax-m3.1-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: minimax/minimax-m3.1-flash
+      openrouterPriceUsd: { input: 0.15, output: 0.6, cacheRead: 0.015 }
+    quirks:
+      - "不支持 stop 参数（传了不截断，且可能仍返回 finish_reason=stop）"
+      - "parallel_tool_calls 不生效；tool_choice 仅支持 auto"
+      - "无 effort 档位可用，无法做「同模型降档省钱」"
+    sources:
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://help.aliyun.com/zh/model-studio/", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: qwen3.8-max-prime
+    provider: alibaba
+    display: "Qwen3.8-Max-Prime"
+    releasedAt: "2026-09-23"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 131072
+    input: [text]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-23"
+      input: 4
+      output: 12
+      cacheRead: 0.50
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "OpenRouter 挂牌；百炼人民币价未核实（同系列 qwen3.8-max-0902 为 2/6）"
+    effort:
+      param: enable_thinking + thinking_budget
+      vocab: []
+      aliases: {}
+      default: unknown
+      disable: unknown
+      alwaysReasoning: unknown
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "Qwen3.8 系用 enable_thinking 开关 + token 预算（flash 的 CoT 上限 262,144）；max-prime 的具体预算区间未核实"
+    caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: false, anthropicApi: false, vision: false, fim: false }
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: aliyun-bailian, qualifiedId: "aliyun-bailian/qwen3.8-max-prime", modelId: qwen3.8-max-prime }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/qwen3.8-max-prime", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/qwen3.8-max-prime", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/qwen3.8-max-prime", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: qwen/qwen3.8-max-prime
+      openrouterPriceUsd: { input: 4, output: 12, cacheRead: 0.5 }
+    quirks:
+      - "同系列三档价格跨度大：max-prime 4/12、max-0902 2/6、flash 0.113/0.382 → 路由时应优先试低价档"
+      - "Qwen 4 尚未 GA（仅 CometAPI Coming soon 与媒体专文，置信度低）"
+    sources:
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://www.alibabacloud.com/help/zh/model-studio/qwen3-8-flash", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: qwen3.8-flash
+    provider: alibaba
+    display: "Qwen3.8-Flash"
+    releasedAt: "unknown"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 131072
+    input: [text, image, video]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "unknown"
+      input: 0.113
+      output: 0.382
+      cacheRead: 0.014
+      cacheWrite: 0.177
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      alternatePriceList:
+        - { channel: aliyun-bailian-singapore, currency: USD, input: 0.15, output: 0.47, cacheRead: 0.016 }
+      notes: "华北2北京价；最大输入 991,808、思考模式最大 CoT 262,144；文档更新时间 2026-10-11"
+    effort:
+      param: enable_thinking + thinking_budget
+      vocab: []
+      aliases: {}
+      default: unknown
+      disable: supported
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "开关式思考 + 预算上限 262,144；具体档位区间未核实"
+    caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: true, anthropicApi: true, vision: true, video: true, fim: false }
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: aliyun-bailian, qualifiedId: "aliyun-bailian/qwen3.8-flash", modelId: qwen3.8-flash }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/qwen3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/qwen3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/qwen3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: qwen/qwen3.8-flash
+      openrouterPriceUsd: null
+    quirks:
+      - "兼容 OpenAI 与 Anthropic 协议（可直接接 Claude Code / Codex）"
+      - "显式缓存有「创建费」0.177（唯一在本表里单列 cacheWrite 的国产模型）"
+      - "releasedAt 未核实 → unknown"
+    sources:
+      - { url: "https://www.alibabacloud.com/help/zh/model-studio/qwen3-8-flash", checkedAt: "2026-10-26", confidence: high }
+
+  - id: glm-5.3-prime
+    provider: zhipu
+    display: "GLM-5.3-Prime"
+    releasedAt: "2026-09-23"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1000000
+    maxOutput: 131072
+    input: [text]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-23"
+      input: 2.8
+      output: 8.8
+      cacheRead: 0.56
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "OpenRouter 挂牌；百炼侧同系列 GLM-5 为 ¥6/¥22/¥1.5（人民币），GLM-5.3 中文渠道价未核实"
+    effort:
+      param: thinking + max thinking tokens
+      vocab: []
+      aliases: {}
+      default: unknown
+      disable: supported
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "开关式 thinking + 最大思维链 131,072（按 GLM-5 官方参数表外推，5.3 未逐项核实）"
+    caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: false, anthropicApi: false, vision: false, fim: false }
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: zhipu-official, qualifiedId: "zhipu-official/glm-5.3-prime", modelId: glm-5.3-prime }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/glm-5.3-prime", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/glm-5.3-prime", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/glm-5.3-prime", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: z-ai/glm-5.3-prime
+      openrouterPriceUsd: { input: 2.8, output: 8.8, cacheRead: 0.56 }
+    quirks:
+      - "定位 Agentic Engineering，仅文本输入输出"
+      - "GLM-5 海外曾大幅涨价（媒体标题证据，置信度低）"
+    sources:
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://help.aliyun.com/zh/model-studio/glm-5-by-zhipu", checkedAt: "2026-10-26", confidence: medium }
+
+  - id: glm-5.3-flashx
+    provider: zhipu
+    display: "GLM-5.3-FlashX"
+    releasedAt: "2026-09-18"
+    deprecatedAt: null
+    retirementAt: null
+    contextWindow: 1048576
+    maxOutput: 131072
+    input: [text]
+    output: [text]
+    pricing:
+      currency: USD
+      unit: per_1m_tokens
+      effectiveFrom: "2026-09-18"
+      input: 0.37
+      output: 1.25
+      cacheRead: 0.09
+      cacheWrite: null
+      longContext: []
+      peakOffpeak: null
+      perCall: []
+      notes: "OpenRouter 挂牌；本表性价比最高的中文档之一"
+    effort:
+      param: thinking + max thinking tokens
+      vocab: []
+      aliases: {}
+      default: unknown
+      disable: supported
+      alwaysReasoning: false
+      reasoningBilling: included_in_output
+      reasoningPassthrough: optional
+      notes: "同 GLM-5.3 家族（开关式），未逐项核实"
+    caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: false, anthropicApi: false, vision: false, fim: false }
+    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
+    channels:
+      official: { channel: zhipu-official, qualifiedId: "zhipu-official/glm-5.3-flashx", modelId: glm-5.3-flashx }
+      accountPool: []
+      relay:
+        - { channel: qiyue, qualifiedId: "qiyue/glm-5.3-flashx", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: qy, qualifiedId: "qy/glm-5.3-flashx", billingMode: unknown, priceUnknown: true, availability: unknown }
+        - { channel: sub2, qualifiedId: "sub2/glm-5.3-flashx", billingMode: unknown, priceUnknown: true, availability: unknown }
+      openrouterId: z-ai/glm-5.3-flashx
+      openrouterPriceUsd: { input: 0.37, output: 1.25, cacheRead: 0.09 }
+    quirks:
+      - "1M 上下文 + 0.37/1.25，长文档/批量场景的价格优势明显"
+      - "仅文本，不支持图像"
+    sources:
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+
+# ── 日历（从各 pricing.effectiveFrom / next / perCall 派生，便于人工核对）────
+calendar:
+  - date: "2026-10-23"
+    type: release
+    models: [kimi-k3.1-pro]
+    description: "Kimi K3.1 Pro 发布（AA 55，TB4.0 67%，2/10）"
+  - date: "2026-11-01"
+    type: billing_start
+    models: [deepseek-flash, deepseek-v4-pro]
+    description: "DeepSeek Search/Fetch 对 server 端工具调用开始计费：¥5 / 1000 次成功请求（此前免费）"
+  - date: "2026-12-01"
+    type: price_increase
+    models: [gemini-4-argon]
+    description: "Gemini 4 Argon GA 促销结束：2/10/0.10 → 4/20/0.20 USD per 1M；Batch 1/5 → 2/10"
+  - date: "2027-01-01"
+    type: price_increase
+    models: [gemini-3.8-flash]
+    description: "Gemini 3.8 Flash 促销结束：0.825/4.125/0.0825 → 1.50/7.50/0.15 USD per 1M"
