@@ -32,6 +32,7 @@
   ],
   "scripts": {
     "test": "node --test",
+    "test:gate": "node scripts/gate.mjs",
     "release:check": "node scripts/check-release.mjs",
     "release:gate": "node scripts/check-release.mjs --pack"
   },

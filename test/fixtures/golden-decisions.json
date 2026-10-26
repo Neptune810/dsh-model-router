@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "scenarios": {
+    "01-short-english-standard": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "stepClass": "standard",
+        "score": 9
+      }
+    },
+    "02-cheap-intent-trivial": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "stepClass": "trivial",
+        "score": 8
+      }
+    },
+    "03-engineering-brief": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": "engineering",
+        "score": 47
+      }
+    },
+    "04-hard-spec-clamped": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": "hard",
+        "score": 59
+      }
+    },
+    "05-image-step-untouched": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": null,
+        "score": null
+      }
+    },
+    "06-poisoned-history-off": {
+      "t2s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "off",
+        "stepClass": "standard",
+        "score": 11
+      }
+    },
+    "07-subagent-frugal": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": "engineering",
+        "score": 47
+      }
+    },
+    "08-pool-strong-engineering": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "high",
+        "stepClass": "engineering",
+        "score": 47
+      }
+    },
+    "09-hysteresis-downgrade": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": "engineering",
+        "score": 47
+      },
+      "t2s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": "standard",
+        "score": 9
+      },
+      "t3s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "stepClass": "standard",
+        "score": 9
+      }
+    },
+    "10-cross-provider-confirm": {
+      "t1s0": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "stepClass": "hard",
+        "score": 59
+      }
+    }
+  }
+}
