@@ -272,6 +272,30 @@ test('the calendar records dated releases and price changes', () => {
   }
 })
 
+test('the watchlist records hard dates for models the catalog deliberately excludes', () => {
+  // The mirror image of calendar: calendar points at models in the routing pool,
+  // watchlist at models that are not candidates but whose dates still matter.
+  assert.ok(Array.isArray(CATALOG.watchlist))
+  assert.deepEqual(
+    CATALOG.watchlist.map((entry) => [entry.id, entry.provider, entry.date, entry.type]),
+    [['glm-4.5', 'zhipu', '2026-12-31', 'retirement']]
+  )
+  for (const entry of CATALOG.watchlist) {
+    assert.ok(!EXPECTED_IDS.includes(entry.id), entry.id + ': watchlist models must not be routable')
+    assert.match(entry.date, DATE, entry.id + ': date')
+    assert.equal(typeof entry.display, 'string')
+    assert.ok(entry.display.length > 0, entry.id + ': display')
+    assert.equal(typeof entry.action, 'string')
+    assert.ok(entry.action.length > 0, entry.id + ': action')
+    assert.ok(Array.isArray(entry.sources) && entry.sources.length > 0, entry.id + ': sources')
+    for (const source of entry.sources) {
+      assert.match(source.url, /^https?:\/\//, entry.id + ': source url')
+      assert.ok(['high', 'medium', 'low'].includes(source.confidence), entry.id + ': source confidence')
+      assert.ok(isDateOrUnknown(source.checkedAt), entry.id + ': source checkedAt')
+    }
+  }
+})
+
 test('validateCatalog accepts the shipped catalog', () => {
   assert.deepEqual(validateCatalog(CATALOG), [])
 })
@@ -290,6 +314,11 @@ test('validateCatalog rejects structurally broken catalogs', () => {
     ['calendar[0].models', (catalog) => { catalog.calendar[0].models = ['nope'] }],
     ['next.effectiveFrom', (catalog) => { catalog.models[9].pricing.next.effectiveFrom = '2026-10-01' }],
     ['channels.official.qualifiedId', (catalog) => { catalog.models[12].channels.official.qualifiedId = 'x/y' }],
+    ['catalog.watchlist', (catalog) => { catalog.watchlist = 'glm-4.5' }],
+    ['catalog.watchlist[0].id', (catalog) => { catalog.watchlist[0].id = 'deepseek-flash' }],
+    ['catalog.watchlist[0].date', (catalog) => { catalog.watchlist[0].date = '2026-13-01' }],
+    ['catalog.watchlist[0].type', (catalog) => { catalog.watchlist[0].type = 'expiry' }],
+    ['catalog.watchlist[0].sources', (catalog) => { catalog.watchlist[0].sources = [] }],
   ]
   for (const [needle, mutate] of cases) {
     const broken = clone()

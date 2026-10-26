@@ -1487,3 +1487,18 @@ calendar:
     type: price_increase
     models: [gemini-3.8-flash]
     description: "Gemini 3.8 Flash 促销结束：0.825/4.125/0.0825 → 1.50/7.50/0.15 USD per 1M"
+
+# ── 看板（不在路由目录里的外部模型硬日历）────────────────────────────────────
+# calendar 只允许目录内 model id（防止拼写错误）；不在目录、不参与路由、但会影响
+# 池子/文档/兼容性的外部条目放这里，由 lib/catalog-pricing.js 汇总成提醒。
+# type 与 calendar 同词表；action 是到期后该做什么，必须写成可执行的一句话。
+watchlist:
+  - id: glm-4.5
+    provider: zhipu
+    display: "GLM-4.5"
+    date: "2026-12-31"
+    type: retirement
+    action: "到期后不要把 GLM-4.5 加回池；已有旧条目按 404/不可用处理，切到 glm-5.3-prime"
+    note: "OpenRouter 上 z-ai/glm-4.5 与 z-ai/glm-4.5v 的 expiration_date=2026-12-31。目录未收录该模型（不在池内），只做日历提醒"
+    sources:
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: "high" }

@@ -306,6 +306,41 @@ export function validateCatalog(catalog) {
     if (typeof entry.description !== 'string' || entry.description.length === 0) fail(at + '.description', 'expected a non-empty string')
   })
 
+  // ── watchlist ────────────────────────────────────────────────────────────
+  // The mirror image of calendar: watchlist entries are hard dates for models
+  // that are deliberately *not* in the routing catalog (GLM-4.5 on OpenRouter
+  // expires 2026-12-31, but it is not a pool candidate). Calendar requires a
+  // known id; watchlist requires an unknown one, so a model cannot be both
+  // routed and forgotten.
+  if (catalog.watchlist !== undefined) {
+    if (!Array.isArray(catalog.watchlist)) fail('catalog.watchlist', 'expected an array')
+    else {
+      const seenWatchIds = new Set()
+      catalog.watchlist.forEach((entry, index) => {
+        const at = 'catalog.watchlist[' + index + ']'
+        if (!isObject(entry)) return fail(at, 'expected an object')
+        if (typeof entry.id !== 'string' || !ID_RE.test(entry.id)) fail(at + '.id', 'expected a lowercase id, got ' + show(entry.id))
+        else if (seenWatchIds.has(entry.id)) fail(at + '.id', 'duplicate watchlist id ' + show(entry.id))
+        else if (knownIds.has(entry.id)) fail(at + '.id', 'watchlist id ' + show(entry.id) + ' is already a catalog model; use catalog.calendar instead')
+        else seenWatchIds.add(entry.id)
+        if (typeof entry.provider !== 'string' || entry.provider.length === 0) fail(at + '.provider', 'expected a non-empty string')
+        if (typeof entry.display !== 'string' || entry.display.length === 0) fail(at + '.display', 'expected a non-empty string')
+        if (!isDate(entry.date)) fail(at + '.date', 'expected YYYY-MM-DD, got ' + show(entry.date))
+        if (!CALENDAR_TYPES.includes(entry.type)) fail(at + '.type', 'unexpected type ' + show(entry.type))
+        if (typeof entry.action !== 'string' || entry.action.length === 0) fail(at + '.action', 'expected a non-empty string')
+        if (entry.note !== undefined && typeof entry.note !== 'string') fail(at + '.note', 'expected a string')
+        if (!Array.isArray(entry.sources) || entry.sources.length === 0) fail(at + '.sources', 'expected a non-empty array')
+        else entry.sources.forEach((source, sourceIndex) => {
+          const sourcePath = at + '.sources[' + sourceIndex + ']'
+          if (!isObject(source)) return fail(sourcePath, 'expected an object')
+          if (typeof source.url !== 'string' || source.url.length === 0) fail(sourcePath + '.url', 'expected a non-empty URL string')
+          if (!isDateOrUnknown(source.checkedAt)) fail(sourcePath + '.checkedAt', 'expected YYYY-MM-DD or unknown, got ' + show(source.checkedAt))
+          if (!CONFIDENCE.includes(source.confidence)) fail(sourcePath + '.confidence', 'unexpected confidence ' + show(source.confidence))
+        })
+      })
+    }
+  }
+
   return errors
 }
 
@@ -387,6 +422,7 @@ if (isMain) {
   const stats = unknownStats(CATALOG)
   const channels = Object.keys(CATALOG.channels || {}).length
   const calendar = (CATALOG.calendar || []).length
+  const watchlist = (CATALOG.watchlist || []).length
   if (errors.length > 0) {
     console.error('check-catalog: ' + errors.length + ' problem(s) in ' + stats.models + ' models')
     for (const error of errors) console.error('  - ' + error)
@@ -398,7 +434,7 @@ if (isMain) {
   }
   console.log(
     'check-catalog: OK - ' + stats.models + ' models, ' + channels + ' channels, ' + calendar + ' calendar entries, ' +
-      'schemaVersion ' + CATALOG.schemaVersion + ', evidence ' + CATALOG.evidenceDate
+      watchlist + ' watchlist entries, schemaVersion ' + CATALOG.schemaVersion + ', evidence ' + CATALOG.evidenceDate
   )
   console.log(
     'check-catalog: unverified-by-design - ' + stats.nullPricingFields + ' null price fields, ' +

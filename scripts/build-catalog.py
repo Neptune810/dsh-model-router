@@ -47,9 +47,9 @@ HEADER = """/**
  * the tests import. Keys are sorted, the indentation is two spaces and the line
  * endings are LF, so regenerating it on another machine changes nothing.
  *
- * Exports: CATALOG (whole document), MODELS (frozen model list),
- * findModel(provider, id) - lookup by canonical id, channel-qualified id or
- * OpenRouter id.
+ * Exports: CATALOG (whole document, including the calendar and watchlist of
+ * hard dates), MODELS (frozen model list), findModel(provider, id) - lookup by
+ * canonical id, channel-qualified id or OpenRouter id.
  */
 
 """
@@ -199,6 +199,23 @@ def check_catalog(catalog: dict) -> None:
                 fail("model '" + model_id + "' pricing is missing '" + key + "'")
         if pricing["unit"] != "per_1m_tokens":
             fail("model '" + model_id + "' pricing.unit must be 'per_1m_tokens', got " + repr(pricing["unit"]))
+    watchlist = catalog.get("watchlist")
+    if watchlist is not None:
+        if not isinstance(watchlist, list):
+            fail("catalog.watchlist must be a list when present")
+        watch_ids: set[str] = set()
+        for entry in watchlist:
+            if not isinstance(entry, dict):
+                fail("catalog.watchlist entries must be mappings")
+            for key in ("id", "provider", "display", "date", "type", "action", "sources"):
+                if key not in entry:
+                    fail("watchlist entry '" + str(entry.get("id", "?")) + "' is missing required key '" + key + "'")
+            watch_id = entry["id"]
+            if watch_id in watch_ids:
+                fail("duplicate watchlist id '" + watch_id + "'")
+            if watch_id in seen:
+                fail("watchlist id '" + watch_id + "' is already a catalog model; use catalog.calendar instead")
+            watch_ids.add(watch_id)
 
 
 def render(catalog: dict) -> str:
