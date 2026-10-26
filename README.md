@@ -338,6 +338,55 @@ have picked, and the panel and `/stats` show whether the two agree.
 - **Turning it on.** `costAware: true` in the row config (the panel does not expose it yet). The same config
   then routes to the cheaper model whenever the cost term outweighs the score gap the shadow was reporting.
 
+## Channel health, spend limits and the peak window (v0.16.1)
+
+0.16.0 answered *what does this step cost*. 0.16.1 answers *is the channel that would serve it healthy, and is
+this session still allowed to spend*. Everything ships inert - `channels.failover` off, `budget.mode: off`,
+`peakPolicy: inform` (a note, never a reroute) - so a router without those blocks behaves exactly as 0.16.0 and
+the ten golden snapshots are unchanged.
+
+- **Channel health (`lib/channels.js`).** Every routed attempt is booked against a channel key: the pool
+  entry's `channel` when set (a second account on the same provider is its own channel), else its provider.
+  `classifyFailure` reads the host's failure code and status - `429`/`RATE_LIMIT` rotates, `5xx`/`TIMEOUT`/
+  `TRANSPORT`/`EMPTY_RESPONSE` fails over, anything else is left alone. `ChannelHealth` keeps a rolling
+  window (20 attempts) per channel with an EWMA of TTFT; three consecutive failures bench the channel for
+  `cooldownMs` (60 s) and one success clears it. Cooling is a demotion, not a ban: a benched entry sinks
+  below healthy ones and keeps its score, so an all-benched pool still routes.
+- **Failover.** Off by default. With `channels.failover: true` a failing request answers the host's
+  `agent/request-error` waterfall with `{kind: 'retry'}` - at most `maxFailoversPerStep` (1) per (turn, step) -
+  and benches the channel that just failed so the retry cannot land back on it. When every channel of the
+  current brand is benched the router may cross a brand boundary on its own, but only to an entry the catalog
+  can price; `crossProvider: 'never'` still outranks failover.
+- **Fingerprint and quarantine.** `fingerprint(observed, expected)` checks a response for what a cheap relay
+  quietly gets wrong: a `model` other than the one asked for, a usage block missing or all zeros, a
+  `reasoning_content` that never arrived, a TTFT past `maxTtftMs`. A channel that keeps failing that check is
+  quarantined for `channels.quarantineMs` (24 h) and named in `/state.channels.quarantined` and the panel;
+  a relay whose price is unknown is never entered automatically.
+- **The spend guard (`lib/budget.js`).** `budget.mode: 'inform' | 'block'` with `sessionTokens`,
+  `sessionUsd`, `dayUsd`, `monthUsd`; `softRatio` (0.8) marks the warning line, and a zero limit is not a
+  limit. `block` refuses only a *synthetic* step - one carrying no fresh user message - by answering
+  `agent/pre-step` with `{kind: 'reject'}`; a step the user is waiting on always runs, and a refusal comes
+  from the step, never from a retry loop. `POST /model-router/budget` (or `/router budget [once]`) releases one
+  step, and the panel shows the same rows with a spend bar.
+- **The peak window.** DeepSeek charges double on weekdays 09:00-12:00 and 14:00-18:00. `peakPolicy: inform`
+  (the default) says so in the panel and `/stats`; `shift` additionally demotes the peak-priced entries for
+  delegated (subagent) steps only - a step the user is sitting in front of is never delayed or downgraded for
+  price.
+- **Cross-brand proposals need a reason.** 0.14.0 asked whenever the brands differed. A switch now has to be
+  clearly better (`crossCost.scoreMargin`, 5 points) or clearly cheaper (`crossCost.maxMultiple`, 3x) than the
+  best same-brand entry, or there has to be no same-brand entry left; the proposal carries `savingMultiple`
+  and its `why`, and every cross-brand step is still written to telemetry.
+- **The panel.** A budget dot (`data-budget=near|over`) beside the catalog dot, a spend block with one row and
+  one bar per active limit, a peak note, and one line naming benched and quarantined channels. A host that
+  sends none of those blocks renders none of them.
+
+```yaml
+channels:  { failover: false, failThreshold: 3, cooldownMs: 60000, quarantineMs: 86400000, fingerprint: true }
+budget:    { mode: off, sessionTokens: 0, sessionUsd: 0, dayUsd: 0, monthUsd: 0, softRatio: 0.8 }
+peakPolicy: inform    # off | inform | shift
+crossCost: { maxMultiple: 3, scoreMargin: 5 }
+```
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -529,13 +578,18 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-333 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+368 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
-restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (23) covers the pool, preset
+restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis, plus the cost term (the
 weighted penalty and its cap), the cost guard's refusals (unpriced entry, unknown floor, `hard` exemption, the
-multiple) and the fallback that keeps a session routed;
+multiple), the fallback that keeps a session routed, and the channel ordering (a benched entry sinks below a
+healthy one, a channel rank breaks a tie, and an all-benched pool still picks its best);
+`test/channels.test.js` (18) covers failure classification by status and by code, the rolling window and its
+success rate, the TTFT EWMA and its discount, cooldown on the third failure, a success clearing it both ways, a
+bench that records no failure, the stable ordering of `orderChannels` / `channelRanks`, and the fingerprint's
+four refusals;
 `test/plugin.test.js` (19) drives the host wiring with ctx/agent doubles, including a quiet tool loop
 that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (34)
 covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
@@ -553,7 +607,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (43)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (49)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -564,8 +618,10 @@ unavailable subagent cell, a failed pick keeping its message, catalog errors off
 order), the router half's control/pool/settings payloads and the `/effort-model` binding, the pool
 control that collapses the list and reopens it, and the catalog warning dot and its three-line note (and the silence of a host that
 sends no `catalog` block), the cost shadow's caption (a divergence with its saving, the agreement form, the enabled flag, English, and the
-silence of a host that sends no `costAware` block), and the declared `ui-chat` seat and `uiConversation`
-service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
+silence of a host that sends no `costAware` block), the spend guard (a near-budget dot and its bar, an
+overspent bar clamping to 100%, token rows, a zero limit and a malformed block staying silent), the peak note
+under `inform` and `shift` (and its silence when off or off-peak), the benched/quarantined channel line in both
+languages, and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
 read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
@@ -574,14 +630,17 @@ against its schema, pins the documented completeness warnings, proves the genera
 watchlist rules and covers `findModel`; `test/catalog-pricing.test.js` (18) covers the rate in force (`pricing.next`
 on its day, the peak/off-peak windows), the token split, the null-not-zero price rules and the alert window;
 `test/catalog-diff.test.js` (15) drives the drift report against a frozen OpenRouter snapshot; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
-PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (14) covers decision events landing on disk, monthly
+PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decision events landing on disk, monthly
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
 costs nothing), a once-only error and the off switch;
-`test/observation.test.js` (11) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
+`test/observation.test.js` (18) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
 `/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`, and the cost
 shadow: the model a cost-aware router would have picked, the agreement a cheap-live route records, the flag
-actually moving the route, and a pool the catalog cannot price recording neither a rate nor a shadow);
+actually moving the route, and a pool the catalog cannot price recording neither a rate nor a shadow; plus the
+0.16.1 surface: the spend guard refusing a synthetic step and releasing one, an inform budget that only warns, a
+benched channel moving the retry to another provider, failover off leaving the route alone, and the cross-brand
+proposal appearing only when the switch is clearly better or cheaper);
 `test/pricing2.test.js` (15) covers the blended rate (peak, off-peak and the weekend, cache-only and output-only
 mixes), the long-context tiers (the largest threshold wins, `effectiveFrom` is respected, `whole_request` vs
 `excess`), `stepCost` matching the catalog price at three instants, and the per-call rows before and after
@@ -604,8 +663,9 @@ node scripts/check-catalog.mjs          # structural validation, no Python neede
 ```
 
 Since 0.15.1 the router does read it, but only for money and dates: each decision is priced at the rate in force at
-that step (`lib/catalog-pricing.js`), and `/state.catalog` reports the hard dates coming up. Routing itself still
-scores by each pool entry's relative `cost`, never by the catalog - 0.16 makes the prices load-bearing for the score.
+that step (`lib/catalog-pricing.js`), and `/state.catalog` reports the hard dates coming up. Since 0.16.0 the catalog
+rates are also what a cost-aware score and the shadow use (`lib/pricing2.js`), and since 0.16.1 they decide which
+candidate a failover may cross into - an entry the catalog cannot price is never entered automatically.
 
 ## Release checks
 

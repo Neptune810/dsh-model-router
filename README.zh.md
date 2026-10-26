@@ -283,6 +283,43 @@ exit 0，且**从不**自动改目录，由人更新 YAML。`.github/workflows/c
 - **怎么打开。** 在行配置里写 `costAware: true`（面板暂不提供开关）。此后只要成本项的分差压过原有分差，
   同一个配置就会路由到更便宜的那个模型。
 
+## 渠道健康、预算与峰谷（v0.16.1）
+
+0.16.0 回答「这一步多少钱」，0.16.1 回答「要接这一单的渠道还健康吗、这个会话还允许花钱吗」。三项默认都是
+惰性的——`channels.failover` 关闭、`budget.mode: off`、`peakPolicy: inform`（只提示、不改路由）——所以不发
+这些块的宿主机行为与 0.16.0 完全一致，十个 golden 快照不变。
+
+- **渠道健康（`lib/channels.js`）。** 每次路由尝试都记在一个渠道键上：池条目写了 `channel` 就用它（同一供应商
+  的第二个账号就是一个独立渠道），否则用供应商。`classifyFailure` 读宿主的失败码与状态：`429`/`RATE_LIMIT` 属于「轮换」，
+  `5xx`/`TIMEOUT`/`TRANSPORT`/`EMPTY_RESPONSE` 属于「故障转移」，其它一律不动。`ChannelHealth` 给每个渠道
+  维护滚动窗口（默认 20 次）与 TTFT 的 EWMA；连续失败 3 次把渠道停用 `cooldownMs`（默认 60 秒），一次成功立刻解除。
+  冷却只是降序不是拉黑：被冷却的条目沉到健康条目之后但保留分数，所以整池都在冷却时仍然照常路由。
+- **故障转移。** 默认关闭。打开 `channels.failover` 后，失败的请求通过 `agent/request-error` 瀑布返回
+  `{kind: 'retry'}`——每个 (turn, step) 最多 `maxFailoversPerStep`（默认 1）次——并把刚失败的渠道先停用，使重试不会落回
+  同一渠道。当当前品牌的全部渠道都被停用时，路由器可以自行跨品牌，但只会跨到目录能定价的条目；
+  `crossProvider: 'never'` 的优先级仍然高于故障转移。
+- **指纹与隔离。** `fingerprint(observed, expected)` 检查便宜中转最容易悄悄做错的地方：`model` 与请求不符、usage
+  缺失或全 0、`reasoning_content` 根本没到、TTFT 超过 `maxTtftMs`。反复不过校验的渠道会被隔离
+  `channels.quarantineMs`（默认 24 小时），并出现在 `/state.channels.quarantined` 与面板里；价格未知的中转绝不自动进入。
+- **预算闸门（`lib/budget.js`）。** `budget.mode: 'inform' | 'block'`，限制项为 `sessionTokens`、`sessionUsd`、
+  `dayUsd`、`monthUsd`，`softRatio`（默认 0.8）是预警线，限制为 0 表示不限制。`block` 只拒绝**合成步骤**——
+  即不携带新用户消息的一步——通过 `agent/pre-step` 返回 `{kind: 'reject'}`；用户正在等的那一步永远放行，拒绝只来自
+  该步本身、不会变成重试循环。`POST /model-router/budget`（或 `/router budget [once]`）放行一步，面板用同一组数字显示用量条。
+- **峰谷。** DeepSeek 工作日 09:00-12:00 与 14:00-18:00 收双倍。默认 `peakPolicy: inform` 只在面板与 `/stats` 说明；
+  `shift` 额外只对委派（子 agent）步骤把高峰价条目降序——用户正等着的那一步绝不因为价格被推迟或降档。
+- **跨品牌提案要有理由。** 0.14.0 只要品牌不同就会问；现在只有比同品牌最优条目**明显更好**（`crossCost.scoreMargin`
+  ，默认 5 分）或**明显更便宜**（`crossCost.maxMultiple`，默认 3 倍），或者同品牌已经无条目可用时才提提案。提案带上
+  `savingMultiple` 与原因，跨品牌步骤仍然全部写入遥测。
+- **面板。** 目录黄点旁多一个预算点（`data-budget=near|over`）、一块带用量条的开销面板、一行峰谷提示，以及一行列出
+  被冷却与被隔离的渠道。宿主不发这些块时全部不显示。
+
+```yaml
+channels:  { failover: false, failThreshold: 3, cooldownMs: 60000, quarantineMs: 86400000, fingerprint: true }
+budget:    { mode: off, sessionTokens: 0, sessionUsd: 0, dayUsd: 0, monthUsd: 0, softRatio: 0.8 }
+peakPolicy: inform    # off | inform | shift
+crossCost: { maxMultiple: 3, scoreMargin: 5 }
+```
+
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -460,11 +497,14 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-333 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+368 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
-`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（23 个）覆盖模型池、
+`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（26 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞，以及成本项（加权扣分与上限）、成本守卫的四种拒绝
-（未定价条目、无底价、`hard` 豁免、倍数上限）与保证会话有路由的回退；`test/plugin.test.js`（19 个）用 ctx/agent 替身
+（未定价条目、无底价、`hard` 豁免、倍数上限）、保证会话有路由的回退，以及渠道排序（被冷却的条目沉到健康条目之后、
+渠道排名用来破平手、整池冷却时仍选最优）；`test/channels.test.js`（18 个）覆盖按状态与按错误码的失败分类、滚动窗口与
+成功率、TTFT 的 EWMA 与折减、连续第三次失败触发冷却、成功在两个方向上解除冷却、只停用不计失败的 bench、
+`orderChannels` / `channelRanks` 的稳定顺序，以及指纹的四类拒绝；`test/plugin.test.js`（19 个）用 ctx/agent 替身
 驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（34 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
 任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令、
 LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、允许/只切一次/禁止、只有异品牌时照常路由）与
@@ -475,13 +515,17 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（43 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（49 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
 分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，目录黄点与它下面的最多三行说明（宿主不发 `catalog` 块时完全安静）、成本影子的那一行（分叉时带节省比例、一致时的
-写法、开关状态、英文界面，以及宿主不发 `costAware` 块时的安静），以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（14 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误与关闭开关；`test/observation.test.js`（11 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子）；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
+写法、开关状态、英文界面，以及宿主不发 `costAware` 块时的安静）、预算闸门（临近上限的圆点与用量条、超支时长度
+夹到 100%、token 行、限制为 0 与畸形块都保持安静）、`inform` 与 `shift` 下的峰谷提示（关闭或非高峰时安静）、
+中英双语的渠道冷却/隔离行，以及声明的 `ui-chat` 座位与
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误与关闭开关；`test/observation.test.js`（18 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
+放行一次、inform 模式只警告不拦、被停用的渠道让重试换到另一供应商、关闭故障转移时路由保持不动，以及跨品牌
+提案只在明显更好或更便宜时出现；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 
 ## 模型目录
 

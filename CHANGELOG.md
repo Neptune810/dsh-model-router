@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.16.1
+
+**A stability release that stays inert by default: channels are scored by health and can fail over on a 429, a
+5xx or a timeout, a spend guard can refuse a synthetic step, and the peak window is named. `channels.failover` is
+off, `budget.mode` is `off` and `peakPolicy` is `inform`, so the golden snapshots are unchanged.**
+
+- **Channel health (`lib/channels.js`, new).** `classifyFailure({status, code, timeout})` maps 429 / `RATE_LIMIT` to
+  `rotate` and 5xx / `TIMEOUT` / `TRANSPORT` / `EMPTY_RESPONSE` to `failover`; `ChannelHealth` keeps a rolling window (20)
+  per channel with a TTFT EWMA, benches a channel after `failThreshold` (3) consecutive failures for `cooldownMs` (60 s),
+  clears it on the first success, and `cool(channel, at, ms)` benches a channel that just failed without recording a
+  failure. `orderChannels` / `channelRanks` are stable and never drop an entry: a benched entry sinks below healthy
+  ones and keeps its score, so an all-benched pool still routes.
+- **Channels in the score and in the pool.** A pool entry may set `channel` (two accounts on one provider are two
+  channels). `chooseEntry` compares channel rank before entry cost, and a channel-blocked entry sinks; `decide()` passes
+  `channelRank` / `channelBlocked` through `signals`, so a cooling pool is ordered, never emptied.
+- **Failover.** `channels.failover: true` answers `agent/request-error` with `{kind: 'retry'}`, at most
+  `maxFailoversPerStep` (1) per (turn, step), and benches the failed channel first so the retry cannot land back on it.
+  When every channel of the current brand is benched, the router crosses to the best entry the catalog can price and
+  records `failoverFrom` in the decision (counted by `/stats.failoverSteps`). `crossProvider: 'never'` still wins. With the
+  flag off a failure is only recorded (`state.lastError`) and the route is left alone.
+- **Fingerprint and quarantine.** `fingerprint(observed, expected)` refuses `model_mismatch`, `usage_missing`,
+  `reasoning_missing` and `ttft_outlier`; a channel that keeps failing a verification is quarantined for
+  `channels.quarantineMs` (24 h), published in `/state.channels.quarantined` and named by `lastVerify` in the panel. A
+  relay whose price is unknown is never entered automatically.
+- **Spend guard (`lib/budget.js`, new).** `budget.mode: 'inform' | 'block'` with `sessionTokens`, `sessionUsd`,
+  `dayUsd`, `monthUsd` and `softRatio` (0.8). `budgetReport` returns one row per active limit (a zero limit is
+  not a limit) with `ratio` / `soft` / `over`, and `/state.budget` publishes it. `block` refuses only a synthetic step -
+  one carrying no fresh user message - through `agent/pre-step` `{kind: 'reject'}`, so a step the user is waiting on
+  always runs; `POST /model-router/budget` (`/router budget [once]`) releases exactly one step.
+- **Peak policy.** `peakPolicy: off | inform | shift`, default `inform`: the panel and `/stats` name the window
+  (`peakSteps`, `peakCostUsd`, `peakShare`) and `shift` demotes peak-priced entries for delegated steps only, never for
+  the step a user is sitting in front of.
+- **Cross-brand proposals need a reason.** A switch must beat the best same-brand entry by `crossCost.scoreMargin` (5)
+  points or be `crossCost.maxMultiple` (3x) cheaper, or no same-brand entry may be left; the proposal carries
+  `savingMultiple` and its `why`, and every cross-brand step is still written to telemetry.
+- **Panel.** A budget dot (`data-budget`), a spend block with one row and one bar per active limit, a peak note,
+  a line naming benched and quarantined channels, and a reason on the route line that lists every rule that
+  applied. A host that sends none of those blocks renders none of them.
+- **Tests.** 368 tests (333 in 0.16.0): `channels` 18, `routing` 26 (channel ordering), `telemetry` 15 (the peak and failover
+  counters), `observation` 18 (the spend guard, the failover, the proposal thresholds), `client` 49 (the dot, the bar, the
+  peak note and the channel line).
+- **Upgrade note:** no state-file migration and no config change. `channels.failover`, `budget.mode` and `crossCost`
+  default to inert values, so a 0.16.0 profile routes exactly as before; `peakPolicy` defaults to `inform` and only prints.
+
 ## 0.16.0
 
 **A cost release that changes no route by default: every pool entry is priced at the catalog's own rate for the
