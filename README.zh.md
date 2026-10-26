@@ -201,7 +201,8 @@ turn/step、`stepClass`、`score` 与 `scoreParts` 分项、前 5 名候选与�
 写入按 setImmediate 合并，失败只报一次并关闭遥测，永远不会影响请求返回。`DSH_MODEL_ROUTER_TELEMETRY=0` 可关闭。
 
 **成本口径。** `costUnits = 本步 token 增量 × 该模型在池里的 cost / 1e6`。这是插件自己的记账单位（便于跨模型
-比较与看趋势），不是账单货币；`/state.cost` 给出 `sessionCostUnits` 与 `taskCostUnits` 两个累加值。
+比较与看趋势），不是账单货币；`/state.cost` 给出 `sessionCostUnits` 与 `taskCostUnits` 两个累加值。0.15.1 起
+每条事件还会按随包目录折算成美元（`usage.costUsd`），`costUnits` 保留为你给每个条目设的相对单位。
 
 **`GET /model-router/stats?since=&until=&limit=`。** 把 JSONL 聚合成固定形状：
 `window{since,until,steps}`、`byClass`、`byModel`、`byEffort`、
@@ -217,6 +218,40 @@ ETag 时退化为无条件轮询（0.14 行为）。调试可用 `DSH_MODEL_ROUT
 
 **宿主兼容自检。** 启动后插件检查宿主契约：`sessionProjections` 是必需的，`webServer`/`commands`/`llm`
 缺失只降级不崩。缺失项以一条 warn 记录，并出现在 `GET /state.compat.missing`，面板据此提示「当前宿主不完整」。
+
+## 价格、硬日期与目录漂移（v0.15.1）
+
+v0.15.1 只是把观测变成钱和日期，不改路由：模型、档位、分数都不变，golden 快照与 0.15.0 逐字节一致。
+
+**带日期的价格。** `catalog/model-catalog.yaml` 记录带生效日期的标价（`pricing`，以及带 `effectiveFrom` 的
+`pricing.next`）、DeepSeek 的峰谷时段和硬日历。`lib/catalog-pricing.js`（导出为 `./catalog-pricing`）把这些数据
+变成数字：
+
+- `pricesAt(model, at)` —— 某一时刻生效的价格。`pricing.next` 在其 `effectiveFrom` 当天接管；DeepSeek 工作日
+  09:00-12:00、14:00-18:00（Asia/Shanghai）按高峰计费，其余时段按五折。
+- `tokenSplit(before, after)`、`tokenCost(split, price)`、`usdCost(...)` —— 把两次累计 token 投影之差拆成一步的
+  input/output/cacheRead/cacheWrite/reasoning，按模型自己的货币计价，再用目录里的 `fxRate` 换算。
+- `upcomingAlerts(at, {withinDays})` 与 `modelMeta(model, at)` —— 窗口内的硬日期，以及目录条目本身。
+
+价格未知一律是 `null`，永远不是 0：缺 cache-write 价格就回落到新输入价（隐式缓存就是这么计费的），缺
+input/output 价格时成本为 `null`，不编数字。
+
+**每条决策都带价。** `router.decision/1` 增加 `usage.split`、`usage.costUsd` 和一份 `usage.price` 快照（货币、单位、
+`effectiveFrom`、是否高峰、来源、当时生效的四档价格），并且用该步自己的时间戳取价——回放时得到的是当时真实
+计费的价，而不是今天的价。
+
+**`/stats` 里的账本。** `totals` 与每个 `by*` 行都带 `tokens`、`inputTokens`、`outputTokens`、
+`cacheReadTokens`、`cacheWriteTokens`、`reasoningTokens`、`costUsd`、`pricedSteps` 与 `unpricedSteps`。0.15.1 之前写的
+事件没有拆分，被计为「未定价」，绝不当成免费。
+
+**观察清单与 `/state.catalog`。** 目录顶层新增 `watchlist:`，记录**不在池内**的模型的硬日期（第一条是 GLM-4.5
+于 2026-12-31 到期）；schema、`scripts/check-catalog.mjs` 与 `scripts/build-catalog.py` 三层校验，watchlist 的 id
+不得与已知模型 id 冲突。`GET /state.catalog` 返回未来 30 天的 `{evidenceDate, withinDays, alerts[{date,
+description, daysUntil}]}`；面板在触发器与面板标题各点一个黄点，并在价格说明下最多列三条。
+
+**每周漂移报告。** `node scripts/catalog-diff.mjs` 把随包投影与 OpenRouter 实时模型列表对比，输出 markdown 报告
+（`--out`、`--now`、`--days`、`--offline <snapshot>`、`--json`、`--quiet`、`--fail-on-drift`）。它是建议性的：默认
+exit 0，且**从不**自动改目录，由人更新 YAML。`.github/workflows/catalog-diff.yml` 每周一 03:00 UTC 运行并上传报告。
 
 ## 五条规则
 
@@ -395,7 +430,7 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-267 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+305 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（17 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（19 个）用 ctx/agent 替身
@@ -409,12 +444,12 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 清空与校验；`test/route-projection.test.js`（12 个）覆盖投影契约（key/stateVersion、纯 JSON 状态、header
 折算且「缺省」与「显式 null」等价、turn/step 跟踪、调用当时生效的 header、缺 header/step 时回落到调用自身的
 值、重复 callId、按插入顺序丢最旧的 200 条上限、整数型 callId 的顺序、纯函数与 JSON 往返）以及宿主注册与
-没有该服务时的加载；`test/client.test.js`（38 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
+没有该服务时的加载；`test/client.test.js`（41 个）在 VM 里加载浏览器 bundle 并断言注册（路由行、作为回退且会自我收回的 composer chip、以及注册在 `conversation.input.model` 优先级 -1 上的合并座位）、
 闭合的触发器、文档里的同源路由、路由 Definition 的匹配与锚点、路由行
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
-分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（20 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现并覆盖 `findModel`；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（12 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、只报一次的错误与关闭开关；`test/observation.test.js`（7 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
+分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，目录黄点与它下面的最多三行说明（宿主不发 `catalog` 块时完全安静），以及声明的 `ui-chat` 座位与
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（13 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、只报一次的错误与关闭开关；`test/observation.test.js`（7 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 
 ## 模型目录
 
@@ -429,8 +464,8 @@ py -3 scripts/build-catalog.py --check  # 两者不一致就失败
 node scripts/check-catalog.mjs          # 结构校验，不需要 Python
 ```
 
-路由器目前还不读这份目录：0.15 已经接入遥测与按池内 `cost` 记账的成本单位，0.16 才把目录里的真实价格变成成本估算。
-先把 schema 和生成器交付出来，那两版才会是改数据，而不是重写。
+0.15.1 起路由器确实读它，但只用来算钱和算日期：每条决策按该步当时生效的价格计价（`lib/catalog-pricing.js`），
+`/state.catalog` 报告近期硬日期。路由本身仍按池内相对 `cost` 打分，不看目录价格——0.16 才让价格进入分数。
 
 ## 发布检查
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.1
+
+**A data release: the shipped catalog now prices every routed step, the panel names the hard dates coming up, and a weekly drift report tells maintainers what changed upstream. No routing decision changes - the golden snapshots are byte-identical to 0.15.0.**
+
+- **Dated prices become numbers (`lib/catalog-pricing.js`, new subpath export `./catalog-pricing`).** Pure and dependency-free: `pricesAt(model, at)` returns the rate in force at an instant (a `pricing.next` block takes over on its `effectiveFrom` day; DeepSeek's weekday 09:00-12:00 and 14:00-18:00 Asia/Shanghai windows bill at peak, every other hour at half), `tokenSplit(before, after)` turns two cumulative token projections into one step's input/output/cacheRead/cacheWrite/reasoning split, `tokenCost`/`usdCost` price that split in the catalog's currency and convert with the catalog's `fxRate`, `upcomingAlerts(at, {withinDays})` lists the hard dates, and `modelMeta` describes the entry. An unknown price is `null`, never zero: a missing cache-write price falls back to the fresh-input price (that is how implicit caching bills), and a missing input or output price makes the cost `null` instead of inventing a number.
+- **Every decision is priced.** `router.decision/1` gains `usage.split`, `usage.costUsd` and a `usage.price` snapshot (currency, unit, effectiveFrom, peak, source and the four rates in force) taken at the step's own timestamp, so a replayed step is priced at the rate that was actually charged.
+- **The cost ledger in `/stats`.** `totals` and every `by*` row now carry `tokens`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens`, `costUsd`, `pricedSteps` and `unpricedSteps`; a window that mixes old and new events reports both, so an event the catalog could not price is visible instead of counted as free.
+- **A watchlist for models outside the pool.** `catalog/model-catalog.yaml` gains a top-level `watchlist:` for hard dates of models that are not (yet) pool members - the first entry is the 2026-12-31 end of GLM-4.5. `schema/model-catalog.schema.json`, `scripts/check-catalog.mjs` and `scripts/build-catalog.py` all validate it, a watchlist id may not shadow a known model id, and the build prints how many entries it kept.
+- **`GET /state.catalog`.** `{evidenceDate, withinDays, alerts[{date, description, daysUntil}]}` for the next 30 days. The composer panel puts a warning dot on the trigger and in the panel head and lists at most three dates under the price note; a host that sends no `catalog` block renders nothing at all.
+- **`/stats` rows name their catalog entry.** Every `byModel` row carries `catalog` (the entry from `findModel`, so a model that left the pool still explains itself) and `summary.catalog` carries the same alert block as `/state`.
+- **Weekly drift report (`scripts/catalog-diff.mjs`, advisory).** One dependency-free CLI compares the committed projection with the live OpenRouter models API (`--out`, `--now`, `--days`, `--offline <snapshot.json>`, `--json`, `--quiet`, `--fail-on-drift`) and never edits the catalog. `.github/workflows/catalog-diff.yml` runs it every Monday at 03:00 UTC and uploads the markdown; exit 0 by default, so a red badge never blocks a release.
+- **Tests.** 305 tests (267 in 0.15.0): catalog 21 (the watchlist cases), catalog-pricing 18, catalog-diff 15, telemetry 13 (the ledger case) and client 41 (the dot, the silent host and the English copy).
+- **Upgrade note:** no state-file migration. Events written by 0.15.0 stay valid and count as `unpricedSteps`.
+
 ## 0.15.0
 
 **An observation release: every routed step now persists one decision event, `/stats` aggregates them, `/router replay`

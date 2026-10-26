@@ -239,3 +239,54 @@ updated test counts and the catalog note; CHANGELOG gets the 0.15.0 section; pac
 | profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.15.0 --save-exact` ok in 10.4 s, installed 0.15.0, `node_modules/.../lib` includes `telemetry.js`; desktop DSH needs a restart to load it (peer-dependency WARNs are pre-existing) |
 
 Registry propagation lagged about a minute (dist-tags briefly showed `latest: 0.14.4` right after the publish job went green); the tag object differs from the commit SHA as expected for an annotated tag.
+
+
+## 0.15.1 - priced decisions, watchlist and drift (2026-10-26)
+
+A data release on top of 0.15.0: the catalog's dated prices become the number on every decision, the
+watchlist advertises hard dates for models outside the pool, and a weekly drift report tells a maintainer what
+moved upstream. Routing is untouched - the golden snapshots are the 0.15.0 bytes.
+
+**How it was built.** Two delegations (task-17 cost ledger, task-18 panel dot) were dispatched into isolated
+worktrees (`wt/cost-ledger` on `feat/151-cost-ledger`, `wt/catalog-panel` on `feat/151-catalog-panel`), but both
+teammates failed twice with no closing message, so the Lead implemented both in the main worktree
+(`release/0.15.1`, base `fa3ed0e`) instead of waiting. Lead-owned files - `lib/index.js`, `lib/telemetry.js`,
+`client/client.js`, `package.json`, README/README.zh/CHANGELOG/EXECUTION - were never edited from a worktree.
+
+### What landed
+
+| area | result |
+| --- | --- |
+| catalog watchlist | top-level `watchlist:` in catalog/model-catalog.yaml (first entry: GLM-4.5 retires 2026-12-31), validated by schema + check-catalog + build-catalog, a watchlist id may not shadow a known model id (commit bcfb81e) |
+| catalog pricing | lib/catalog-pricing.js: pricesAt / tokenCost / usdCost / tokenSplit / upcomingAlerts / modelMeta, pricing.next takeover, peak and off-peak windows in Asia/Shanghai, fxRate conversion; unknown price stays null; 18 tests (commit 7813fbf) |
+| drift pipeline | scripts/catalog-diff.mjs (zero dependencies, advisory, never edits the catalog) + test/catalog-diff.test.js (15 tests) + .github/workflows/catalog-diff.yml (Monday 03:00 UTC, report uploaded) (commit 3193ecf, merged fa3ed0e) |
+| priced decisions | every `router.decision/1` now carries `usage.split`, `usage.costUsd` and a `usage.price` snapshot taken at the step timestamp; /state gains `catalog`; /stats gains the ledger and a per-row `catalog`; new export `./catalog-pricing` (commit c8abd5a) |
+| telemetry ledger | rows and totals carry tokens, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens, costUsd, pricedSteps, unpricedSteps; a 0.15.0 event has no split and counts as unpriced |
+| client | warning dot on the trigger and in the panel head plus a three-line note under the price note, bilingual copy, and complete silence when the host sends no `catalog` block (+3 tests, 41 in the file) |
+
+### Commits on release/0.15.1
+
+| commit | subject |
+| --- | --- |
+| bcfb81e | feat(catalog): keep a watchlist of hard dates for models outside the pool |
+| 7813fbf | feat(pricing): price decisions and alerts at the catalog rates |
+| 3193ecf | feat(catalog): add read-only catalog drift pipeline |
+| fa3ed0e | merge: 0.15.1 weekly catalog drift pipeline (151-1) |
+| c8abd5a | feat(telemetry): price every decision at catalog rates and surface hard dates |
+
+### Freeze evidence (local, before the tag)
+
+| check | result |
+| --- | --- |
+| node --test | 305 tests / 305 pass / 0 fail (267 in 0.15.0) |
+| per file | policy 40, routing 17, plugin 19, modes 34, pricing 11, effort-model 10, route-projection 12, client 41, store 6, routes 10, release 8, catalog 21, catalog-pricing 18, catalog-diff 15, smoke 11, telemetry 13, observation 7, golden 11 |
+| node scripts/gate.mjs | PASS: tests 7.4 s, release checks 0.1 s, catalog checks 0.1 s |
+| node scripts/check-release.mjs --pack | ok: version 0.15.1 = changelog 0.15.1, tarball contents match the whitelist, packed files 24 (23 in 0.15.0: +lib/catalog-pricing.js) |
+| node scripts/check-catalog.mjs | exit 0: 19 models, 15 channels, 4 calendar entries, 1 watchlist entry, schemaVersion 1.0.0, evidence 2026-10-26, 1 pinned warning |
+| py -3 scripts/build-catalog.py --check | OK: lib/catalog.js matches the YAML, 19 models, 88865 bytes, sha256 7f018f7cf4e86c5b |
+| golden | test/fixtures/golden untouched since 0.15.0; only ROUTER_POLICY (0.15.1) and the usage block changed, and routing assertions still pass |
+
+Docs updated with the release: README and README.zh gain the "prices, hard dates and catalog drift" section, the
+cost-units caveat, the real test counts and the corrected catalog paragraph (the router now reads the catalog for
+money and dates, but still scores by pool-relative `cost`); CHANGELOG gets the 0.15.1 section; package.json is
+0.15.1 with the new `./catalog-pricing` export.

@@ -244,7 +244,8 @@ disables telemetry, and a write can never affect the request path. `DSH_MODEL_RO
 
 **Cost units.** `costUnits = token delta × the model's pool cost / 1e6`. It is the plugin's own accounting unit for
 comparing steps and spotting trends, not a billed amount; `/state.cost` exposes `sessionCostUnits` and
-`taskCostUnits`.
+`taskCostUnits`. Since 0.15.1 each event is also priced in USD from the shipped catalog (`usage.costUsd`), and
+`costUnits` stays the pool-relative unit you set per entry.
 
 **`GET /model-router/stats?since=&until=&limit=`.** Aggregates the JSONL into a fixed shape:
 `window{since,until,steps}`, `byClass`, `byModel`, `byEffort`,
@@ -262,6 +263,45 @@ monotonic counter the client watches. On a host with no ETag it degrades to unco
 **Host self-check.** At boot the plugin verifies its host contracts: `sessionProjections` is required, while a missing
 `webServer`/`commands`/`llm` only degrades features. Missing pieces are logged once and surfaced in
 `GET /state.compat.missing`, so the panel can say the host is incomplete.
+
+## Prices, hard dates and catalog drift (v0.15.1)
+
+v0.15.1 prices observations; it does not change a route. Same model choice, same effort, same score - the
+golden snapshots are byte-identical to 0.15.0.
+
+**Dated prices.** `catalog/model-catalog.yaml` records dated list prices (`pricing`, and `pricing.next` with an
+`effectiveFrom`), the DeepSeek peak/off-peak schedule and the hard calendar. `lib/catalog-pricing.js` (exported as
+`./catalog-pricing`) turns that data into numbers:
+
+- `pricesAt(model, at)` - the rate in force at an instant. A `pricing.next` block takes over on its `effectiveFrom`
+  day, and DeepSeek's weekday 09:00-12:00 / 14:00-18:00 windows (Asia/Shanghai) bill at peak while every other hour
+  bills at half.
+- `tokenSplit(before, after)`, `tokenCost(split, price)`, `usdCost(...)` - two cumulative token projections become one
+  step's input/output/cacheRead/cacheWrite/reasoning split, priced in the model's own currency and converted with the
+  catalog's `fxRate`.
+- `upcomingAlerts(at, {withinDays})` and `modelMeta(model, at)` - the hard dates inside a window, and the entry itself.
+
+An unknown price stays `null`: a missing cache-write rate falls back to the fresh-input rate (that is how implicit
+caching is billed), and a missing input or output rate makes the cost `null` rather than zero.
+
+**Priced decisions.** `router.decision/1` carries `usage.split`, `usage.costUsd` and a `usage.price` snapshot
+(currency, unit, `effectiveFrom`, `peak`, source and the four rates in force), taken at the step's own timestamp - a
+replayed step is priced at the rate that was actually charged, not at today's.
+
+**Cost ledger in `/stats`.** `totals` and every `by*` row carry `tokens`, `inputTokens`, `outputTokens`,
+`cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens`, `costUsd`, `pricedSteps` and `unpricedSteps`. An event
+written before 0.15.1 has no split and is counted as unpriced, never as free.
+
+**Watchlist and `/state.catalog`.** The catalog keeps a top-level `watchlist:` for hard dates of models that are not in
+the pool (the first entry is the 2026-12-31 end of GLM-4.5); the schema, `scripts/check-catalog.mjs` and
+`scripts/build-catalog.py` all validate it, and a watchlist id may not shadow a known model id. `GET /state.catalog`
+answers `{evidenceDate, withinDays, alerts[{date, description, daysUntil}]}` for the next 30 days; the panel shows a
+warning dot on the trigger and in the panel head and lists at most three dates under the price note.
+
+**Weekly drift report.** `node scripts/catalog-diff.mjs` compares the committed projection with the live OpenRouter
+models API and writes a markdown report (`--out`, `--now`, `--days`, `--offline <snapshot>`, `--json`, `--quiet`,
+`--fail-on-drift`). It is advisory - exit 0 by default - and it never edits the catalog: a human updates the YAML.
+`.github/workflows/catalog-diff.yml` runs it every Monday at 03:00 UTC and uploads the report.
 
 ## The five rules
 
@@ -454,7 +494,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-267 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+305 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (17) covers the pool, preset
@@ -476,7 +516,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (38)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (41)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -485,16 +525,20 @@ the seat face delegating to the session directory, the official selection semant
 `reasoningEffort`, effort rows with it, the provider default, the current-row no-op, a locked session, an
 unavailable subagent cell, a failed pick keeping its message, catalog errors offering a retry, and group
 order), the router half's control/pool/settings payloads and the `/effort-model` binding, the pool
-control that collapses the list and reopens it, and the declared `ui-chat` seat and `uiConversation`
+control that collapses the list and reopens it, and the catalog warning dot and its three-line note (and the silence of a host that
+sends no `catalog` block), and the declared `ui-chat` seat and `uiConversation`
 service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
 read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
-CHANGELOG agreement plus tarball contents); `test/catalog.test.js` (20) validates the shipped catalog
-against its schema, pins the documented completeness warnings, proves the generator is deterministic and
-covers `findModel`; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
-PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (12) covers decision events landing on disk, monthly
-files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, a once-only error and the off switch;
+CHANGELOG agreement plus tarball contents); `test/catalog.test.js` (21) validates the shipped catalog
+against its schema, pins the documented completeness warnings, proves the generator is deterministic, checks the
+watchlist rules and covers `findModel`; `test/catalog-pricing.test.js` (18) covers the rate in force (`pricing.next`
+on its day, the peak/off-peak windows), the token split, the null-not-zero price rules and the alert window;
+`test/catalog-diff.test.js` (15) drives the drift report against a frozen OpenRouter snapshot; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
+PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (13) covers decision events landing on disk, monthly
+files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
+counts as unpriced), a once-only error and the off switch;
 `test/observation.test.js` (7) walks the v0.15 surface end to end (/state fields, ETag 304, `/stats` aggregation,
 `/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`);
 `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only with `GOLDEN_UPDATE=1`), so
@@ -515,9 +559,9 @@ py -3 scripts/build-catalog.py --check  # fail if the two disagree
 node scripts/check-catalog.mjs          # structural validation, no Python needed
 ```
 
-The router still does not read the catalog: 0.15 wires telemetry and cost units based on each pool entry's `cost`,
-and 0.16 turns catalog prices into cost estimates. Shipping the schema and the generator first is what makes those releases data changes rather
-than rewrites.
+Since 0.15.1 the router does read it, but only for money and dates: each decision is priced at the rate in force at
+that step (`lib/catalog-pricing.js`), and `/state.catalog` reports the hard dates coming up. Routing itself still
+scores by each pool entry's relative `cost`, never by the catalog - 0.16 makes the prices load-bearing for the score.
 
 ## Release checks
 
