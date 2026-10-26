@@ -1299,3 +1299,77 @@ test('a session change clears the stored ETag so the new conversation reads unco
   assert.equal(switched.url, '/model-router/state?sessionId=session-2')
   assert.equal(switched.headers['if-none-match'], undefined, 'the new conversation reads unconditionally')
 })
+
+/** A state carrying the catalog hard-date block the 0.15.1 router serves. */
+function catalogState(alerts, evidenceDate = '2026-10-26') {
+  return {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [], presets: {}, settings: {}, decisions: [],
+    catalog: { evidenceDate, withinDays: 30, alerts },
+  }
+}
+
+const CATALOG_ALERTS = [
+  { date: '2026-12-01', description: 'Gemini 4 Argon 开始计费', daysUntil: 36 },
+  { date: '2027-01-01', description: 'Gemini 3.8 Flash 促销结束', daysUntil: 67 },
+  { date: '2026-12-31', description: 'GLM-4.5 到期', daysUntil: 66 },
+  { date: '2027-02-01', description: '第四条不该出现在面板里', daysUntil: 98 },
+]
+
+test('the catalog watchlist raises a dot on the trigger and a note inside the panel', async () => {
+  const app = await openControl({ state: catalogState(CATALOG_ALERTS) })
+  const triggerDot = byProp(app.holder.tree, 'data-catalog', 'true')
+  assert.equal(triggerDot.length, 1, 'the closed trigger carries the catalog dot')
+  assert.match(triggerDot[0].props.title, /模型目录里有几个硬日期快到/)
+  assert.match(triggerDot[0].props.title, /\[2026-12-01\] Gemini 4 Argon 开始计费 · 36 天后/)
+  assert.doesNotMatch(triggerDot[0].props.title, /第四条/, 'the trigger summarises at most three dates')
+
+  openPanel(app.holder)
+  await app.rt.flush()
+  assert.equal(byProp(app.holder.tree, 'data-catalog', 'true').length, 2, 'the open panel adds its own dot in the head')
+  const note = byProp(app.holder.tree, 'data-mr-catalog', 'true')[0]
+  assert.ok(note, 'the panel lists the hard dates')
+  const shown = textOf(note)
+  assert.match(shown, /\[2026-12-01\] Gemini 4 Argon 开始计费 · 36 天后/)
+  assert.match(shown, /GLM-4\.5 到期/)
+  assert.match(shown, /67 天后/)
+  assert.doesNotMatch(shown, /第四条/, 'the note shows the same three dates')
+  assert.equal(note.props.title, '目录核对日期 2026-10-26')
+})
+
+test('a router without catalog alerts shows no dot and no note', async () => {
+  // An older host: no state.catalog at all.
+  const legacy = await openControl({ state: { effectiveControl: 'full', engaged: true, current: null, pool: [], decisions: [] } })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-catalog', 'true').length, 0)
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-catalog', 'true').length, 0)
+
+  // The current host with an empty watchlist stays quiet too.
+  const quiet = await openControl({ state: catalogState([]) })
+  openPanel(quiet.holder)
+  await quiet.rt.flush()
+  assert.equal(byProp(quiet.holder.tree, 'data-catalog', 'true').length, 0)
+
+  // A catalog block with no alerts array is ignored rather than rendered as junk.
+  const odd = await openControl({ state: Object.assign(catalogState([]), { catalog: { evidenceDate: null } }) })
+  openPanel(odd.holder)
+  await odd.rt.flush()
+  assert.equal(byProp(odd.holder.tree, 'data-catalog', 'true').length, 0)
+})
+
+test('the catalog dot and note follow the chat language', async () => {
+  const app = await openControl({
+    state: catalogState([{ date: '2026-12-01', description: 'Gemini 4 Argon starts billing', daysUntil: 3 }]),
+    globals: { navigator: { language: 'en-US' } },
+  })
+  const dot = byProp(app.holder.tree, 'data-catalog', 'true')[0]
+  assert.match(dot.props.title, /hard dates coming up/)
+  assert.match(dot.props.title, /in 3d/)
+  openPanel(app.holder)
+  await app.rt.flush()
+  const note = byProp(app.holder.tree, 'data-mr-catalog', 'true')[0]
+  assert.match(textOf(note), /in 3d/)
+  assert.equal(note.props.title, 'catalog evidence 2026-10-26')
+})

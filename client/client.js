@@ -93,6 +93,8 @@ window.__ModuleLoader__.load({
 				priceDone: "已更新 {n} 个模型 · {s}",
 				groupAdd: "全加入", groupRemove: "全移除",
 				groupAddHint: "把该品牌的全部模型加入池", groupRemoveHint: "把该品牌的模型全部移出池",
+				catalogHint: "模型目录里有几个硬日期快到：开始计费、涨价、下线",
+				catalogDays: "{n} 天后", catalogToday: "今天", catalogEvidence: "目录核对日期 {d}",
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -158,6 +160,8 @@ window.__ModuleLoader__.load({
 				priceDone: "updated {n} models \u00b7 {s}",
 				groupAdd: "Add all", groupRemove: "Remove all",
 				groupAddHint: "add every model of this provider to the pool", groupRemoveHint: "remove this provider's models from the pool",
+				catalogHint: "the model catalog has hard dates coming up: billing starts, price rises, retirements",
+				catalogDays: "in {n}d", catalogToday: "today", catalogEvidence: "catalog evidence {d}",
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -178,6 +182,8 @@ window.__ModuleLoader__.load({
 			".mr-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#e8e8ea)}",
 			".mr-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-success-primary,#3fb950)}",
 			".mr-dot[data-yielded=true]{background:var(--dsw-alias-state-warn-label,#d29922)}",
+			".mr-dot[data-catalog=true]{background:var(--dsw-alias-state-warn-label,#d29922)}",
+			".mr-catalog{display:flex;flex-direction:column;gap:2px;padding:4px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:1.35}",
 			".mr-panel{position:fixed;z-index:2147483000;width:372px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}",
 			".mr-panel::-webkit-scrollbar{width:8px}",
 			".mr-panel::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.3));border-radius:4px}",
@@ -574,6 +580,17 @@ window.__ModuleLoader__.load({
 			const effortPending = !!(state && state.effortModelPending)
 			const effortBoundId = (state && state.effectiveEffortModel) || null
 			const pool = poolOverride || ((state && state.pool) || [])
+			// v0.15.1 catalog alerts: a host that predates them simply sends no
+			// state.catalog, and the panel then shows no dot at all.
+			const catalogInfo = state && state.catalog && Array.isArray(state.catalog.alerts) ? state.catalog : null
+			const catalogAlerts = catalogInfo ? catalogInfo.alerts.slice(0, 3) : []
+			const catalogDay = (days) => (Number(days) === 0
+				? t.catalogToday
+				: t.catalogDays.replace("{n}", String(days === undefined || days === null ? "?" : days)))
+			const catalogLine = (alert) => "[" + (alert.date || "") + "] " + (alert.description || "") + " \u00b7 " + catalogDay(alert.daysUntil)
+			const catalogTitle = catalogAlerts.length > 0
+				? [t.catalogHint].concat(catalogAlerts.map(catalogLine)).join("\n")
+				: undefined
 			/**
 			 * The pool list is collapsed by default: the router row carries a pool control, so the
 			 * menu body does not have to hold every model all the time. Effort scope forces it open
@@ -868,6 +885,7 @@ window.__ModuleLoader__.load({
 						: null))),
 					officialBusy ? h("span", { className: "mr-spin" }) : null,
 					needsConfirm ? h("span", { className: "mr-attn", title: t.confirmAttn }) : null,
+					catalogAlerts.length > 0 ? h("span", { className: "mr-dot", "data-catalog": "true", title: catalogTitle }) : null,
 					h("span", { className: "mr-dot", "data-yielded": String(yielded) })
 				),
 			]
@@ -961,6 +979,9 @@ window.__ModuleLoader__.load({
 						h("span", { className: "mr-name" }, t.title),
 						h("span", { className: "mr-dot", "data-yielded": String(yielded), title: yielded ? t.yieldedHint : t.engagedHint }),
 						h("span", { style: { flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: yielded ? t.yieldedHint : t.engagedHint }, yielded ? t.yielded : t.engaged),
+						catalogAlerts.length > 0
+							? h("span", { className: "mr-dot", "data-catalog": "true", style: { marginLeft: "auto" } , title: catalogTitle })
+							: null,
 						// With the seat the pool is merged into the model rows, so a header control
 						// would only repeat it. Without the seat (the .right chip fallback) this is
 						// the only way to reach the pool list.
@@ -985,6 +1006,14 @@ window.__ModuleLoader__.load({
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
 					if (priceNote) body.push(h("div", { className: "mr-note", "data-mr-price-note": "true" }, priceNote))
+					// Catalog hard dates (v0.15.1): the same alerts the dot advertises,
+					// spelled out, so the panel is readable without hovering.
+					if (catalogAlerts.length > 0) {
+						body.push(h("div", {
+							key: "catalog", className: "mr-catalog", "data-mr-catalog": "true",
+							title: catalogInfo.evidenceDate ? t.catalogEvidence.replace("{d}", catalogInfo.evidenceDate) : undefined,
+						}, catalogAlerts.map((alert, index) => h("div", { key: String(index) }, catalogLine(alert)))))
+					}
 					// --- Per-conversation confirmation, before anything else can be touched ---
 					if (needsConfirm) {
 						const scopeLabel = t[plan.control] || plan.control || t.confirmNone

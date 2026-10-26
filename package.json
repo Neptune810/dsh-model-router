@@ -13,6 +13,7 @@
     "./routing": "./lib/routing.js",
     "./config": "./lib/config.js",
     "./client": "./client/client.js",
+    "./catalog-pricing": "./lib/catalog-pricing.js",
     "./package.json": "./package.json"
   },
   "files": [

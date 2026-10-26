@@ -238,19 +238,24 @@ test('summarize returns the fixed shape with class/model/effort aggregates', asy
   assert.deepEqual(Object.keys(summary).sort(), ['byClass', 'byEffort', 'byModel', 'totals', 'window'])
   assert.deepEqual(Object.keys(summary.window).sort(), ['since', 'steps', 'until'])
   assert.deepEqual(summary.window, { since: nowMs - WEEK_MS, until: nowMs, steps: 3 })
+  // Prompt-free events written before 0.15.1 carry no split and no USD cost:
+  // they contribute zero tokens and count as unpriced rather than free.
   assert.deepEqual(summary.byClass, [
-    { key: 'engineering', steps: 2, avgScore: 65, strongSteps: 1, costUnits: 0.02 },
-    { key: 'standard', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02 },
+    { key: 'engineering', steps: 2, avgScore: 65, strongSteps: 1, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 2 },
+    { key: 'standard', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 1 },
   ])
   assert.deepEqual(summary.byModel, [
-    { key: 'deepseek-official/deepseek-flash', steps: 2, avgScore: 65, strongSteps: 1, costUnits: 0.02 },
-    { key: 'openrouter/qwen3', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02 },
+    { key: 'deepseek-official/deepseek-flash', steps: 2, avgScore: 65, strongSteps: 1, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 2 },
+    { key: 'openrouter/qwen3', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 1 },
   ])
   assert.deepEqual(summary.byEffort, [
-    { key: 'high', steps: 2, avgScore: 65, strongSteps: 1, costUnits: 0.02 },
-    { key: 'low', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02 },
+    { key: 'high', steps: 2, avgScore: 65, strongSteps: 1, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 2 },
+    { key: 'low', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 1 },
   ])
-  assert.deepEqual(Object.keys(summary.totals).sort(), ['costUnits', 'failedEscalations', 'overrideRate', 'strongSteps'])
+  assert.deepEqual(Object.keys(summary.totals).sort(), [
+    'cacheReadTokens', 'cacheWriteTokens', 'costUnits', 'costUsd', 'failedEscalations', 'inputTokens',
+    'outputTokens', 'overrideRate', 'pricedSteps', 'reasoningTokens', 'strongSteps', 'tokens', 'unpricedSteps',
+  ])
   assert.equal(summary.totals.costUnits, 0.04)
   assert.equal(summary.totals.strongSteps, 1)
   assert.equal(summary.totals.overrideRate, 1 / 3)
@@ -263,6 +268,92 @@ test('summarize returns the fixed shape with class/model/effort aggregates', asy
   assert.equal(filtered.totals.overrideRate, 0.5)
 })
 
+test('summarize sums the token split and USD cost, and counts unpriced steps', async (t) => {
+  const dir = tempDir(t)
+  const nowMs = Date.UTC(2026, 10, 3, 9)
+  const tel = createTelemetry({ dir, now: () => nowMs })
+  const events = [
+    {
+      ts: nowMs - 4000,
+      stepClass: 'engineering',
+      score: 60,
+      chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+      usage: {
+        tokens: 1300,
+        costUnits: 0.01,
+        split: { input: 1000, output: 200, cacheRead: 100, cacheWrite: 0, reasoning: 0 },
+        costUsd: 0.000123,
+        price: { currency: 'USD', input: 0.26, output: 1.04, cacheRead: 0.026, cacheWrite: 0.26, peak: null, source: 'catalog', effectiveFrom: '2026-10-01' },
+      },
+    },
+    {
+      ts: nowMs - 3000,
+      stepClass: 'standard',
+      score: 80,
+      chosen: { provider: 'google-official', model: 'gemini-3.8-flash', effort: 'high', tier: 'cheap' },
+      usage: {
+        tokens: 830,
+        costUnits: 0.02,
+        split: { input: 500, output: 250, cacheRead: 0, cacheWrite: 50, reasoning: 30 },
+        costUsd: 0.000456,
+      },
+    },
+    {
+      ts: nowMs - 2000,
+      stepClass: 'engineering',
+      score: 55,
+      chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+      usage: { tokens: 900, costUnits: 0.02 },
+    },
+    {
+      ts: nowMs - 1000,
+      stepClass: 'standard',
+      score: 70,
+      chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+      usage: { tokens: 40, costUnits: 0, split: { input: 40 }, costUsd: null },
+    },
+  ]
+  for (const event of events) assert.equal(tel.writeDecision(event), true)
+  await tel.flush()
+
+  const summary = await tel.summarize()
+  assert.deepEqual(summary.totals, {
+    costUnits: 0.05,
+    strongSteps: 0,
+    overrideRate: 0,
+    failedEscalations: 0,
+    tokens: 2170,
+    inputTokens: 1540,
+    outputTokens: 450,
+    cacheReadTokens: 100,
+    cacheWriteTokens: 50,
+    reasoningTokens: 30,
+    costUsd: 0.000579,
+    pricedSteps: 2,
+    unpricedSteps: 2,
+  })
+
+  const byEffort = summary.byEffort.find((row) => row.key === 'high')
+  assert.equal(byEffort.steps, 4)
+  assert.equal(byEffort.tokens, 2170)
+  assert.equal(byEffort.costUsd, 0.000579)
+  assert.equal(byEffort.pricedSteps, 2)
+  assert.equal(byEffort.unpricedSteps, 2)
+
+  const flash = summary.byModel.find((row) => row.key === 'deepseek-official/deepseek-flash')
+  assert.equal(flash.steps, 3)
+  assert.equal(flash.tokens, 1340, 'a null costUsd keeps the tokens but counts the step as unpriced')
+  assert.equal(flash.costUsd, 0.000123)
+  assert.equal(flash.pricedSteps, 1)
+  assert.equal(flash.unpricedSteps, 2)
+
+  const gemini = summary.byModel.find((row) => row.key === 'google-official/gemini-3.8-flash')
+  assert.deepEqual(
+    { tokens: gemini.tokens, priced: gemini.pricedSteps, unpriced: gemini.unpricedSteps },
+    { tokens: 830, priced: 1, unpriced: 0 },
+  )
+})
+
 test('summarize keeps the fixed shape with zero events and accepts no/empty/explicit windows', async (t) => {
   const dir = tempDir(t)
   const nowMs = Date.UTC(2026, 10, 3, 9)
@@ -272,7 +363,21 @@ test('summarize keeps the fixed shape with zero events and accepts no/empty/expl
     byClass: [],
     byModel: [],
     byEffort: [],
-    totals: { costUnits: 0, strongSteps: 0, overrideRate: 0, failedEscalations: 0 },
+    totals: {
+      costUnits: 0,
+      strongSteps: 0,
+      overrideRate: 0,
+      failedEscalations: 0,
+      tokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+      costUsd: 0,
+      pricedSteps: 0,
+      unpricedSteps: 0,
+    },
   }
   assert.deepEqual(await tel.summarize(), empty)
   assert.deepEqual(await tel.summarize({}), empty)
