@@ -83,17 +83,33 @@ function chipFace(registrations, sessionId = 'session-1') {
 }
 
 /**
- * Interactive React stand-in: state survives re-renders (a click handler from an
- * older tree still updates the tree we assert on), effects run once after mount.
- * Every draw is synchronous, so a click can be inspected immediately.
+ * Interactive React stand-in: state and refs survive re-renders (a click handler
+ * from an older tree still updates the tree we assert on), effects run once after
+ * mount, and the host can push new props in (holder.update) the way it re-injects
+ * the seat when the conversation changes. Every draw is synchronous, so a click
+ * can be inspected immediately.
  */
 function createRuntime() {
   const states = []
-  const mountEffects = []
+  const callbacks = []
+  const refs = []
+  const effects = []
   let cursor = 0
+  let callbackCursor = 0
+  let refCursor = 0
+  let effectCursor = 0
   let rendering = false
   let draw = null
   let phase = 'mount'
+  let pendingEffects = []
+
+  const sameDeps = (a, b) => {
+    if (a === undefined || b === undefined) return a === b
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i += 1) if (!Object.is(a[i], b[i])) return false
+    return true
+  }
+
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat() }),
     useState: (initial) => {
@@ -104,26 +120,71 @@ function createRuntime() {
         if (draw && !rendering) draw()
       }]
     },
-    useEffect: (fn) => { if (phase === 'mount') mountEffects.push(fn) },
-    useCallback: (fn) => fn,
-    useRef: (value) => ({ current: value }),
+    useEffect: (fn, deps) => {
+      const index = effectCursor++
+      if (phase === 'mount') {
+        effects[index] = { deps: deps, cleanup: null }
+        pendingEffects.push({ index, fn })
+        return
+      }
+      // Plain state-driven draws do not re-run effects; only the props-driven
+      // update below models React's dependency check (a session change).
+      if (phase !== 'update') return
+      const slot = effects[index]
+      if (slot && sameDeps(slot.deps, deps)) return
+      pendingEffects.push({ index, fn })
+    },
+    useCallback: (fn, deps) => {
+      const index = callbackCursor++
+      const slot = callbacks[index]
+      if (slot && sameDeps(slot.deps, deps)) return slot.fn
+      callbacks[index] = { fn: fn, deps: deps }
+      return fn
+    },
+    useRef: (value) => {
+      const index = refCursor++
+      if (!refs[index]) refs[index] = { current: value }
+      return refs[index]
+    },
     useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
   }
   const flush = async (ticks = 40) => { for (let i = 0; i < ticks; i += 1) await Promise.resolve() }
+  const runPendingEffects = () => {
+    for (const effect of pendingEffects.splice(0)) {
+      const slot = effects[effect.index]
+      if (slot && typeof slot.cleanup === 'function') slot.cleanup()
+      const cleanup = effect.fn()
+      if (effects[effect.index]) effects[effect.index].cleanup = typeof cleanup === 'function' ? cleanup : null
+    }
+  }
   const mount = async (component, props) => {
-    const holder = { tree: null, renders: 0 }
-    draw = () => {
+    const holder = { tree: null, renders: 0, props: props }
+    const render = (nextProps) => {
+      if (nextProps) holder.props = nextProps
       if (rendering) return
       rendering = true
       cursor = 0
-      holder.tree = component(props)
+      callbackCursor = 0
+      refCursor = 0
+      effectCursor = 0
+      holder.tree = component(holder.props)
       holder.renders += 1
       rendering = false
     }
-    draw()
+    draw = render
+    render(props)
     phase = 'steady'
-    for (const effect of mountEffects.splice(0)) effect()
+    runPendingEffects()
     await flush()
+    // The host re-injects the seat for the next conversation: re-render with the
+    // new props and run only the effects whose dependencies changed.
+    holder.update = async (nextProps) => {
+      phase = 'update'
+      render(nextProps)
+      phase = 'steady'
+      runPendingEffects()
+      await flush()
+    }
     return holder
   }
   return { react, mount, flush }
@@ -177,17 +238,39 @@ function directoriesStub(map) {
   }
 }
 
-/** fetch double: records every request and answers from a path -> payload map. */
+/** Headers stand-in: the one method the client reads, case-insensitive like Fetch. */
+function headerStub(map) {
+  const entries = Object.entries(map || {}).map(([key, value]) => [String(key).toLowerCase(), String(value)])
+  return { get: (name) => { const hit = entries.find(([key]) => key === String(name).toLowerCase()); return hit ? hit[1] : null } }
+}
+
+/**
+ * fetch double: records every request (headers included) and answers from the
+ * callback. A payload with `__status` becomes that non-2xx response (a 304 has no
+ * body); `__headers` rides on the response without leaking into the JSON body.
+ */
 function fetchStub(answer) {
   const calls = []
   const fetch = async (url, options = {}) => {
     const method = options.method || 'GET'
     const body = options && options.body ? JSON.parse(options.body) : undefined
-    const record = { url: String(url), path: String(url).split('?')[0], method, body }
+    const headers = Object.assign({}, (options && options.headers) || {})
+    const record = { url: String(url), path: String(url).split('?')[0], method, body, headers }
     calls.push(record)
     const payload = answer ? answer(record) : {}
-    if (payload && payload.__status) return { ok: false, status: payload.__status, json: async () => ({ error: payload.error }) }
-    return { ok: true, status: 200, json: async () => (payload === undefined ? {} : payload) }
+    const responseHeaders = headerStub(payload && payload.__headers)
+    if (payload && payload.__status) {
+      return {
+        ok: false,
+        status: payload.__status,
+        headers: responseHeaders,
+        // A 304 carries no body at all; other failures answer with { error }.
+        json: async () => { if (payload.error === undefined) throw new SyntaxError('Unexpected end of JSON input'); return { error: payload.error } },
+      }
+    }
+    const json = {}
+    if (payload) for (const key of Object.keys(payload)) if (key.indexOf('__') !== 0) json[key] = payload[key]
+    return { ok: true, status: 200, headers: responseHeaders, json: async () => json }
   }
   return { fetch, calls, posts: (path) => calls.filter((entry) => entry.method === 'POST' && entry.path === path) }
 }
@@ -423,7 +506,7 @@ async function openControl(options = {}) {
   const dirs = directoriesStub({ 'session-1': dir })
   const net = fetchStub((record) => {
     if (record.path === '/model-router/catalog') return { groups: [] }
-    if (record.path === '/model-router/state') return options.state || {}
+    if (record.path === '/model-router/state') return options.stateAnswer ? options.stateAnswer(record) : (options.state || {})
     return { ok: true }
   })
   const rt = createRuntime()
@@ -1077,7 +1160,7 @@ test('the readout polls while visible and refreshes at once when the window retu
   })
   await app.rt.flush()
   assert.ok(armed, 'the readout keeps a poll armed while a conversation is open')
-  assert.ok(armed.ms <= 1000, 'the poll is short enough to read as live: ' + armed.ms)
+  assert.equal(armed.ms, 1200, 'the conditional poll cadence is 1200 ms')
   const fetches = () => app.net.calls.filter((entry) => entry.path === '/model-router/state').length
   const before = fetches()
 
@@ -1096,4 +1179,123 @@ test('the readout polls while visible and refreshes at once when the window retu
   armed.fn()
   await app.rt.flush()
   assert.equal(fetches(), before + 2)
+})
+
+// --- 0.15.0: conditional /state polling (ETag / 304) -------------------------------
+
+const stateCalls = (app) => app.net.calls.filter((entry) => entry.path === '/model-router/state')
+const lastStateCall = (app) => stateCalls(app)[stateCalls(app).length - 1]
+
+/**
+ * Mount the control with a visible document and a captured poll timer, so the
+ * conditional read can be ticked by hand. stateAnswer answers each /state request;
+ * every request is recorded on net.calls together with its request headers.
+ */
+async function openPollingControl(options = {}) {
+  const listeners = {}
+  const documentStub = {
+    hidden: false,
+    body: { appendChild: () => {}, removeChild: () => {} },
+    createElement: () => ({ style: {} }),
+    addEventListener: (type, fn) => { listeners[type] = fn },
+    removeEventListener: (type) => { delete listeners[type] },
+  }
+  let armed = null
+  const app = await openControl(Object.assign({}, options, {
+    globals: Object.assign({
+      document: documentStub,
+      setInterval: (fn, ms) => { armed = { fn: fn, ms: ms }; return 7 },
+      clearInterval: () => { armed = null },
+    }, options.globals || {}),
+  }))
+  return Object.assign(app, { poll: () => armed, documentStub: documentStub, listeners: listeners })
+}
+
+test('the readout polls /state every 1200 ms and an old host is read unconditionally', async () => {
+  const app = await openPollingControl()
+  await app.rt.flush()
+  assert.ok(app.poll(), 'the readout keeps a poll armed while a conversation is open')
+  assert.equal(app.poll().ms, 1200)
+
+  // The response carries no ETag (an old host): the tick still answers 200 and its
+  // request has no validator, exactly the plain polling 0.14 did.
+  app.poll().fn()
+  await app.rt.flush()
+  const calls = stateCalls(app)
+  assert.equal(calls.length, 2)
+  assert.equal(calls[1].headers['if-none-match'], undefined, 'a host without ETag is polled unconditionally')
+})
+
+test('the second poll sends if-none-match with the ETag of the first response', async () => {
+  const app = await openPollingControl({
+    stateAnswer: () => ({ __headers: { ETag: '"state-7"' }, stateVersion: 7, engaged: true }),
+  })
+  await app.rt.flush()
+  const first = stateCalls(app)[0]
+  assert.equal(first.headers['if-none-match'], undefined, 'the first read is unconditional')
+  app.poll().fn()
+  await app.rt.flush()
+  const second = stateCalls(app)[1]
+  assert.equal(second.headers['if-none-match'], '"state-7"', 'the next read revalidates with the stored ETag')
+})
+
+test('a 304 response leaves the rendered state untouched', async () => {
+  let reads = 0
+  const app = await openPollingControl({
+    stateAnswer: () => {
+      reads += 1
+      if (reads > 1) return { __status: 304, __headers: { etag: '"state-1"' } }
+      return {
+        __headers: { etag: '"state-1"' }, stateVersion: 1, engaged: true, effectiveControl: 'full',
+        current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+        pool: [], presets: {}, settings: {}, decisions: [],
+      }
+    },
+  })
+  await app.rt.flush()
+  const renders = app.holder.renders
+  const tree = app.holder.tree
+  app.poll().fn()
+  await app.rt.flush()
+  assert.equal(stateCalls(app).length, 2, 'the tick did reach the host')
+  assert.equal(app.holder.renders, renders, 'a 304 does not re-render the panel')
+  assert.equal(app.holder.tree, tree, 'and the rendered view stays exactly as it was')
+})
+
+test('a 200 with a new ETag is stored and revalidated with the new value next time', async () => {
+  let reads = 0
+  const app = await openPollingControl({
+    stateAnswer: () => {
+      reads += 1
+      return { __headers: { etag: '"state-' + reads + '"' }, stateVersion: reads, engaged: true }
+    },
+  })
+  await app.rt.flush()
+  assert.equal(stateCalls(app)[0].headers['if-none-match'], undefined)
+  app.poll().fn()
+  await app.rt.flush()
+  assert.equal(stateCalls(app)[1].headers['if-none-match'], '"state-1"')
+  app.poll().fn()
+  await app.rt.flush()
+  assert.equal(stateCalls(app)[2].headers['if-none-match'], '"state-2"', 'the newest validator replaces the old one')
+})
+
+test('a session change clears the stored ETag so the new conversation reads unconditionally', async () => {
+  let reads = 0
+  const app = await openPollingControl({
+    stateAnswer: () => {
+      reads += 1
+      return { __headers: { etag: '"state-' + reads + '"' }, stateVersion: reads, engaged: true }
+    },
+  })
+  await app.rt.flush()
+  app.poll().fn()
+  await app.rt.flush()
+  assert.equal(lastStateCall(app).headers['if-none-match'], '"state-1"', 'the same conversation revalidates')
+
+  // The host re-injects the seat when the conversation changes.
+  await app.holder.update(Object.assign({}, app.props, { sessionId: 'session-2' }))
+  const switched = lastStateCall(app)
+  assert.equal(switched.url, '/model-router/state?sessionId=session-2')
+  assert.equal(switched.headers['if-none-match'], undefined, 'the new conversation reads unconditionally')
 })
