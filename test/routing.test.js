@@ -127,6 +127,36 @@ test('image steps are restricted to vision entries, and maxPerTask ceilings excl
   assert.equal(second.entry.model, 'deepseek-flash')
 })
 
+test('config-level maxPerTask caps strong entries that omit their own limit', () => {
+  const c = cfg({
+    maxPerTask: { strong: 2 },
+    pool: [
+      { id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 8 },
+      { id: 'deepseek-official/deepseek-flash', cost: 1 },
+    ],
+  })
+  const pool = normalizePool(c)
+  assert.equal(pool[0].maxPerTask, 2)
+  // Cheap entries keep no ceiling: the cap is about spending strong models.
+  assert.equal(pool[1].maxPerTask, undefined)
+  const hard = { stepClass: 'hard', hasImage: false, escalations: 0 }
+  assert.equal(chooseEntry(pool, c, hard, {}).entry.model, 'deepseek-v4-pro')
+  assert.equal(chooseEntry(pool, c, hard, { 'deepseek-official/deepseek-v4-pro': 2 }).entry.model, 'deepseek-flash')
+})
+
+test('entry-level maxPerTask overrides config-level', () => {
+  const c = cfg({
+    maxPerTask: { strong: 2 },
+    pool: [
+      { id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 8, maxPerTask: 0 },
+      { id: 'deepseek-official/deepseek-flash', cost: 1 },
+    ],
+  })
+  const pool = normalizePool(c)
+  assert.equal(pool[0].maxPerTask, 0, 'an explicit 0 still means "disabled for this task"')
+  assert.equal(chooseEntry(pool, c, { stepClass: 'hard' }, {}).entry.model, 'deepseek-flash')
+})
+
 test('an empty pool selects nothing', () => {
   assert.equal(chooseEntry(normalizePool({ provider: 'x', model: '' }), cfg({ pool: [] }), { stepClass: 'standard' }, {}), null)
 })

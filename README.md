@@ -54,8 +54,10 @@ pool:
 ```
 
 `tier: strong` is what hard steps and evidence escalation prefer; `cost` feeds
-`scoring.costPenalty`; `maxPerTask` caps how many steps of one task may spend that entry; a
-`vision` tag is required for image steps once any pooled model carries one.
+`scoring.costPenalty`; `maxPerTask` caps how many steps of one task may spend that entry
+(per entry, or as a config-level `maxPerTask.strong` default for every strong entry that omits
+its own; with neither, the default is unlimited); a `vision` tag is required for image steps
+once any pooled model carries one.
 
 **Task presets.** A user-defined task type with rules and per-model weights:
 
@@ -335,6 +337,7 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `manualOverride.yieldOnManual` | `true` | a manual pick in the scope that owns it makes the router stand down |
 | `manualOverride.resumeOnNextCommand` | `true` | the next command re-engages it |
 | `pool` | `[]` | `provider/model` whitelist with `cost`/`tier`/`tags`/`weights`/`maxPerTask` |
+| `maxPerTask.strong` | unlimited | Per-task step ceiling for strong entries; an entry's own `maxPerTask` wins |
 | `presets` | `{}` | task types with `match` rules and per-model `weights` |
 | `scoring.costPenalty` | `0.4` | relative-cost weight in the pool score |
 | `scoring.toolCallClass` | `standard` | class a tool loop earns on its own: `standard` (0.9.0) or `engineering` (pre-0.9.0 rule); any other value falls back to `standard` |

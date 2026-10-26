@@ -50,8 +50,9 @@ pool:
 ```
 
 `tier: strong` 是困难步骤与证据升级时优先的档位；`cost` 参与 `scoring.costPenalty` 扣分；
-`maxPerTask` 限制单个任务能用这个模型几步；一旦池中有模型带 `vision` 标签，带图步骤只在它们
-之间选。
+`maxPerTask` 限制单个任务能用这个模型几步（可写在条目上，也可在配置层写
+`maxPerTask.strong` 作为所有强档条目的默认上限；两者都不写就是**不限**）。一旦池中有模型带
+`vision` 标签，带图步骤只在它们之间选。
 
 **任务预设**：自定义任务类型 + 规则 + 每模型权重。
 
@@ -289,6 +290,7 @@ engineering 的任务再靠证据升级也没有任何变化。
 | `manualOverride.yieldOnManual` | `true` | 拥有它的那种手调是否让位（见上面的授权模式） |
 | `manualOverride.resumeOnNextCommand` | `true` | 下一条命令是否自动恢复 |
 | `pool` | `[]` | `provider/model` 白名单，支持 `cost`/`tier`/`tags`/`weights`/`maxPerTask` |
+| `maxPerTask.strong` | 不限 | 每个强档条目在单个任务内的步数上限；条目自带 `maxPerTask` 时以条目为准 |
 | `presets` | `{}` | 任务类型：`match` 规则 + 每模型 `weights` |
 | `scoring.costPenalty` | `0.4` | 成本扣分权重 |
 | `scoring.toolCallClass` | `standard` | 工具循环本身能换来的类别：`standard`（0.9.0）或 `engineering`（旧规则）；其它取值一律回落到 `standard` |
