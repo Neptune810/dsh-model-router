@@ -351,7 +351,6 @@ The plugin reads its config from its row in the profile's `cordis.patch.yml`:
 | `signals.sessionTokens` | `0` | token total above which the cheap tier is preferred |
 | `subagent.preferCheap` | `true` | delegated work prefers the cheap tier |
 | `leaveImageSteps` | `true` | steps carrying images keep the caller's model |
-| `imagePolicy` | `keep` | set to `flash` to route image steps too (the flash model has native vision) |
 | `escalateOnErrors` | `2` | failure-evidence threshold |
 | `escalateOnRepeats` | `3` | repeated-call threshold |
 | `maxEscalations` | `2` | most classes a single task may climb |

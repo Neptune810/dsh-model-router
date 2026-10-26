@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { normalizeRuntimeConfig, withSettings } from '../lib/config.js'
 import {
   AUTO_CEILING,
   DEFAULT_ROUTES,
@@ -304,10 +305,28 @@ test('decideRoute passes through requests it must not own', () => {
   assert.equal(decideRoute(cfg, { provider: 'deepseek-official' }, sig({ text: 'refactor' })), null)
 })
 
-test('imagePolicy flash lets image steps be routed', () => {
-  const c = normalizeConfig({ imagePolicy: 'flash' })
-  const d = decideRoute(c, resolved, sig({ text: 'read this screenshot', hasImage: true }))
+test('imagePolicy only accepts keep or vision', () => {
+  assert.equal(normalizeRuntimeConfig({}).imagePolicy, 'keep')
+  assert.equal(normalizeRuntimeConfig({ imagePolicy: 'keep' }).imagePolicy, 'keep')
+  assert.equal(normalizeRuntimeConfig({ imagePolicy: 'vision' }).imagePolicy, 'vision')
+  assert.equal(normalizeRuntimeConfig({ imagePolicy: 'nonsense' }).imagePolicy, 'keep')
+  // "flash" was retired in 0.14.3; a legacy config migrates to what it always meant.
+  assert.equal(normalizeRuntimeConfig({ imagePolicy: 'flash' }).imagePolicy, 'vision')
+})
+
+test('legacy decideRoute leaves image steps alone unless imagePolicy is vision', () => {
+  const keep = normalizeConfig({})
+  assert.equal(decideRoute(keep, resolved, sig({ text: 'read this screenshot', hasImage: true })), null)
+  const vision = normalizeConfig({ imagePolicy: 'vision' })
+  const d = decideRoute(vision, resolved, sig({ text: 'read this screenshot', hasImage: true }))
   assert.equal(d.model, 'deepseek-flash')
+})
+
+test('stored imagePolicy flash migrates to vision', () => {
+  const c = withSettings(normalizeRuntimeConfig({}), { imagePolicy: 'flash' })
+  assert.equal(c.imagePolicy, 'vision')
+  // A fresh settings save then persists the migrated value.
+  assert.equal(withSettings(normalizeRuntimeConfig({ imagePolicy: 'vision' }), {}).imagePolicy, 'vision')
 })
 
 test('tool evidence: isError and exit-code text are both failures', () => {

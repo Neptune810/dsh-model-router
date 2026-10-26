@@ -304,7 +304,6 @@ engineering 的任务再靠证据升级也没有任何变化。
 | `signals.sessionTokens` | `0` | 超过该 token 总量偏向廉价档 |
 | `subagent.preferCheap` | `true` | 子 agent 是否优先廉价档 |
 | `leaveImageSteps` | `true` | 带图步骤保持调用方模型 |
-| `imagePolicy` | `keep` | 改成 `flash` 则带图步骤也路由（flash 有原生视觉） |
 | `escalateOnErrors` | `2` | 失败证据阈值 |
 | `escalateOnRepeats` | `3` | 重复调用阈值 |
 | `maxEscalations` | `2` | 单任务最多升几档 |
