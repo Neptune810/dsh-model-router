@@ -477,3 +477,59 @@ Routing behaviour is untouched: `costAware` stays `false` and `peakPolicy` stays
 
 Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.16.1 latest` and `pnpm add` 0.16.1 in
 the profile; 0.17.0 adds fields rather than changing state, so 0.16.1 reads the same store without migration.
+
+## 0.17.1 — feedback, classifier v2, exploration (2026-10-26)
+
+**Goal.** Take the deferred half of the effort-economics scope and ship it as signals, not as a default flip:
+the user can tell the router whether a step was worth it, the classifier can admit doubt instead of guessing,
+and exploration exists but only as a shadow. `costAware` stays `false`.
+
+**What landed.**
+1. `lib/feedback.js` + `lib/feedback-store.js` — three labels (`too-expensive`, `too-weak`, `just-right`) posted
+   from the panel to `POST /model-router/feedback`, appended to
+   `<storages>/model-router/telemetry/feedback.v1.jsonl` (local only, never uploaded). The next routed step
+   answers the verdict: the same route records `stayed`, a different one records `moved`.
+2. `/state.feedback` publishes the labels, the last verdict (with its outcome) and whether one is pending;
+   `/stats.feedback` aggregates the file by label, by class and by outcome (`changedShare`).
+3. `lib/classifier2.js` — `parseVerdict` pulls `{class, confidence, family, evidence, signals}` out of prose,
+   `decideVerdict` keeps the source, and a confidence below `classifierMinConfidence` (0.6) **raises a tier
+   instead of guessing**. Calls are bounded (2 attempts, 2 s) and `CircuitBreaker` opens for ten minutes after
+   three consecutive failures, during which routing is rules-only.
+4. `lib/experiments.js` — ε-greedy over the allowed pool, off by default, never drawn on `hard` or `engineering`
+   steps. `apply: false` (the default) records the draw without changing the route; `seed` makes a draw
+   reproducible. An applied draw resets the hysteresis streak.
+5. Decision events carry `experiment`; `/state.experiments` and `/stats.totals.experiments` report steps,
+   explored share, applied count and per-arm counts.
+6. The client adds three lines: the feedback row (three buttons, the recorded one highlighted, and the outcome
+   the next step produced), the exploration line (shadow vs applied wording) and the classifier line (low
+   confidence escalation or open breaker). Both languages; silent on hosts without the blocks.
+
+**Freeze evidence.** `node --test` 413/413 pass (382 in 0.17.0: +8 feedback, +7 experiments, +6 classifier2,
++5 client, +5 observation), `node --check` clean on every touched file, `scripts/check-release.mjs --pack` green
+(33 packed files, up from 29). Golden snapshots untouched: every new behaviour sits behind a switch that
+defaults to off.
+
+**Deferred on purpose.** The 24-task L2 economics run and the `costAware` flip. The flip gate (G3/G4: at least
+7 days and 300 priced shadow steps) cannot be met by a release published the same day the shadow landed; the
+repo records the unmet threshold rather than fabricating a pass. Catalog refresh and the telemetry-size audit
+also stay in 1.0.0 scope.
+
+**Commits.** `d5fe62b` the feedback loop, classifier v2, experiments, telemetry, client and tests;
+`5a3ea74` `chore(release): 0.17.1`.
+
+### Publish evidence (2026-10-26)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/0.17.1` from `44b2547` (the 0.17.0 evidence commit), two commits |
+| push to main | `git push origin release/0.17.1:main` -> `44b2547..5a3ea74` (fast-forward) |
+| tag | annotated `v0.17.1` -> commit `5a3ea74` |
+| CI (tag) | Actions publish run [40295285548](https://github.com/Neptune810/dsh-model-router/actions/runs/40295285548) success: test node 20/22/24, release gate `--pack`, catalog regeneration, catalog validator, then the OIDC publish job (`Publish` step success) |
+| CI (main) | Actions publish run 40295281320 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 40295285633 success, report uploaded as an artifact |
+| npm | `dist-tags.latest = 0.17.1`, tarball shasum `908e9747b67bce4f8f7239fd9727b3182b34353b`, integrity `sha512-4KNIKIRjfoeul/8SeK023PzvwriXbKK3NwEC8omu7B9c7ZMwokroIC1Xdrzwu6xQqblnSPYZ6g/j7N0qWW/ztw==`, 33 files, published with provenance from the tag run |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.17.1 --save-exact`, dependency pinned to `0.17.1` (the desktop app must be restarted to load it) |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.17.0 latest` and `pnpm add` 0.17.0 in
+the profile; 0.17.1 adds fields and a new log file rather than changing state, so 0.17.0 reads the same store
+without migration (the feedback log is simply absent until the first label).
