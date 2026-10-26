@@ -258,9 +258,9 @@ test('summarize returns the fixed shape with class/model/effort aggregates', asy
     { key: 'low', steps: 1, avgScore: 80, strongSteps: 0, costUnits: 0.02, tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costUsd: 0, pricedSteps: 0, unpricedSteps: 1 },
   ])
   assert.deepEqual(Object.keys(summary.totals).sort(), [
-    'cacheReadTokens', 'cacheWriteTokens', 'costUnits', 'costUsd', 'failedEscalations', 'failoverSteps', 'inputTokens',
-    'outputTokens', 'overrideRate', 'peakCostUsd', 'peakShare', 'peakSteps', 'pricedSteps', 'reasoningTokens',
-    'strongSteps', 'tokens', 'unpricedSteps',
+    'cacheReadTokens', 'cacheWriteTokens', 'costUnits', 'costUsd', 'effort', 'failedEscalations', 'failoverSteps',
+    'inputTokens', 'mappedShare', 'mappedSteps', 'outputTokens', 'overrideRate', 'peakCostUsd', 'peakShare',
+    'peakSteps', 'pricedSteps', 'reasoningTokens', 'strongSteps', 'tokens', 'unpricedSteps',
   ])
   assert.equal(summary.totals.costUnits, 0.04)
   assert.equal(summary.totals.strongSteps, 1)
@@ -342,6 +342,19 @@ test('summarize sums the token split and USD cost, and counts unpriced steps', a
     peakCostUsd: 0,
     peakShare: 0,
     failoverSteps: 0,
+    // v0.17.0: none of these events carries an effort mapping either.
+    mappedSteps: 0,
+    mappedShare: 0,
+    effort: {
+      steps: 4,
+      mappedSteps: 0,
+      mappedShare: 0,
+      byClass: [
+        { stepClass: 'engineering', steps: 2, mapped: 0, mappedShare: 0 },
+        { stepClass: 'standard', steps: 2, mapped: 0, mappedShare: 0 },
+      ],
+      top: [],
+    },
   })
 
   const byEffort = summary.byEffort.find((row) => row.key === 'high')
@@ -444,6 +457,9 @@ test('summarize keeps the fixed shape with zero events and accepts no/empty/expl
       peakCostUsd: 0,
       peakShare: 0,
       failoverSteps: 0,
+      mappedSteps: 0,
+      mappedShare: 0,
+      effort: { steps: 0, mappedSteps: 0, mappedShare: 0, byClass: [], top: [] },
     },
     shadow: {
       steps: 0,

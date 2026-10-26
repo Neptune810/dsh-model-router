@@ -1603,3 +1603,53 @@ test('a benched channel is named on the panel in the chat language', async () =>
   await quiet.rt.flush()
   assert.equal(byProp(quiet.holder.tree, 'data-mr-channels', 'true').length, 0)
 })
+
+/** A state carrying the v0.17.0 effort-mapping report the router now serves. */
+function effortState(last) {
+  return Object.assign(catalogState([]), {
+    effort: { ladder: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'], points: { high: 75 }, last: last || null },
+  })
+}
+
+test('a tier the model cannot take verbatim is explained on the panel', async () => {
+  const alias = await openControl({ state: effortState({ from: 'medium', to: 'high', why: 'alias' }) })
+  openPanel(alias.holder)
+  await alias.rt.flush()
+  const note = byProp(alias.holder.tree, 'data-mr-effort', 'true')[0]
+  assert.ok(note, 'the panel explains the collapse')
+  assert.equal(textOf(note), '思考等级 medium \u2192 high（别名）')
+  assert.match(note.props.title, /再按目标模型的真实词表映射/)
+  assert.equal(byProp(alias.holder.tree, 'data-mr-effort', 'true').length, 1)
+
+  const nearest = await openControl({ state: effortState({ from: 'high', to: 'max', why: 'nearest' }) })
+  openPanel(nearest.holder)
+  await nearest.rt.flush()
+  assert.equal(textOf(byProp(nearest.holder.tree, 'data-mr-effort', 'true')[0]), '思考等级 high \u2192 max（就近取档）')
+
+  const none = await openControl({ state: effortState({ from: 'high', to: null, why: 'none' }) })
+  openPanel(none.holder)
+  await none.rt.flush()
+  assert.equal(textOf(byProp(none.holder.tree, 'data-mr-effort', 'true')[0]), '思考等级 high \u2192 -（该模型不接思考等级）')
+})
+
+test('an exact mapping, a missing report and the chat language', async () => {
+  const exact = await openControl({ state: effortState({ from: 'low', to: 'low', why: 'exact' }) })
+  openPanel(exact.holder)
+  await exact.rt.flush()
+  assert.equal(byProp(exact.holder.tree, 'data-mr-effort', 'true').length, 0, 'a verbatim tier needs no note')
+
+  const legacy = await openControl({ state: catalogState([]) })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-effort', 'true').length, 0, 'an older host renders nothing')
+
+  const broken = await openControl({ state: Object.assign(catalogState([]), { effort: { last: 'nope' } }) })
+  openPanel(broken.holder)
+  await broken.rt.flush()
+  assert.equal(byProp(broken.holder.tree, 'data-mr-effort', 'true').length, 0, 'a malformed report is ignored')
+
+  const en = await openControl({ state: effortState({ from: 'medium', to: 'high', why: 'alias' }), globals: { navigator: { language: 'en-US' } } })
+  openPanel(en.holder)
+  await en.rt.flush()
+  assert.equal(textOf(byProp(en.holder.tree, 'data-mr-effort', 'true')[0]), 'effort medium \u2192 high (alias)')
+})

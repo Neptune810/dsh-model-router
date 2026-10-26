@@ -103,7 +103,9 @@ window.__ModuleLoader__.load({
 				peakInform: "当前高峰时段，单价更高", peakShift: "高峰时段：可延后的后台步骤已排到空闲时段",
 				peakHint: "DeepSeek 工作日 9-12 点、14-18 点为高峰价，空闲时段单价约为高峰的一半",
 				channelCooling: "渠道冷却中：{c}", channelQuarantined: "渠道已隔离：{c}",
-				channelHint: "失败的渠道会短暂停用；重试会换到健康渠道，价格未知的中转绝不自动进入"
+				channelHint: "失败的渠道会短暂停用；重试会换到健康渠道，价格未知的中转绝不自动进入",
+				effortNote: "思考等级 {from} \u2192 {to}（{why}）", effortWhyAlias: "别名", effortWhyNearest: "就近取档", effortWhyNone: "该模型不接思考等级",
+				effortHint: "每一步的档位先按任务类型决定，再按目标模型的真实词表映射；别名与就近取档都会显式说明"
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -179,7 +181,9 @@ window.__ModuleLoader__.load({
 				peakInform: "peak hours: this provider is charging double", peakShift: "peak hours: deferred background steps were moved to the off-peak window",
 				peakHint: "DeepSeek charges peak rates on weekdays 09:00-12:00 and 14:00-18:00; off-peak is about half price",
 				channelCooling: "channel benched: {c}", channelQuarantined: "channel quarantined: {c}",
-				channelHint: "a failing channel is benched for a while; the retry moves to a healthy one, and a relay of unknown price is never entered automatically"
+				channelHint: "a failing channel is benched for a while; the retry moves to a healthy one, and a relay of unknown price is never entered automatically",
+				effortNote: "effort {from} \u2192 {to} ({why})", effortWhyAlias: "alias", effortWhyNearest: "nearest tier", effortWhyNone: "model takes no effort",
+				effortHint: "each step picks a tier from the task type, then maps it onto what the model really accepts; aliases and nearest tiers are spelled out"
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -651,6 +655,14 @@ window.__ModuleLoader__.load({
 			const shadowNote = costInfo && (shadowLine || costInfo.enabled)
 				? t.shadowLabel + (costInfo.enabled ? " (on)" : " (off)") + (shadowLine ? " \u00b7 " + shadowLine : "")
 				: ""
+			// Effort mapping (v0.17.0): a tier the model cannot take verbatim is the
+			// difference between "asked for high" and "ran at high", so it is said out loud.
+			const effortInfo = state && state.effort && typeof state.effort === "object" ? state.effort : null
+			const effortLast = effortInfo && effortInfo.last && typeof effortInfo.last === "object" ? effortInfo.last : null
+			const effortWhy = !effortLast ? "" : effortLast.why === "alias" ? t.effortWhyAlias : effortLast.why === "nearest" ? t.effortWhyNearest : effortLast.why === "none" ? t.effortWhyNone : String(effortLast.why || "")
+			const effortNote = effortLast && effortLast.why && effortLast.why !== "exact" && effortWhy
+				? t.effortNote.replace("{from}", String(effortLast.from || "")).replace("{to}", String(effortLast.to === null || effortLast.to === undefined ? "-" : effortLast.to)).replace("{why}", effortWhy)
+				: ""
 			/**
 			 * The pool list is collapsed by default: the router row carries a pool control, so the
 			 * menu body does not have to hold every model all the time. Effort scope forces it open
@@ -1105,6 +1117,10 @@ window.__ModuleLoader__.load({
 					if (channelNote || verifyNote) {
 						body.push(h("div", { key: "channels", className: "mr-note", "data-mr-channels": "true", title: t.channelHint },
 							channelNote || verifyNote))
+					}
+					// Effort mapping (v0.17.0): only shown when the tier was not taken verbatim.
+					if (effortNote) {
+						body.push(h("div", { key: "effort", className: "mr-note", "data-mr-effort": "true", title: t.effortHint }, effortNote))
 					}
 					// --- Per-conversation confirmation, before anything else can be touched ---
 					if (needsConfirm) {

@@ -14,7 +14,14 @@
     "./config": "./lib/config.js",
     "./client": "./client/client.js",
     "./catalog-pricing": "./lib/catalog-pricing.js",
+    "./effort": "./lib/effort.js",
+    "./channels": "./lib/channels.js",
+    "./budget": "./lib/budget.js",
+    "./replay": "./lib/replay.js",
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-model-router-replay": "./lib/replay.js"
   },
   "files": [
     "lib/",
@@ -35,7 +42,8 @@
     "test": "node --test",
     "test:gate": "node scripts/gate.mjs",
     "release:check": "node scripts/check-release.mjs",
-    "release:gate": "node scripts/check-release.mjs --pack"
+    "release:gate": "node scripts/check-release.mjs --pack",
+    "replay": "node lib/replay.js"
   },
   "dsh": {
     "compat": {

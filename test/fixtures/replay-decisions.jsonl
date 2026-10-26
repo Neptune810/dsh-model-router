@@ -1,0 +1,6 @@
+{"ts":1792890000000,"stepClass":"standard","chosen":{"provider":"deepseek-official","model":"deepseek-flash","effort":"low","tier":"cheap","cost":1},"policy":"0.17.0","applied":true}
+{"ts":1792893600000,"stepClass":"standard","chosen":{"provider":"deepseek-official","model":"deepseek-flash","effort":"low","tier":"cheap","cost":1},"policy":"0.17.0","applied":true}
+{"ts":1792897200000,"stepClass":"standard","chosen":{"provider":"deepseek-official","model":"deepseek-v4-pro","effort":"high","tier":"strong","cost":3},"policy":"0.17.0","applied":true}
+{"ts":1792900800000,"stepClass":"engineering","chosen":{"provider":"deepseek-official","model":"deepseek-v4-pro","effort":"high","tier":"strong","cost":3},"policy":"0.17.0","applied":true}
+{"ts":1792904400000,"stepClass":"hard","chosen":{"provider":"deepseek-official","model":"deepseek-v4-pro","effort":"max","tier":"strong","cost":3},"policy":"0.17.0","applied":true}
+{"ts":1792908000000,"stepClass":"standard","chosen":{"provider":"deepseek-official","model":"deepseek-flash","effort":"low","tier":"cheap","cost":1},"policy":"0.17.0","applied":true}
