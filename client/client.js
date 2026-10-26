@@ -95,6 +95,8 @@ window.__ModuleLoader__.load({
 				groupAddHint: "把该品牌的全部模型加入池", groupRemoveHint: "把该品牌的模型全部移出池",
 				catalogHint: "模型目录里有几个硬日期快到：开始计费、涨价、下线",
 				catalogDays: "{n} 天后", catalogToday: "今天", catalogEvidence: "目录核对日期 {d}",
+				shadowLabel: "成本影子", shadowHint: "若打开成本感知路由，本步会选哪个模型（仅记录，不影响当前路由）",
+				shadowAgree: "成本路由也选 {m}", shadowDiverge: "成本路由会选 {m} 而不是 {c}", shadowSaved: "便宜约 {n}%",
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -162,6 +164,8 @@ window.__ModuleLoader__.load({
 				groupAddHint: "add every model of this provider to the pool", groupRemoveHint: "remove this provider's models from the pool",
 				catalogHint: "the model catalog has hard dates coming up: billing starts, price rises, retirements",
 				catalogDays: "in {n}d", catalogToday: "today", catalogEvidence: "catalog evidence {d}",
+				shadowLabel: "cost shadow", shadowHint: "which model a cost-aware router would pick for this step (recorded only; the live route is unchanged)",
+				shadowAgree: "cost routing agrees on {m}", shadowDiverge: "cost routing would pick {m} over {c}", shadowSaved: "~{n}% cheaper",
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -183,7 +187,7 @@ window.__ModuleLoader__.load({
 			".mr-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-success-primary,#3fb950)}",
 			".mr-dot[data-yielded=true]{background:var(--dsw-alias-state-warn-label,#d29922)}",
 			".mr-dot[data-catalog=true]{background:var(--dsw-alias-state-warn-label,#d29922)}",
-			".mr-catalog{display:flex;flex-direction:column;gap:2px;padding:4px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:1.35}",
+			".mr-catalog,.mr-shadow{display:flex;flex-direction:column;gap:2px;padding:4px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:1.35}",
 			".mr-panel{position:fixed;z-index:2147483000;width:372px;max-height:min(72vh,540px);overflow:auto;padding:6px;border-radius:var(--dsw-radius-lg,12px);background:var(--dsw-specific-menu,#232326);color:var(--dsw-alias-label-primary,#e8e8ea);box-shadow:var(--dsw-elevation-prominent,0 16px 48px rgba(0,0,0,.45));border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));font-size:13px;line-height:20px;scrollbar-width:thin}",
 			".mr-panel::-webkit-scrollbar{width:8px}",
 			".mr-panel::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.3));border-radius:4px}",
@@ -591,6 +595,20 @@ window.__ModuleLoader__.load({
 			const catalogTitle = catalogAlerts.length > 0
 				? [t.catalogHint].concat(catalogAlerts.map(catalogLine)).join("\n")
 				: undefined
+			// v0.16.0 cost shadow: the model a cost-aware router would have used for
+			// the last step. A host that predates the field simply sends no
+			// state.costAware and the panel stays silent, like the catalog block.
+			const costInfo = state && state.costAware && typeof state.costAware === "object" ? state.costAware : null
+			const shadow = costInfo && costInfo.shadow && typeof costInfo.shadow === "object" ? costInfo.shadow : null
+			const shadowLine = shadow
+				? (shadow.agree
+					? t.shadowAgree.replace("{m}", String(shadow.current || "?"))
+					: t.shadowDiverge.replace("{m}", String(shadow.candidate || "?")).replace("{c}", String(shadow.current || "?"))
+						+ (Number(shadow.savedRatio) > 0 ? " \u00b7 " + t.shadowSaved.replace("{n}", String(Math.round(Number(shadow.savedRatio) * 100))) : ""))
+				: ""
+			const shadowNote = costInfo && (shadowLine || costInfo.enabled)
+				? t.shadowLabel + (costInfo.enabled ? " (on)" : " (off)") + (shadowLine ? " \u00b7 " + shadowLine : "")
+				: ""
 			/**
 			 * The pool list is collapsed by default: the router row carries a pool control, so the
 			 * menu body does not have to hold every model all the time. Effort scope forces it open
@@ -1006,6 +1024,10 @@ window.__ModuleLoader__.load({
 						h("button", { type: "button", className: "mr-btn", style: { marginLeft: "auto" }, onClick: () => setOpen(false) }, h(Icon, { name: "close", size: 12 }))
 					))
 					if (priceNote) body.push(h("div", { className: "mr-note", "data-mr-price-note": "true" }, priceNote))
+				// Cost shadow (v0.16.0): one line, recorded only.
+				if (shadowNote) {
+					body.push(h("div", { key: "shadow", className: "mr-shadow", "data-mr-shadow": "true", title: t.shadowHint }, shadowNote))
+				}
 					// Catalog hard dates (v0.15.1): the same alerts the dot advertises,
 					// spelled out, so the panel is readable without hovering.
 					if (catalogAlerts.length > 0) {

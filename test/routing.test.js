@@ -5,6 +5,7 @@ import {
   EFFORT_WORDS,
   ROUTING_DEFAULTS,
   chooseEntry,
+  costAllows,
   effortTierForClass,
   manualOverridePolicy,
   mapEffort,
@@ -244,4 +245,83 @@ test('mapEffort resolves the nearest rank, and ties go to the higher effort (qua
   // Exact matches and the empty vocabulary keep working unchanged.
   assert.equal(mapEffort('xhigh', ['off', 'low', 'xhigh']), 'xhigh')
   assert.equal(mapEffort('medium', []), undefined)
+})
+
+// ---- v0.16.0 cost-aware scoring -------------------------------------------
+// Weights are the pool's own 1-4 cost units by default; cost awareness adds a
+// MEASURED term on top (USD per million tokens from the catalog) so a model that
+// is twice the cheapest in real money loses points even when its unit cost is 1.
+
+/** Rates for a two-model pool: 0.5 USD/1M floor and a 4.0 (8x) neighbour. */
+const COST_SIGNALS = (over = {}) => ({
+  stepClass: 'standard',
+  reason: [],
+  costRates: { 'a/frugal': 0.5, 'a/pricy': 4 },
+  costFloor: 0.5,
+  ...over,
+})
+
+const COST_CFG = (over = {}) => cfg({ costAware: true, ...over })
+
+test('the cost term is zero unless cost awareness is on (v0.16.0 default)', () => {
+  const entry = { id: 'a/pricy', cost: 1, tier: 'cheap' }
+  const plain = scoreEntry(entry, null, cfg(), { stepClass: 'standard', reason: [] })
+  // The measured rates are ignored while costAware is off: 0.15.1 behavior.
+  assert.equal(scoreEntry(entry, null, cfg(), COST_SIGNALS()), plain)
+  assert.equal(plain, 64.6)
+})
+
+test('the cost term subtracts costWeight * 10 per doubling, capped at the guard', () => {
+  const entry = { id: 'a/pricy', cost: 1, tier: 'cheap' }
+  const base = 64.6
+  // 2x the floor loses 1.5 points; 8x (the guard ceiling) loses all 10.5.
+  assert.equal(scoreEntry(entry, null, COST_CFG(), COST_SIGNALS({ costRates: { 'a/pricy': 1 }, costFloor: 0.5 })), base - 1.5)
+  assert.equal(scoreEntry(entry, null, COST_CFG(), COST_SIGNALS()), base - 10.5)
+  // The floor itself loses nothing, and a rate below it is not a bonus.
+  assert.equal(scoreEntry(entry, null, COST_CFG(), COST_SIGNALS({ costRates: { 'a/pricy': 0.5 } })), 64.6)
+  assert.equal(scoreEntry(entry, null, COST_CFG(), COST_SIGNALS({ costRates: { 'a/pricy': 0.1 } })), 64.6)
+})
+
+test('costWeight 0 keeps cost awareness on for the guard but off for the score', () => {
+  const noWeight = COST_CFG({ scoring: { ...ROUTING_DEFAULTS.scoring, costWeight: 0 } })
+  assert.equal(scoreEntry({ id: 'a/pricy', cost: 1, tier: 'cheap' }, null, noWeight, COST_SIGNALS()), 64.6)
+})
+
+test('costAllows lets a hard step or an unpriceable pool through as documented', () => {
+  const entry = { id: 'a/pricy', cost: 1, tier: 'cheap' }
+  // Default: no cost awareness, nothing is refused.
+  assert.equal(costAllows(entry, cfg(), COST_SIGNALS()), true)
+  // A rate the catalog cannot produce is refused or allowed by the guard setting.
+  assert.equal(costAllows(entry, COST_CFG(), COST_SIGNALS({ costRates: { 'a/pricy': null } })), false)
+  assert.equal(costAllows(entry, COST_CFG({ costGuard: { maxMultiple: 8, unknownPricing: 'allow' } }), COST_SIGNALS({ costRates: { 'a/pricy': null } })), true)
+  // Exactly at the multiple is still selectable, one step past it is not.
+  assert.equal(costAllows(entry, COST_CFG(), COST_SIGNALS()), true)
+  assert.equal(costAllows(entry, COST_CFG(), COST_SIGNALS({ costRates: { 'a/pricy': 5 }, costFloor: 0.5 })), false)
+  // A hard step is exempt: the user asked for the strongest model.
+  assert.equal(costAllows(entry, COST_CFG(), COST_SIGNALS({ stepClass: 'hard', costRates: { 'a/pricy': 5 }, costFloor: 0.5 })), true)
+  // No usable floor means the comparison is meaningless, so nothing is refused.
+  assert.equal(costAllows(entry, COST_CFG(), COST_SIGNALS({ costFloor: null })), true)
+})
+
+test('cost awareness flips the winner when the cheaper unit cost is dearer in money', () => {
+  const pool = [
+    { id: 'a/frugal', cost: 3, tier: 'cheap' },
+    { id: 'a/pricy', cost: 1, tier: 'cheap' },
+  ]
+  // Without cost awareness the pool's own units decide: cost 1 beats cost 3.
+  assert.equal(chooseEntry(pool, cfg(), COST_SIGNALS()).entry.id, 'a/pricy')
+  // With it the real price decides: 8x the floor costs more than two units.
+  assert.equal(chooseEntry(pool, COST_CFG(), COST_SIGNALS()).entry.id, 'a/frugal')
+})
+
+test('a cost filter that empties the pool falls back to the old choice', () => {
+  const pool = [
+    { id: 'a/spent', cost: 1, tier: 'strong', maxPerTask: 1 },
+    { id: 'a/pricy', cost: 1, tier: 'strong' },
+  ]
+  // The cheap strong model has already used its per-task allowance, and the other
+  // is 10x the floor, so cost awareness alone would leave nothing to route to.
+  const choice = chooseEntry(pool, COST_CFG(), COST_SIGNALS({ costRates: { 'a/spent': 0.5, 'a/pricy': 5 } }), { 'a/spent': 1 })
+  assert.equal(choice.entry.id, 'a/pricy')
+  assert.equal(choice.costFallback, true)
 })

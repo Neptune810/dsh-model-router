@@ -256,3 +256,101 @@ test('scoreOf publishes a scoreParts breakdown that sums to the score', () => {
   assert.equal(result.scoreParts.base, 6)
   assert.ok(result.scoreParts.tool > 0)
 })
+
+// ---- v0.16.0 cost-aware shadow ---------------------------------------------
+// Two cheap entries, so the preset weight alone decides the live route. The
+// dearer model wins by two points, which the token cost term (~2.9 points at the
+// measured pro/flash ratio of 3.9x) then erases — a margin small enough to prove
+// the shadow is computed independently of the applied route, not echoed from it.
+const COST_POOL = [
+  { id: 'deepseek-official/deepseek-flash', cost: 1, tier: 'cheap' },
+  { id: 'deepseek-official/deepseek-v4-pro', cost: 1, tier: 'cheap' },
+]
+const COST_PRESETS = {
+  api: { match: ['接口'], weights: { 'deepseek-official/deepseek-flash': 90, 'deepseek-official/deepseek-v4-pro': 92 } },
+}
+const UNPRICED_POOL = [
+  { id: 'local/some-model', cost: 1, tier: 'cheap' },
+  { id: 'local/other-model', cost: 1, tier: 'cheap' },
+]
+
+test('the shadow records the model a cost-aware router would have picked', async () => {
+  const host = makeHost({ pool: COST_POOL, routes: ROUTES, presets: COST_PRESETS })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  assert.equal(out.model, 'deepseek-v4-pro', 'the live route still follows the preset weight')
+
+  const state = await stateOf(host)
+  assert.equal(state.costAware.enabled, false)
+  assert.equal(typeof state.costAware.costWeight, 'number')
+  assert.equal(state.costAware.guard.maxMultiple, 8)
+  assert.ok(Number.isFinite(state.costAware.floorUsdPerMTok))
+
+  const entries = new Map(state.costAware.entries.map((e) => [e.id, e]))
+  const flash = entries.get('deepseek-official/deepseek-flash')
+  const pro = entries.get('deepseek-official/deepseek-v4-pro')
+  assert.equal(flash.priced, true)
+  assert.equal(pro.priced, true)
+  assert.equal(flash.currency, 'CNY')
+  assert.ok(pro.usdPerMTok > flash.usdPerMTok, 'the pro model is the dearer one')
+  assert.equal(state.costAware.floorUsdPerMTok, flash.usdPerMTok)
+
+  const shadow = state.costAware.shadow
+  assert.equal(shadow.current, 'deepseek-official/deepseek-v4-pro')
+  assert.equal(shadow.candidate, 'deepseek-official/deepseek-flash')
+  assert.equal(shadow.agree, false)
+  assert.ok(shadow.savedRatio > 0 && shadow.savedRatio < 1)
+  assert.equal(shadow.costFallback, false)
+})
+
+test('the shadow agrees when the live route is already the cheap pick, and stats count it', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('refactor the parser') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.equal(out.model, 'deepseek-flash')
+  await tick()
+
+  const state = await stateOf(host)
+  const shadow = state.costAware.shadow
+  assert.equal(shadow.current, 'deepseek-official/deepseek-flash')
+  assert.equal(shadow.candidate, 'deepseek-official/deepseek-flash')
+  assert.equal(shadow.agree, true)
+  assert.equal(shadow.savedRatio, 0)
+
+  const stats = JSON.parse((await call(host.routes.get('/model-router/stats'), { url: '/model-router/stats' })).payload)
+  assert.ok(stats.shadow.steps >= 1)
+  assert.ok(stats.shadow.agreeSteps >= 1)
+  assert.equal(stats.shadow.divergedSteps, 0)
+  assert.equal(stats.shadow.agreementRate, 1)
+  assert.ok(stats.shadow.pricedSteps >= 1)
+})
+
+test('turning costAware on moves the route the shadow had been predicting', async () => {
+  const host = makeHost({ pool: COST_POOL, routes: ROUTES, presets: COST_PRESETS, costAware: true })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  // Same config, same step, one flag: the cost term breaks the preset tie.
+  assert.equal(out.model, 'deepseek-flash')
+
+  const state = await stateOf(host)
+  assert.equal(state.costAware.enabled, true)
+  assert.equal(state.costAware.shadow, null, 'a cost-aware router has nothing to shadow')
+})
+
+test('a pool the catalog cannot price records no shadow and no rate', async () => {
+  const host = makeHost({ pool: UNPRICED_POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('refactor the parser') })
+  const out = await request(host, { agent, turn: 1, step: 0 }, seed())
+  assert.ok(['some-model', 'other-model'].includes(out.model), 'the pool still routes without prices')
+
+  const state = await stateOf(host)
+  assert.equal(state.costAware.floorUsdPerMTok, null)
+  assert.equal(state.costAware.shadow, null)
+  assert.deepEqual(state.costAware.entries.map((e) => e.priced), [false, false])
+})

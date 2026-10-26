@@ -1373,3 +1373,80 @@ test('the catalog dot and note follow the chat language', async () => {
   assert.match(textOf(note), /in 3d/)
   assert.equal(note.props.title, 'catalog evidence 2026-10-26')
 })
+
+/** A state carrying the v0.16.0 cost-aware block the router serves. */
+function costState(costAware) {
+  return Object.assign(catalogState([]), { costAware })
+}
+
+test('the cost shadow names the model a cost-aware router would have used', async () => {
+  const app = await openControl({
+    state: costState({
+      enabled: false,
+      costWeight: 0.15,
+      guard: { maxMultiple: 8, unknownPricing: 'exclude' },
+      floorUsdPerMTok: 0.158143,
+      entries: [],
+      shadow: {
+        candidate: 'deepseek-official/deepseek-flash',
+        current: 'deepseek-official/deepseek-v4-pro',
+        agree: false,
+        savedRatio: 0.75,
+      },
+    }),
+  })
+  openPanel(app.holder)
+  await app.rt.flush()
+
+  const note = byProp(app.holder.tree, 'data-mr-shadow', 'true')[0]
+  assert.ok(note, 'the panel carries the shadow line')
+  const shown = textOf(note)
+  assert.match(shown, /成本影子 \(off\)/)
+  assert.match(shown, /成本路由会选 deepseek-official\/deepseek-flash 而不是 deepseek-official\/deepseek-v4-pro/)
+  assert.match(shown, /便宜约 75%/)
+  assert.equal(note.props.title, '若打开成本感知路由，本步会选哪个模型（仅记录，不影响当前路由）')
+})
+
+test('the shadow line follows agreement, the enabled flag and the chat language', async () => {
+  // A cost-aware router has nothing to shadow: it reports that it is on.
+  const on = await openControl({ state: costState({ enabled: true, entries: [], shadow: null }) })
+  openPanel(on.holder)
+  await on.rt.flush()
+  assert.equal(textOf(byProp(on.holder.tree, 'data-mr-shadow', 'true')[0]), '成本影子 (on)')
+
+  // Agreement names one model and claims no saving.
+  const agree = await openControl({
+    state: costState({
+      enabled: false,
+      entries: [],
+      shadow: { candidate: 'deepseek-official/deepseek-flash', current: 'deepseek-official/deepseek-flash', agree: true, savedRatio: 0 },
+    }),
+  })
+  openPanel(agree.holder)
+  await agree.rt.flush()
+  assert.equal(
+    textOf(byProp(agree.holder.tree, 'data-mr-shadow', 'true')[0]),
+    '成本影子 (off) · 成本路由也选 deepseek-official/deepseek-flash',
+  )
+
+  const en = await openControl({
+    state: costState({
+      enabled: false,
+      entries: [],
+      shadow: { candidate: 'b/flash', current: 'a/pro', agree: false, savedRatio: 0.5 },
+    }),
+    globals: { navigator: { language: 'en-US' } },
+  })
+  openPanel(en.holder)
+  await en.rt.flush()
+  assert.equal(
+    textOf(byProp(en.holder.tree, 'data-mr-shadow', 'true')[0]),
+    'cost shadow (off) · cost routing would pick b/flash over a/pro · ~50% cheaper',
+  )
+
+  // A host that predates cost awareness renders nothing at all.
+  const legacy = await openControl({ state: { effectiveControl: 'full', engaged: true, current: null, pool: [], decisions: [] } })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-shadow', 'true').length, 0)
+})

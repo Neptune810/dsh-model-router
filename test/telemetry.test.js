@@ -235,7 +235,12 @@ test('summarize returns the fixed shape with class/model/effort aggregates', asy
   await tel.flush()
 
   const summary = await tel.summarize()
-  assert.deepEqual(Object.keys(summary).sort(), ['byClass', 'byEffort', 'byModel', 'totals', 'window'])
+  assert.deepEqual(Object.keys(summary).sort(), ['byClass', 'byEffort', 'byModel', 'shadow', 'totals', 'window'])
+  // v0.16.0: no event carries a shadow here, so the block is present and zero.
+  assert.deepEqual(summary.shadow, {
+    steps: 0, agreeSteps: 0, divergedSteps: 0, agreementRate: 0, pricedSteps: 0,
+    currentUsd: 0, candidateUsd: 0, savedUsd: 0, savedRatio: 0,
+  })
   assert.deepEqual(Object.keys(summary.window).sort(), ['since', 'steps', 'until'])
   assert.deepEqual(summary.window, { since: nowMs - WEEK_MS, until: nowMs, steps: 3 })
   // Prompt-free events written before 0.15.1 carry no split and no USD cost:
@@ -378,6 +383,17 @@ test('summarize keeps the fixed shape with zero events and accepts no/empty/expl
       pricedSteps: 0,
       unpricedSteps: 0,
     },
+    shadow: {
+      steps: 0,
+      agreeSteps: 0,
+      divergedSteps: 0,
+      agreementRate: 0,
+      pricedSteps: 0,
+      currentUsd: 0,
+      candidateUsd: 0,
+      savedUsd: 0,
+      savedRatio: 0,
+    },
   }
   assert.deepEqual(await tel.summarize(), empty)
   assert.deepEqual(await tel.summarize({}), empty)
@@ -448,4 +464,41 @@ test('readRecentSync tails the active file synchronously for replay', async (t) 
   const blocked = join(tempDir(t), 'blocked')
   writeFileSync(blocked, 'not a directory')
   assert.deepEqual(createTelemetry({ dir: blocked }).readRecentSync(), [])
+})
+
+test('summarize aggregates the cost-aware shadow and skips malformed ones', async (t) => {
+  const dir = tempDir(t)
+  const nowMs = Date.UTC(2026, 10, 3, 9)
+  const tel = createTelemetry({ dir, now: () => nowMs })
+  const base = (over) => ({
+    ts: nowMs - 2000,
+    stepClass: 'standard',
+    score: 70,
+    chosen: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', tier: 'cheap' },
+    usage: { costUnits: 0.01 },
+    ...over,
+  })
+  const events = [
+    base({ shadow: { candidate: 'deepseek-official/deepseek-flash', current: 'deepseek-official/deepseek-v4-pro', agree: false, currentStepUsd: 0.004, candidateStepUsd: 0.001 } }),
+    base({ shadow: { candidate: 'deepseek-official/deepseek-flash', current: 'deepseek-official/deepseek-flash', agree: true, currentStepUsd: 0.001, candidateStepUsd: 0.001 } }),
+    // A shadow without a priced pair still counts as a step, but not as money.
+    base({ shadow: { agree: false, currentStepUsd: null, candidateStepUsd: 0.0005 } }),
+    base({ shadow: 'diverged' }),
+    base({}),
+  ]
+  for (const event of events) assert.equal(tel.writeDecision(event), true)
+  await tel.flush()
+
+  const summary = await tel.summarize()
+  assert.deepEqual(summary.shadow, {
+    steps: 3,
+    agreeSteps: 1,
+    divergedSteps: 2,
+    agreementRate: 0.3333,
+    pricedSteps: 2,
+    currentUsd: 0.005,
+    candidateUsd: 0.002,
+    savedUsd: 0.003,
+    savedRatio: 0.6,
+  })
 })
