@@ -1653,3 +1653,126 @@ test('an exact mapping, a missing report and the chat language', async () => {
   await en.rt.flush()
   assert.equal(textOf(byProp(en.holder.tree, 'data-mr-effort', 'true')[0]), 'effort medium \u2192 high (alias)')
 })
+
+// --- Route feedback, exploration and the classifier (v0.17.1) -----------------------
+
+/** A router state carrying the feedback report, on top of the catalog baseline. */
+function feedbackState(overrides = {}) {
+  return Object.assign(catalogState([]), {
+    feedback: Object.assign({
+      enabled: true,
+      labels: ['too-expensive', 'too-weak', 'just-right'],
+      written: 1,
+      lastError: null,
+      last: { at: 1, label: 'too-expensive', provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard', outcome: null },
+      pending: true,
+    }, overrides),
+  })
+}
+
+/** A router state carrying an exploration report. */
+function experimentState(last, config = {}) {
+  return Object.assign(catalogState([]), {
+    experiments: Object.assign({ enabled: true, apply: false, epsilon: 0.1, seed: 3, last }, config),
+  })
+}
+
+/** A router state carrying a classifier report. */
+function classifierState(overrides = {}) {
+  return Object.assign(catalogState([]), {
+    classifier: Object.assign({ enabled: true, minConfidence: 0.6, escalate: false, confidence: null, breaker: { fails: 0, open: false, openUntil: null } }, overrides),
+  })
+}
+
+test('the feedback labels post the verdict for the route on screen', async () => {
+  const app = await openControl({ state: feedbackState() })
+  openPanel(app.holder)
+  await app.rt.flush()
+
+  const buttons = byProp(app.holder.tree, 'data-mr-feedback', 'true')[0]
+  assert.ok(buttons, 'the panel carries the feedback row')
+  const labels = byProp(app.holder.tree, 'data-feedback-label', 'too-expensive')
+  const all = findAll(app.holder.tree, (node) => node.props && node.props['data-feedback-label'])
+  assert.deepEqual(all.map((node) => node.props['data-feedback-label']), ['too-expensive', 'too-weak', 'just-right'])
+  assert.deepEqual(all.map(textOf), ['太贵', '太弱', '正好'])
+  assert.equal(labels[0].props['data-active'], 'true', 'the label already recorded is marked')
+  assert.equal(textOf(byProp(app.holder.tree, 'data-mr-feedback-note', 'true')[0]), '太贵 · 等下一步验证')
+
+  all[1].props.onClick()
+  await app.rt.flush()
+  assert.deepEqual(plain(app.net.posts('/model-router/feedback').pop().body), { sessionId: 'session-1', label: 'too-weak' })
+})
+
+test('the feedback row follows the chat language and reports what the next step did', async () => {
+  const app = await openControl({
+    state: feedbackState({ last: { at: 2, label: 'just-right', provider: 'deepseek-official', model: 'deepseek-flash', effort: 'low', stepClass: 'standard', outcome: 'moved' } }),
+    globals: { navigator: { language: 'en-US' } },
+  })
+  openPanel(app.holder)
+  await app.rt.flush()
+  const all = findAll(app.holder.tree, (node) => node.props && node.props['data-feedback-label'])
+  assert.deepEqual(all.map(textOf), ['too expensive', 'too weak', 'just right'])
+  assert.equal(all[2].props['data-active'], 'true')
+  assert.equal(textOf(byProp(app.holder.tree, 'data-mr-feedback-note', 'true')[0]), 'just right · the next step moved to another route')
+})
+
+test('a host without the feedback report renders no label row', async () => {
+  const legacy = await openControl({ state: { effectiveControl: 'full', engaged: true, current: null, pool: [], decisions: [] } })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-feedback', 'true').length, 0, 'an older host has no labels to show')
+
+  const broken = await openControl({ state: Object.assign(catalogState([]), { feedback: { labels: 'nope' } }) })
+  openPanel(broken.holder)
+  await broken.rt.flush()
+  assert.equal(byProp(broken.holder.tree, 'data-mr-feedback', 'true').length, 0, 'a malformed report is ignored')
+})
+
+test('the exploration draw is named, and only a shadow leaves the route alone', async () => {
+  const shadow = await openControl({ state: experimentState({ allowed: true, explore: true, applied: false, arm: 'deepseek-official/deepseek-v4-pro' }) })
+  openPanel(shadow.holder)
+  await shadow.rt.flush()
+  assert.equal(textOf(byProp(shadow.holder.tree, 'data-mr-experiment', 'true')[0]), '探索影子：抽到 deepseek-official/deepseek-v4-pro，未改路由')
+
+  const applied = await openControl({ state: experimentState({ allowed: true, explore: true, applied: true, arm: 'deepseek-official/deepseek-v4-pro' }) })
+  openPanel(applied.holder)
+  await applied.rt.flush()
+  assert.equal(textOf(byProp(applied.holder.tree, 'data-mr-experiment', 'true')[0]), '探索实验：这一步试了 deepseek-official/deepseek-v4-pro')
+
+  const exploit = await openControl({ state: experimentState({ allowed: true, explore: false, applied: false, arm: 'deepseek-official/deepseek-v4-pro' }) })
+  openPanel(exploit.holder)
+  await exploit.rt.flush()
+  assert.equal(byProp(exploit.holder.tree, 'data-mr-experiment', 'true').length, 0, 'an exploit draw is not news')
+
+  const none = await openControl({ state: Object.assign(catalogState([]), { experiments: { enabled: true, apply: false, epsilon: 0.1, seed: null, last: null } }) })
+  openPanel(none.holder)
+  await none.rt.flush()
+  assert.equal(byProp(none.holder.tree, 'data-mr-experiment', 'true').length, 0)
+
+  const en = await openControl({ state: experimentState({ allowed: true, explore: true, applied: true, arm: 'deepseek-official/deepseek-flash' }), globals: { navigator: { language: 'en-US' } } })
+  openPanel(en.holder)
+  await en.rt.flush()
+  assert.equal(textOf(byProp(en.holder.tree, 'data-mr-experiment', 'true')[0]), 'experiment: this step tried deepseek-official/deepseek-flash')
+})
+
+test('a raised tier for lack of confidence, and an open breaker, are said out loud', async () => {
+  const raised = await openControl({ state: classifierState({ escalate: true, confidence: 0.42 }) })
+  openPanel(raised.holder)
+  await raised.rt.flush()
+  assert.equal(textOf(byProp(raised.holder.tree, 'data-mr-classifier', 'true')[0]), '分类器低置信（0.42）已上调一档')
+
+  const open = await openControl({ state: classifierState({ escalate: true, confidence: 0.42, breaker: { fails: 3, open: true, openUntil: 99, openForMs: 10, cooldownMs: 600000, opens: 1 } }) })
+  openPanel(open.holder)
+  await open.rt.flush()
+  assert.equal(textOf(byProp(open.holder.tree, 'data-mr-classifier', 'true')[0]), '分类器连续失败，暂时只用规则', 'the breaker outranks the last escalation')
+
+  const quiet = await openControl({ state: classifierState({ confidence: 0.91 }) })
+  openPanel(quiet.holder)
+  await quiet.rt.flush()
+  assert.equal(byProp(quiet.holder.tree, 'data-mr-classifier', 'true').length, 0)
+
+  const legacy = await openControl({ state: catalogState([]) })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-classifier', 'true').length, 0)
+})

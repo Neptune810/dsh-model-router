@@ -18,6 +18,10 @@
     "./channels": "./lib/channels.js",
     "./budget": "./lib/budget.js",
     "./replay": "./lib/replay.js",
+    "./classifier2": "./lib/classifier2.js",
+    "./experiments": "./lib/experiments.js",
+    "./feedback": "./lib/feedback.js",
+    "./feedback-store": "./lib/feedback-store.js",
     "./package.json": "./package.json"
   },
   "bin": {

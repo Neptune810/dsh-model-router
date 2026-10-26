@@ -105,7 +105,12 @@ window.__ModuleLoader__.load({
 				channelCooling: "渠道冷却中：{c}", channelQuarantined: "渠道已隔离：{c}",
 				channelHint: "失败的渠道会短暂停用；重试会换到健康渠道，价格未知的中转绝不自动进入",
 				effortNote: "思考等级 {from} \u2192 {to}（{why}）", effortWhyAlias: "别名", effortWhyNearest: "就近取档", effortWhyNone: "该模型不接思考等级",
-				effortHint: "每一步的档位先按任务类型决定，再按目标模型的真实词表映射；别名与就近取档都会显式说明"
+				effortHint: "每一步的档位先按任务类型决定，再按目标模型的真实词表映射；别名与就近取档都会显式说明",
+				feedbackLabel: "这一步怎么样", feedbackHint: "告诉路由这一步选得对不对；只写本地，不上传，下一步会验证是否改道",
+				feedbackTooExpensive: "太贵", feedbackTooWeak: "太弱", feedbackJustRight: "正好",
+				feedbackPending: "等下一步验证", feedbackStayed: "下一步留在原路由", feedbackMoved: "下一步换了路由",
+				experimentNote: "探索实验：这一步试了 {arm}", experimentShadow: "探索影子：抽到 {arm}，未改路由", experimentHint: "epsilon-greedy 只在非 hard、非 engineering 的步骤抽签；默认关闭",
+				classifierEscalated: "分类器低置信（{c}）已上调一档", classifierBreaker: "分类器连续失败，暂时只用规则", classifierHint: "分类器给不出高置信结论时宁可上调一档，也不猜"
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -183,7 +188,12 @@ window.__ModuleLoader__.load({
 				channelCooling: "channel benched: {c}", channelQuarantined: "channel quarantined: {c}",
 				channelHint: "a failing channel is benched for a while; the retry moves to a healthy one, and a relay of unknown price is never entered automatically",
 				effortNote: "effort {from} \u2192 {to} ({why})", effortWhyAlias: "alias", effortWhyNearest: "nearest tier", effortWhyNone: "model takes no effort",
-				effortHint: "each step picks a tier from the task type, then maps it onto what the model really accepts; aliases and nearest tiers are spelled out"
+				effortHint: "each step picks a tier from the task type, then maps it onto what the model really accepts; aliases and nearest tiers are spelled out",
+				feedbackLabel: "how was this step", feedbackHint: "tell the router whether this step\u0027s call was right; local only, and the next step shows whether it changed",
+				feedbackTooExpensive: "too expensive", feedbackTooWeak: "too weak", feedbackJustRight: "just right",
+				feedbackPending: "waiting for the next step", feedbackStayed: "the next step stayed on the route", feedbackMoved: "the next step moved to another route",
+				experimentNote: "experiment: this step tried {arm}", experimentShadow: "experiment shadow: drew {arm}, route unchanged", experimentHint: "epsilon-greedy draws only on steps that are neither hard nor engineering; off by default",
+				classifierEscalated: "classifier confidence low ({c}), tier raised", classifierBreaker: "the classifier keeps failing, rules only for now", classifierHint: "when the classifier cannot be confident it raises the tier instead of guessing"
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -258,7 +268,7 @@ window.__ModuleLoader__.load({
 			".mr-cross-hint{flex:1;min-width:0;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:15px}",
 			".mr-err{margin:4px 8px;padding:6px 8px;border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.14));color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px;line-height:16px;word-break:break-word}",
 			".mr-foot{display:flex;gap:6px;align-items:center;padding:8px 8px 2px;margin-top:2px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}",
-			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}.mr-budget{display:flex;flex-direction:column;gap:2px;padding:6px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:1.35}.mr-budget[data-tone=near]{color:var(--dsw-alias-state-warn-label,#d29922)}.mr-budget[data-tone=over]{color:var(--dsw-alias-state-error-primary,#f85149)}.mr-budget-row{display:flex;align-items:center;gap:6px}.mr-budget-name{flex:none}.mr-budget-value{flex:none;font-variant-numeric:tabular-nums}.mr-bar{flex:1;height:4px;border-radius:2px;background:var(--dsw-alias-bg-base,rgba(127,127,127,.25));overflow:hidden;min-width:40px}.mr-bar-fill{display:block;height:100%;background:currentColor}.mr-dot[data-budget=near]{background:var(--dsw-alias-state-warn-label,#d29922)}.mr-dot[data-budget=over]{background:var(--dsw-alias-state-error-primary,#f85149)}",
+			".mr-note{padding:8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}.mr-budget{display:flex;flex-direction:column;gap:2px;padding:6px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px;line-height:1.35}.mr-budget[data-tone=near]{color:var(--dsw-alias-state-warn-label,#d29922)}.mr-budget[data-tone=over]{color:var(--dsw-alias-state-error-primary,#f85149)}.mr-budget-row{display:flex;align-items:center;gap:6px}.mr-budget-name{flex:none}.mr-budget-value{flex:none;font-variant-numeric:tabular-nums}.mr-bar{flex:1;height:4px;border-radius:2px;background:var(--dsw-alias-bg-base,rgba(127,127,127,.25));overflow:hidden;min-width:40px}.mr-bar-fill{display:block;height:100%;background:currentColor}.mr-dot[data-budget=near]{background:var(--dsw-alias-state-warn-label,#d29922)}.mr-dot[data-budget=over]{background:var(--dsw-alias-state-error-primary,#f85149)}.mr-feedback{display:flex;align-items:center;gap:6px;padding:4px 8px;color:var(--dsw-alias-label-caption,#8b9096);font-size:11px}.mr-feedback-name{flex:none}.mr-feedback-btn{padding:1px 6px;font-size:11px}.mr-feedback-btn[data-active=true]{border-color:var(--dsw-alias-brand-primary,#4a9eff);color:var(--dsw-alias-brand-primary,#4a9eff)}.mr-feedback-note{margin-left:auto;flex:none;opacity:.85}",
 			// The per-conversation confirmation: a warn-tinted bar because it wants an answer,
 			// plus the pulsing dot that announces it on the composer trigger.
 			".mr-confirm{display:flex;flex-direction:column;gap:5px;margin:2px 6px 6px;padding:8px 10px;border:1px solid var(--dsw-alias-state-warn-label,rgba(210,153,34,.45));border-radius:var(--dsw-radius-md,8px);background:var(--dsw-alias-interactive-bg-hover-warn,rgba(210,153,34,.12))}",
@@ -660,6 +670,25 @@ window.__ModuleLoader__.load({
 			const effortInfo = state && state.effort && typeof state.effort === "object" ? state.effort : null
 			const effortLast = effortInfo && effortInfo.last && typeof effortInfo.last === "object" ? effortInfo.last : null
 			const effortWhy = !effortLast ? "" : effortLast.why === "alias" ? t.effortWhyAlias : effortLast.why === "nearest" ? t.effortWhyNearest : effortLast.why === "none" ? t.effortWhyNone : String(effortLast.why || "")
+			// Route feedback (v0.17.1): three labels the user can press, plus what the
+			// router did with the last one (answered by the next step, not by a promise).
+			const feedbackInfo = state && state.feedback && typeof state.feedback === "object" && Array.isArray(state.feedback.labels) ? state.feedback : null
+			const feedbackLast = feedbackInfo && feedbackInfo.last && typeof feedbackInfo.last === "object" ? feedbackInfo.last : null
+			const feedbackLabels = feedbackInfo ? feedbackInfo.labels : []
+			const feedbackLabelName = (label) => t["feedback" + String(label).split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("")] || String(label)
+			const feedbackLine = !feedbackLast ? "" : feedbackLabelName(feedbackLast.label) + " \u00b7 "
+				+ (feedbackLast.outcome === "stayed" ? t.feedbackStayed : feedbackLast.outcome === "moved" ? t.feedbackMoved : t.feedbackPending)
+			// Exploration (v0.17.1): an applied draw moves the step; a shadow draw did not.
+			const experimentInfo = state && state.experiments && typeof state.experiments === "object" ? state.experiments : null
+			const experimentLast = experimentInfo && experimentInfo.last && typeof experimentInfo.last === "object" ? experimentInfo.last : null
+			const experimentNote = !experimentLast || !experimentLast.explore || !experimentLast.arm ? ""
+				: (experimentLast.applied ? t.experimentNote : t.experimentShadow).replace("{arm}", String(experimentLast.arm))
+			// Classifier v2 (v0.17.1): say it when the tier was raised for lack of confidence,
+			// or when the breaker went rules-only.
+			const classifierInfo = state && state.classifier && typeof state.classifier === "object" ? state.classifier : null
+			const classifierBreaker = classifierInfo && classifierInfo.breaker && classifierInfo.breaker.open === true ? classifierInfo.breaker : null
+			const classifierNote = classifierBreaker ? t.classifierBreaker
+				: (classifierInfo && classifierInfo.escalate ? t.classifierEscalated.replace("{c}", String(classifierInfo.confidence === null || classifierInfo.confidence === undefined ? "?" : classifierInfo.confidence)) : "")
 			const effortNote = effortLast && effortLast.why && effortLast.why !== "exact" && effortWhy
 				? t.effortNote.replace("{from}", String(effortLast.from || "")).replace("{to}", String(effortLast.to === null || effortLast.to === undefined ? "-" : effortLast.to)).replace("{why}", effortWhy)
 				: ""
@@ -1121,6 +1150,25 @@ window.__ModuleLoader__.load({
 					// Effort mapping (v0.17.0): only shown when the tier was not taken verbatim.
 					if (effortNote) {
 						body.push(h("div", { key: "effort", className: "mr-note", "data-mr-effort": "true", title: t.effortHint }, effortNote))
+					}
+					// Route feedback (v0.17.1): the three labels live here, so the verdict is
+					// one action away from the route it judges.
+					if (feedbackLabels.length > 0) {
+						body.push(h("div", { key: "feedback", className: "mr-feedback", "data-mr-feedback": "true", title: t.feedbackHint },
+							h("span", { className: "mr-feedback-name" }, t.feedbackLabel),
+							feedbackLabels.map((label) => h("button", {
+								key: label, type: "button", className: "mr-btn mr-feedback-btn",
+								"data-feedback-label": label, "data-active": String(!!(feedbackLast && feedbackLast.label === label)),
+								disabled: sessionId ? undefined : true,
+								onClick: () => { if (sessionId) run("/feedback", { sessionId: sessionId, label: label }) },
+							}, feedbackLabelName(label))),
+							feedbackLine ? h("span", { className: "mr-feedback-note", "data-mr-feedback-note": "true" }, feedbackLine) : null))
+					}
+					if (experimentNote) {
+						body.push(h("div", { key: "experiment", className: "mr-note", "data-mr-experiment": "true", title: t.experimentHint }, experimentNote))
+					}
+					if (classifierNote) {
+						body.push(h("div", { key: "classifier", className: "mr-note", "data-mr-classifier": "true", title: t.classifierHint }, classifierNote))
 					}
 					// --- Per-conversation confirmation, before anything else can be touched ---
 					if (needsConfirm) {

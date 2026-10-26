@@ -124,11 +124,16 @@ test('the state route publishes the v0.15 observation surface', async () => {
   assert.equal(typeof state.stateVersion, 'number')
   assert.equal(typeof state.cost.sessionTokens, 'number')
   assert.equal(typeof state.cost.sessionCostUnits, 'number')
-  assert.deepEqual(Object.keys(state.classifierStats).sort(), ['calls', 'durationMs', 'fails', 'fallbacks', 'tokens'])
+  assert.deepEqual(Object.keys(state.classifierStats).sort(), [
+    'breaker', 'breakerOpens', 'calls', 'durationMs', 'fails', 'fallbacks', 'lastError', 'retries', 'skipped', 'tokens',
+  ])
   assert.equal(state.telemetry.enabled, true)
   assert.equal(typeof state.telemetry.written, 'number')
   assert.ok(Array.isArray(state.compat.missing))
-  assert.equal(state.settings.classifierMinConfidence, 0)
+  // v0.17.1: the default floor is 0.6, and the breaker state is part of /state.
+  assert.equal(state.settings.classifierMinConfidence, 0.6)
+  assert.equal(state.classifierStats.breaker.open, false)
+  assert.equal(state.classifierStats.breaker.threshold, 3)
 
   // The revision counter moves when a routed step is recorded, and the panel's
   // ETag is what changes with it.
@@ -210,22 +215,80 @@ test('the semantic classifier answer is filtered by classifierMinConfidence', as
     stream: async function* stream() { yield { type: 'text-delta', index: 0, text } },
   })
   const low = makeHost(
-    { pool: POOL, routes: ROUTES, presets, classifier: 'llm', classifierMinConfidence: 0.6 },
+    { pool: POOL, routes: ROUTES, presets, classifier: 'llm' },
     { llm: answer('{"type":"novel","confidence":0.2}') },
   )
   const lowAgent = agentWith()
   emit(low, 'agent/inbox/claimed', { agent: lowAgent, ...claimed('write something') })
   const ignored = await request(low, { agent: lowAgent, turn: 1, step: 0 }, seed())
   assert.equal(ignored.model, 'deepseek-flash', 'a low-confidence answer falls back to the rules')
+  const lowState = await stateOf(low)
+  assert.equal(lowState.classifier.used, false)
+  assert.equal(lowState.classifier.source, 'low-confidence')
+  assert.equal(lowState.classifier.confidence, 0.2)
+  assert.equal(lowState.classifier.escalate, true)
+  assert.equal(lowState.classifier.type, 'novel', 'the model did name a type, it was just not trusted')
 
   const accept = makeHost(
-    { pool: POOL, routes: ROUTES, presets, classifier: 'llm' },
+    { pool: POOL, routes: ROUTES, presets, classifier: 'llm', classifierMinConfidence: 0 },
     { llm: answer('{"type":"novel","confidence":0.2}') },
   )
   const acceptAgent = agentWith()
   emit(accept, 'agent/inbox/claimed', { agent: acceptAgent, ...claimed('write something') })
   const used = await request(accept, { agent: acceptAgent, turn: 1, step: 0 }, seed())
-  assert.equal(used.model, 'deepseek-v4-pro', 'with the default floor every answer is used')
+  assert.equal(used.model, 'deepseek-v4-pro', 'with an explicit floor of 0 every answer is used')
+})
+
+test('the v2 classifier can be unsure without guessing, and can trip a breaker', async () => {
+  const presets = { novel: { match: ['__never__'], weights: { 'deepseek-official/deepseek-v4-pro': 99 } } }
+  const answer = (text) => ({ stream: async function* stream() { yield { type: 'text-delta', index: 0, text } } })
+  const thrower = { stream: async function* stream() { throw new Error('classifier down') } }
+
+  // A prose answer names the type but carries no confidence: the class is used
+  // and the step is lifted one tier, which is the safe direction.
+  const prose = makeHost(
+    { pool: POOL, routes: ROUTES, presets, classifier: 'llm' },
+    { llm: answer('I think this is a novel task.') },
+  )
+  const proseAgent = agentWith()
+  emit(prose, 'agent/inbox/claimed', { agent: proseAgent, ...claimed('write something') })
+  const proseOut = await request(prose, { agent: proseAgent, turn: 1, step: 0 }, seed())
+  assert.equal(proseOut.model, 'deepseek-v4-pro', 'a prose answer still names the type')
+  const proseState = await stateOf(prose)
+  assert.equal(proseState.classifier.source, 'prose')
+  assert.equal(proseState.classifier.escalate, true)
+  assert.equal(proseState.classifier.value, 'novel')
+  assert.match(String(proseState.current.reason), /classifier unsure/)
+
+  // Three failed calls in a row open the breaker; the next turn spends no call
+  // at all and the counters say so.
+  const broken = makeHost({ pool: POOL, routes: ROUTES, presets, classifier: 'llm' }, { llm: thrower })
+  const brokenAgent = agentWith()
+  for (let turn = 1; turn <= 4; turn += 1) {
+    emit(broken, 'agent/inbox/claimed', { agent: brokenAgent, ...claimed('write something', turn) })
+    await request(broken, { agent: brokenAgent, turn, step: 0 }, seed())
+  }
+  const brokenState = await stateOf(broken)
+  assert.equal(brokenState.classifierStats.breaker.open, true)
+  assert.equal(brokenState.classifierStats.breakerOpens, 1)
+  assert.equal(brokenState.classifierStats.skipped, 1, 'the fourth turn never called the classifier')
+  assert.equal(brokenState.classifierStats.calls, 6, 'two attempts per call, three turns')
+  assert.equal(brokenState.classifierStats.retries, 3)
+  assert.match(String(brokenState.classifierStats.lastError), /circuit breaker is open/)
+
+  // A successful call after the cooldown resets the breaker.
+  const recovering = makeHost(
+    { pool: POOL, routes: ROUTES, presets, classifier: 'llm' },
+    { llm: answer('{"class":"novel","confidence":0.9,"family":"writing","evidence":"write something","signals":["imperative"]}') },
+  )
+  const recoveringAgent = agentWith()
+  emit(recovering, 'agent/inbox/claimed', { agent: recoveringAgent, ...claimed('write something') })
+  await request(recovering, { agent: recoveringAgent, turn: 1, step: 0 }, seed())
+  const recoveringState = await stateOf(recovering)
+  assert.equal(recoveringState.classifierStats.breaker.fails, 0)
+  assert.deepEqual(recoveringState.classifier.family, 'writing')
+  assert.equal(recoveringState.classifier.escalate, false)
+  assert.equal(recoveringState.classifier.source, 'llm')
 })
 
 test('a nine-word route keeps the legacy thinking and allowMax guards', async () => {
@@ -571,4 +634,125 @@ test('cross-provider routing turned off keeps every step on the brand', async ()
   const state = await stateOf(host)
   assert.equal(state.cross.proposal, null)
   assert.match(state.current.reason, /cross-provider routing is off/)
+})
+
+// --- v0.17.1: the feedback loop ---------------------------------------------
+
+test('a label names the running route, and the next step answers it', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('update the docs line') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  const posted = await call(host.routes.get('/model-router/feedback'), {
+    method: 'POST',
+    url: '/model-router/feedback',
+    body: { sessionId: 's1', label: 'too-expensive', note: 'should have been flash' },
+  })
+  assert.equal(posted.status, 200)
+  const answer = JSON.parse(posted.payload)
+  assert.equal(answer.ok, true)
+  assert.equal(answer.feedback.last.label, 'too-expensive')
+  assert.equal(answer.feedback.pending, true)
+  assert.deepEqual(answer.feedback.labels, ['too-expensive', 'too-weak', 'just-right'])
+
+  let state = await stateOf(host)
+  assert.equal(state.feedback.last.label, 'too-expensive')
+  assert.equal(state.feedback.last.outcome, null)
+  assert.equal(state.feedback.pending, true)
+  assert.equal(state.feedback.last.provider, state.current.provider)
+  assert.equal(state.feedback.last.model, state.current.model)
+  assert.equal(state.feedback.last.stepClass, 'standard')
+
+  // The same route runs again, so the follow-up record says the label stood.
+  await request(host, { agent, turn: 1, step: 1 }, seed())
+  state = await stateOf(host)
+  assert.equal(state.feedback.pending, false)
+  assert.equal(state.feedback.last.outcome, 'stayed')
+
+  const stats = JSON.parse((await call(host.routes.get('/model-router/stats'), { url: '/model-router/stats' })).payload)
+  assert.equal(stats.feedback.total, 1)
+  assert.equal(stats.feedback.labels['too-expensive'], 1)
+  assert.equal(stats.feedback.overrides, 1)
+  assert.equal(stats.feedback.outcomes.recorded, 1)
+  assert.equal(stats.feedback.outcomes.changed, 0)
+  assert.deepEqual(Object.keys(stats.feedback.byClass), ['standard'])
+})
+
+test('a label the router cannot read changes nothing', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('update the docs line') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+
+  const unknown = await call(host.routes.get('/model-router/feedback'), {
+    method: 'POST', body: { sessionId: 's1', label: 'meh' },
+  })
+  assert.equal(JSON.parse(unknown.payload).ok, false)
+  assert.match(JSON.parse(unknown.payload).error, /label must be one of/)
+
+  const gone = await call(host.routes.get('/model-router/feedback'), {
+    method: 'POST', body: { sessionId: 'nope', label: 'just-right' },
+  })
+  assert.equal(JSON.parse(gone.payload).ok, false)
+  assert.match(JSON.parse(gone.payload).error, /no live session/)
+
+  const state = await stateOf(host)
+  assert.equal(state.feedback.last, null)
+  assert.equal(state.feedback.pending, false)
+})
+
+// --- v0.17.1: epsilon-greedy exploration -------------------------------------
+
+test('an exploration draw is recorded without moving the route', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES, experiments: { enabled: true, epsilon: 1, seed: 3 } })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('update the docs line') })
+  const first = await request(host, { agent, turn: 1, step: 0 }, seed())
+  const second = await request(host, { agent, turn: 1, step: 1 }, seed())
+
+  const state = await stateOf(host)
+  assert.equal(state.experiments.enabled, true)
+  assert.equal(state.experiments.apply, false)
+  assert.equal(state.experiments.epsilon, 1)
+  assert.equal(state.experiments.seed, 3)
+  assert.ok(state.experiments.last, 'the draw is published even when it does not apply')
+  assert.equal(state.experiments.last.allowed, true)
+  assert.equal(state.experiments.last.explore, true)
+  assert.equal(state.experiments.last.applied, false)
+  assert.equal(state.experiments.last.arm, 'deepseek-official/deepseek-v4-pro')
+  assert.notEqual(state.experiments.last.arm, second.model)
+  assert.equal(second.model, first.model, 'a shadow draw never moves the route')
+
+  await tick()
+  const stats = JSON.parse((await call(host.routes.get('/model-router/stats'), { url: '/model-router/stats' })).payload)
+  assert.equal(stats.totals.experiments.steps, 1)
+  assert.equal(stats.totals.experiments.explored, 1)
+  assert.equal(stats.totals.experiments.applied, 0)
+  assert.equal(stats.totals.experiments.byArm['deepseek-official/deepseek-v4-pro'], 1)
+})
+
+test('with apply on the drawn arm takes the step, and hard steps are exempt', async () => {
+  const host = makeHost({ pool: POOL, routes: ROUTES, experiments: { enabled: true, apply: true, epsilon: 1, seed: 3 } })
+  const agent = agentWith()
+  emit(host, 'agent/inbox/claimed', { agent, ...claimed('update the docs line') })
+  await request(host, { agent, turn: 1, step: 0 }, seed())
+  const moved = await request(host, { agent, turn: 1, step: 1 }, seed())
+
+  let state = await stateOf(host)
+  assert.equal(state.experiments.last.applied, true)
+  assert.equal(state.experiments.last.arm, 'deepseek-official/deepseek-v4-pro')
+  assert.equal(moved.model, 'deepseek-v4-pro', 'the drawn arm is the model this step used')
+  assert.equal(state.current.model, state.experiments.last.arm.split('/')[1])
+  assert.match(state.current.reason, /epsilon-greedy exploration/)
+
+  const hard = makeHost({ pool: POOL, routes: ROUTES, experiments: { enabled: true, apply: true, epsilon: 1, seed: 3 } })
+  const hardAgent = agentWith()
+  emit(hard, 'agent/inbox/claimed', { agent: hardAgent, ...claimed(HARD_BRIEF) })
+  const held = await request(hard, { agent: hardAgent, turn: 1, step: 0 }, seed())
+  const heldAgain = await request(hard, { agent: hardAgent, turn: 1, step: 1 }, seed())
+  state = await stateOf(hard)
+  assert.equal(state.current.stepClass, 'hard')
+  assert.equal(state.experiments.last, null, 'hard steps are never drawn')
+  assert.equal(heldAgain.model, held.model)
 })
