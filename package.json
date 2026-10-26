@@ -18,6 +18,8 @@
   "files": [
     "lib/",
     "client/",
+    "catalog/",
+    "schema/",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -29,7 +31,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "release:check": "node scripts/check-release.mjs",
+    "release:gate": "node scripts/check-release.mjs --pack"
   },
   "dsh": {
     "compat": {

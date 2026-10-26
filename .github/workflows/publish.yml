@@ -9,40 +9,51 @@
 #   Allowed actions      npm publish
 #
 # After that, pushing a vX.Y.Z tag publishes that version with a provenance
-# attestation — no token on disk, no 2FA prompt. The tag must equal the
-# version in package.json, which the second step below enforces.
+# attestation — no token on disk, no 2FA prompt.
+#
+# Shape:
+#   test     Node 20/22/24 matrix, every test file, the release gate and the
+#            generated catalog check. Runs on every push and pull request.
+#   publish  Only on a v* tag, only after the whole matrix is green. The release
+#            gate re-checks that the tag, package.json and CHANGELOG agree and
+#            that the tarball ships what the "files" whitelist promises.
 
 name: publish
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+  pull_request:
 
 permissions:
   contents: read
   id-token: write # the OIDC token npm exchanges for a short-lived publish credential
 
 jobs:
-  publish:
+  test:
+    name: test (node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22", "24"]
     steps:
       - uses: actions/checkout@v4
 
-      # Node 24 ships npm 11, the first line able to exchange the GitHub OIDC
-      # token for a publish credential (trusted publishing needs npm >= 11.5.1).
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "${{ matrix.node }}"
 
-      - name: Tag must match package.json
+      - name: Syntax check
         run: |
           set -eu
-          tag="${GITHUB_REF_NAME#v}"
-          pkg="$(node -p "require('./package.json').version")"
-          echo "tag=v$tag package=$pkg"
-          [ "$tag" = "$pkg" ] || { echo "::error::tag v$tag does not match package.json version $pkg"; exit 1; }
+          for f in lib/*.js client/client.js scripts/*.mjs; do
+            node --check "$f"
+          done
 
       # Keep the published artifact gated on the whole suite, but make a failure
       # readable: raw Actions logs need admin rights, while check-run
@@ -66,10 +77,43 @@ jobs:
             annotated=$((annotated + 1))
           done
           if [ "$annotated" -eq 0 ]; then
-            msg="$(grep -E '^.?✖|AssertionError|expected|actual|Error:' /tmp/test.log | head -20 | tr '\n' ' ' | cut -c1-3800)"
+            msg="$(grep -E '✖|AssertionError|expected|actual|Error:' /tmp/test.log | head -20 | tr '\n' ' ' | cut -c1-3800)"
             echo "::error::npm test failed while every test file passed alone :: $msg"
           fi
           exit 1
+
+      - name: Release gate (tag, version, CHANGELOG, tarball contents; node 24)
+        if: matrix.node == '24'
+        run: node scripts/check-release.mjs --pack
+
+      - name: Catalog is generated from catalog/model-catalog.yaml (node 24)
+        if: matrix.node == '24'
+        run: |
+          set -eu
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/build-catalog.py --check
+
+      - name: Catalog validator (node 24)
+        if: matrix.node == '24'
+        run: node scripts/check-catalog.mjs
+
+  publish:
+    name: publish
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 ships npm 11, the first line able to exchange the GitHub OIDC
+      # token for a publish credential (trusted publishing needs npm >= 11.5.1).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Release gate
+        run: node scripts/check-release.mjs --pack
 
       # No registry-url and no NODE_AUTH_TOKEN on purpose: with id-token: write,
       # npm finds the OIDC identity by itself.
