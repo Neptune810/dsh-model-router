@@ -1,0 +1,392 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-26",
+  "kind": "synthetic",
+  "host": {
+    "package": "@deepseek-ai/dsh",
+    "version": "0.1.7-rc.2"
+  },
+  "provenance": {
+    "how": "hand-written from the .d.ts contracts; no captured traffic",
+    "redaction": "all natural-language text replaced with <prompt:…>/<file:…> placeholders; token counts are constructed, not measured",
+    "warning": "agent/request payloads carry a serializable SUMMARY (messagesSummary), not a real Agent; streams are omitted (streamOmitted)"
+  },
+  "consumers": [
+    "0.15 replay harness",
+    "classifier/effort regression",
+    "scripts/smoke.mjs shape checks"
+  ],
+  "samples": [
+    {
+      "id": "agent-request-engineering",
+      "event": "agent/request",
+      "mode": "waterfall",
+      "contract": "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:311-332",
+      "note": "payload 里 agent 实例不可序列化，此处是回放所需的摘要：messages 的角色/来源/长度，不保留原文。",
+      "payload": {
+        "turn": 3,
+        "step": 2,
+        "modelSelection": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "reasoningEffort": "high"
+        },
+        "messagesSummary": {
+          "count": 11,
+          "systemPromptChars": 0,
+          "roles": {
+            "user": 4,
+            "assistant": 5,
+            "toolResult": 2
+          },
+          "sources": {
+            "human": 2,
+            "file-change": 1,
+            "skill": 1
+          },
+          "textChars": 8420,
+          "hasImage": false,
+          "firstUserText": "<prompt:refactor-3-files>"
+        }
+      }
+    },
+    {
+      "id": "agent-request-effort-scope",
+      "event": "agent/request",
+      "mode": "waterfall",
+      "contract": "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:311-332",
+      "payload": {
+        "turn": 1,
+        "step": 1,
+        "modelSelection": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "reasoningEffort": "low"
+        },
+        "messagesSummary": {
+          "count": 2,
+          "roles": {
+            "user": 1,
+            "assistant": 0
+          },
+          "textChars": 640,
+          "hasImage": false,
+          "firstUserText": "<prompt:one-line-answer>"
+        }
+      }
+    },
+    {
+      "id": "assistant-message-usage",
+      "event": "assistant/message",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:320-338",
+      "payload": {
+        "turn": 3,
+        "step": 2,
+        "message": {
+          "role": "assistant",
+          "contentSummary": [
+            {
+              "type": "text",
+              "chars": 412
+            },
+            {
+              "type": "tool-call",
+              "name": "fs_read"
+            }
+          ]
+        },
+        "streamOmitted": true,
+        "usage": {
+          "inputTokens": 512,
+          "outputTokens": 128,
+          "totalTokens": 640,
+          "cacheReadTokens": 10240,
+          "cacheWriteTokens": 0,
+          "reasoningTokens": 96
+        }
+      }
+    },
+    {
+      "id": "assistant-message-interrupted",
+      "event": "assistant/message",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:320-338",
+      "payload": {
+        "turn": 4,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "contentSummary": [
+            {
+              "type": "text",
+              "chars": 63
+            }
+          ]
+        },
+        "streamOmitted": true,
+        "interrupted": true,
+        "usage": {
+          "inputTokens": 220,
+          "outputTokens": 18,
+          "totalTokens": 238,
+          "cacheReadTokens": 5120,
+          "cacheWriteTokens": 0
+        }
+      }
+    },
+    {
+      "id": "assistant-attempt-transport",
+      "event": "assistant/attempt",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:339-348",
+      "note": "一次未产出 surface 消息的尝试；stream 内容省略（streamOmitted），回放只用失败事实。",
+      "payload": {
+        "turn": 5,
+        "step": 1,
+        "streamOmitted": true,
+        "failed": true,
+        "failure": {
+          "message": "DeepSeek Messages transport failed",
+          "code": "TRANSPORT"
+        }
+      }
+    },
+    {
+      "id": "request-error-transport",
+      "event": "agent/request-error",
+      "mode": "waterfall",
+      "contract": "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:333-356; LlmFailure @deepseek-ai/dsh-llm/lib/types/types.d.ts:25-44",
+      "payload": {
+        "turn": 5,
+        "step": 1,
+        "provider": "deepseek",
+        "failure": {
+          "message": "DeepSeek Messages transport failed",
+          "code": "TRANSPORT"
+        },
+        "retryPolicy": {
+          "mode": "normal",
+          "maxRetries": 5,
+          "retryableCodes": [
+            "TRANSPORT",
+            "TIMEOUT",
+            "SERVER",
+            "RATE_LIMIT"
+          ],
+          "backoff": {
+            "initialDelayMs": 500,
+            "maxDelayMs": 10000,
+            "jitterRatio": 0.1
+          }
+        }
+      }
+    },
+    {
+      "id": "request-error-server-503",
+      "event": "agent/request-error",
+      "mode": "waterfall",
+      "contract": "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:333-356",
+      "payload": {
+        "turn": 5,
+        "step": 2,
+        "provider": "deepseek",
+        "failure": {
+          "message": "DeepSeek Messages request failed",
+          "code": "SERVER",
+          "status": 503,
+          "providerRetryAfterMs": 2000,
+          "requestId": "req_synthetic_503"
+        },
+        "retryPolicy": {
+          "mode": "normal",
+          "maxRetries": 5,
+          "retryableCodes": [
+            "TRANSPORT",
+            "TIMEOUT",
+            "SERVER",
+            "RATE_LIMIT"
+          ],
+          "backoff": {
+            "initialDelayMs": 500,
+            "maxDelayMs": 10000,
+            "jitterRatio": 0.1
+          }
+        }
+      }
+    },
+    {
+      "id": "request-error-timeout",
+      "event": "agent/request-error",
+      "mode": "waterfall",
+      "contract": "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:333-356",
+      "payload": {
+        "turn": 5,
+        "step": 3,
+        "provider": "deepseek",
+        "failure": {
+          "message": "DeepSeek Messages stream idle timeout",
+          "code": "TIMEOUT"
+        },
+        "retryPolicy": {
+          "mode": "always"
+        }
+      }
+    },
+    {
+      "id": "request-error-quota",
+      "event": "agent/request-error",
+      "mode": "waterfall",
+      "contract": "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:333-356; QUOTA_EXCEEDED_CODE @deepseek-ai/dsh-llm/lib/index.js:2390",
+      "payload": {
+        "turn": 6,
+        "step": 1,
+        "provider": "deepseek",
+        "failure": {
+          "message": "DeepSeek account quota exceeded",
+          "code": "QUOTA_EXCEEDED",
+          "status": 429
+        },
+        "retryPolicy": {
+          "mode": "normal",
+          "maxRetries": 0,
+          "retryableCodes": [],
+          "backoff": {
+            "initialDelayMs": 500,
+            "maxDelayMs": 10000,
+            "jitterRatio": 0.1
+          }
+        }
+      }
+    },
+    {
+      "id": "llm-retry",
+      "event": "llm/retry",
+      "source": "@deepseek-ai/dsh-llm-retry/lib/index.js:141",
+      "payload": {
+        "provider": "deepseek",
+        "code": "SERVER",
+        "retry": 1,
+        "retryId": "retry_synthetic_1",
+        "turn": 5,
+        "step": 2
+      }
+    },
+    {
+      "id": "llm-retry-started",
+      "event": "llm/retry-started",
+      "source": "@deepseek-ai/dsh-llm-retry/lib/index.js:143",
+      "payload": {
+        "retryId": "retry_synthetic_1",
+        "turn": 5,
+        "step": 2,
+        "retry": 1
+      }
+    },
+    {
+      "id": "tool-call",
+      "event": "tool/call",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:349-360",
+      "payload": {
+        "turn": 3,
+        "step": 2,
+        "callId": "call_synthetic_1",
+        "name": "fs_read",
+        "arguments": "{\"path\":\"<file:src-a.js>\"}"
+      }
+    },
+    {
+      "id": "tool-result-ok",
+      "event": "tool/result",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:361-388",
+      "payload": {
+        "turn": 3,
+        "step": 2,
+        "message": {
+          "role": "toolResult",
+          "callId": "call_synthetic_1",
+          "isError": false,
+          "contentSummary": [
+            {
+              "type": "text",
+              "chars": 1180
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tool-result-is-error",
+      "event": "tool/result",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:361-388",
+      "payload": {
+        "turn": 3,
+        "step": 2,
+        "message": {
+          "role": "toolResult",
+          "callId": "call_synthetic_2",
+          "isError": true,
+          "contentSummary": [
+            {
+              "type": "text",
+              "chars": 90
+            }
+          ]
+        },
+        "error": {
+          "name": "FileNotFound",
+          "code": "ENOENT",
+          "reason": "<file:src-a.js> not found"
+        }
+      }
+    },
+    {
+      "id": "turn-end-completed",
+      "event": "turn/end",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:265-276, 162-210",
+      "payload": {
+        "turn": 3,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "id": "turn-end-error",
+      "event": "turn/end",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:265-276, 162-210",
+      "payload": {
+        "turn": 5,
+        "reason": {
+          "kind": "error",
+          "error": {
+            "message": "DeepSeek Messages stream idle timeout",
+            "code": "TIMEOUT"
+          }
+        }
+      }
+    },
+    {
+      "id": "turn-end-aborted",
+      "event": "turn/end",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:265-276, 147-160",
+      "payload": {
+        "turn": 6,
+        "reason": {
+          "kind": "aborted",
+          "reason": {
+            "kind": "user"
+          }
+        }
+      }
+    },
+    {
+      "id": "turn-end-max-tokens",
+      "event": "turn/end",
+      "contract": "@deepseek-ai/dsh-session/lib/types/types.d.ts:186-189",
+      "payload": {
+        "turn": 7,
+        "reason": {
+          "kind": "max-tokens"
+        }
+      }
+    }
+  ]
+}
