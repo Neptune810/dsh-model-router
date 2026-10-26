@@ -1,0 +1,81 @@
+{
+  "data": [
+    {
+      "id": "deepseek/deepseek-v4.1-flash-1017",
+      "canonical_slug": "deepseek/deepseek-v4.1-flash-1017-20261017",
+      "context_length": 1048576,
+      "pricing": {
+        "prompt": "0.00000015",
+        "completion": "0.0000006",
+        "input_cache_read": "0.000000003",
+        "overrides": [
+          {
+            "utc_days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+            "utc_start": 100,
+            "utc_end": 400,
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.000000006"
+          },
+          {
+            "min_prompt_tokens": 272000,
+            "prompt": "0.0000006",
+            "completion": "0.0000024",
+            "input_cache_read": "0.000000012"
+          }
+        ]
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "canonical_slug": "openai/gpt-6-astra-20261001",
+      "context_length": 1050000,
+      "pricing": {
+        "prompt": "0.000012",
+        "completion": "0.00005",
+        "input_cache_read": "0.000001",
+        "input_cache_write": "0.0000125",
+        "overrides": [
+          {
+            "min_prompt_tokens": 272000,
+            "prompt": "0.00002",
+            "completion": "0.000075",
+            "input_cache_read": "0.000002",
+            "input_cache_write": "0.000025"
+          }
+        ]
+      }
+    },
+    {
+      "id": "google/gemini-4-argon",
+      "canonical_slug": "google/gemini-4-argon-20260915",
+      "context_length": 1048576,
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000001875"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra",
+      "canonical_slug": "openai/gpt-6.2-astra-20261024",
+      "context_length": 1050000,
+      "pricing": {
+        "prompt": "0.0000008",
+        "completion": "0.000004",
+        "input_cache_read": "0.00000008",
+        "input_cache_write": "0.000001"
+      }
+    },
+    {
+      "id": "vendor/new-model",
+      "canonical_slug": "vendor/new-model-20261020",
+      "context_length": 131072,
+      "pricing": {
+        "prompt": "0.0000002",
+        "completion": "0.0000008"
+      }
+    }
+  ]
+}
