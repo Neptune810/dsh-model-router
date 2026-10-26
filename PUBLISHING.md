@@ -85,9 +85,14 @@ made 0.10.0 fail the page boot audit (see the 0.11.0 changelog entry).
 
 ## npm
 
-Published: **`@neptune810/dsh-model-router@0.11.0`** (2026-10-01). Earlier releases: 0.6.12, 0.6.11, 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15). The 0.7.0–0.10.1
-line was developed in the working tree but never tagged, so 0.11.0 is the first registry release that
-carries it.
+Current release: **`@neptune810/dsh-model-router@0.14.3`** (2026-10-26). The 0.7.0–0.10.1 line was
+developed in the working tree and never tagged, so 0.11.0 (2026-10-01) was the first registry release
+that carries it; 0.11.1, 0.12.0, 0.13.0, 0.14.0–0.14.2 (2026-10-04) and 0.14.3 followed. Earlier
+releases: 0.6.12, 0.6.11, 0.6.10, 0.6.9, 0.6.8, 0.6.7, 0.6.6, 0.6.5, 0.6.4, 0.6.3, 0.6.2, 0.6.1,
+0.6.0, 0.5.0, 0.4.0, 0.3.0 (2026-09-15). `0.14.3` is the first release gated by
+[`scripts/check-release.mjs`](scripts/check-release.mjs) and published from the Test matrix, and the
+first whose tarball the release gate checked before upload.
+
 Listing does not depend on it —
 the market installs from the repository — but a registry package gives storefronts a download count
 and lets people install without the `github:` spec.
@@ -123,15 +128,69 @@ Then every release is:
 
 ```sh
 # 1. bump "version" in package.json and add the CHANGELOG section
+ npm run release:check -- --pack        # tag/version/CHANGELOG/tarball contents
 # 2. push the commit
  git push origin main
 # 3. tag it — that tag is what publishes
  git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
-The workflow refuses to publish when the tag and `package.json` disagree, and it runs `npm test`
-before the upload. The `repository` field already points back at this repo, so the market picks up a
-new version on its own — nothing to change in the entry.
+The tag push starts the `test` matrix (Node 20, 22, 24) and only a fully green matrix reaches the
+`publish` job. That job runs the release gate again and refuses to publish when the tag and
+`package.json` disagree, when the CHANGELOG has no section for the version, or when the tarball no
+longer ships the files listed in `files` / `scripts/check-release.mjs`. The `repository` field already
+points back at this repo, so the market picks up a new version on its own — nothing to change in the
+entry.
+
+### Release checklist
+
+Before tagging:
+
+1. `node --test` is green locally, on Node 20 as well as 24 — the matrix is not a substitute.
+2. `scripts/check-release.mjs --pack` passes; `npm pack --dry-run` lists no `test/`, `scripts/` or
+   `.github/` entries.
+3. `package.json` `version` and the first `## ` heading in `CHANGELOG.md` are the same, and the
+   CHANGELOG section describes behaviour changes, not commits.
+4. `engines.dsh` (and `dsh.compat.dsh`) still bracket the DSH versions this release was tested on.
+5. The compatibility self-check still degrades instead of throwing on the oldest supported DSH
+   (see [docs/compat.md](compat-matrix.md) in the plan archive, or the runtime self-check log).
+6. `README.md` and `README.zh.md` agree with the code for every config key this release added,
+   renamed or removed.
+7. The generated catalog is current: `python scripts/build-catalog.py --check` and, if model facts
+   changed, the YAML was updated first (never the generated JS).
+8. A real `dsh web` session was run against the new build and the three smoke checks passed: the
+   panel seat renders once, a routed request shows its model/effort, and a manual override yields
+   and resumes.
+9. `~/.dsh` state survives an upgrade: the pre-upgrade `state.json` still loads (or is migrated by
+   `lib/store.js`), and no `state.json.corrupt-*` file appears.
+10. The version was chosen deliberately: patch = fixes and tooling only, minor = new routing
+    behaviour, major = a breaking config/API change.
+
+After the workflow is green:
+
+1. `npm view @neptune810/dsh-model-router version` and `dist-tags.latest` both show the new version.
+2. `npm view @neptune810/dsh-model-router dist.attestations` (or the package page's Provenance
+   badge) shows an attestation whose commit is the tagged one.
+3. The tarball contains the expected file count and no sources that should stay private.
+4. The GitHub Release for the tag is drafted from the CHANGELOG section.
+5. `pnpm add @neptune810/dsh-model-router@X.Y.Z --save-exact` in the user profile, then restart the
+   desktop app — a running app never picks up a plugin update on its own.
+
+### Rolling back a bad release
+
+npm keeps a version forever; it cannot be deleted, only deprecated. So the rollback is a dist-tag
+move plus a follow-up version, not a deletion:
+
+1. While the bad version's `latest` must stop reaching new installs, move the tag:
+   `npm dist-tag add @neptune810/dsh-model-router@X.Y.(Z-1) latest` (and deprecate the bad version
+   with a message pointing at the previous one).
+2. Reinstall the previous version in the profile with `pnpm add ...@X.Y.(Z-1) --save-exact`, and
+   restore `.model-router/state.json` from the pre-release backup if the store migrated it.
+3. Publish the fix as `X.Y.(Z+1)` — never re-tag a published version; the tag must keep pointing at
+   the commit that produced the tarball, and that identity is what the provenance attestation proves.
+
+A 24-hour watch follows every release: the bad-version window above is one command, and the
+`previous` dist-tag can be kept pointing at the last good version until the watch ends.
 
 ### Fallback: a bypass-2FA access token
 

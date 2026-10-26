@@ -361,11 +361,11 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-161 个用例。`test/policy.test.js`（34 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+222 个用例。`test/policy.test.js`（36 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
-`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（12 个）覆盖模型池、
-预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（16 个）用 ctx/agent 替身
-驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（33 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
+`engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（14 个）覆盖模型池、
+预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞；`test/plugin.test.js`（19 个）用 ctx/agent 替身
+驱动宿主接线，包括安静的工具循环不再把档位抬到 `high`；`test/modes.test.js`（34 个）覆盖三种模式、手调让位与接管、同源校验、池/预设编辑、手动指定
 任务类型、第三方 effort 词表、视觉分流、子 agent 廉价策略、todo 驱动任务类型、上下文压力、`/router` 命令、
 LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、允许/只切一次/禁止、只有异品牌时照常路由）与
 定价路由；`test/pricing.test.js`（11 个）覆盖价格分类表、USD 分档边界、OpenRouter 解析与索引、手标条目
@@ -380,7 +380,37 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 防御式读取投影、本地化默认标签、座位面委托给会话目录、官方选择语义（模型行不带 `reasoningEffort`、思考行
 带它、供应商默认行、点当前行是空操作、会话锁定、子 agent 会话不可用、选择失败保留错误、目录出错可重试、
 分组顺序）、插件半边原来的控件/池/设置载荷与 `/effort-model` 绑定，以及声明的 `ui-chat` 座位与
-`uiConversation` 服务。
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（7 个）覆盖面板 token、同源读校验与路径脱敏；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（20 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现并覆盖 `findModel`；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态。
+
+## 模型目录
+
+路由的策略是代码，模型的事实是数据。`catalog/model-catalog.yaml` 是唯一事实来源：每个可寻址模型多少钱、
+接受哪些思考等级词、上下文窗口多大、由哪些渠道承载、接下来会有什么变化——19 个模型，每个都带证据日期，
+宁可写 `unknown` 也不猜。它按 `schema/model-catalog.schema.json` 校验，再由
+`scripts/build-catalog.py` 生成 `lib/catalog.js`；生成物入库，不手改。
+
+```sh
+py -3 scripts/build-catalog.py          # 从 YAML 重新生成 lib/catalog.js
+py -3 scripts/build-catalog.py --check  # 两者不一致就失败
+node scripts/check-catalog.mjs          # 结构校验，不需要 Python
+```
+
+路由器目前还不读这份目录：0.15 接入遥测，0.16 才把目录里的价格变成成本估算。先把 schema 和生成器
+交付出来，那两版才会是改数据，而不是重写。
+
+## 发布检查
+
+每次发布在本地和 CI 走同一道门禁：
+
+```sh
+npm test                                # 全部测试
+npm run release:gate                    # tag = package.json = CHANGELOG，以及 tarball 内容
+py -3 scripts/build-catalog.py --check
+```
+
+`scripts/check-release.mjs` 会拒绝缺文件或误打包测试源码的 tarball，也是从此版本号、CHANGELOG 标题和
+推上去的 tag 不能再各走各的原因。CI 在 Node 20、22、24 上跑测试；打 tag 的那次用 npm trusted publishing
+发布并附带 provenance。完整检查单与回滚步骤见 [PUBLISHING.md](PUBLISHING.md)。
 
 ## 许可证
 

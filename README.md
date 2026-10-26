@@ -416,13 +416,13 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-161 tests. `test/policy.test.js` (34) covers classification, the absence of a ratchet, the
+222 tests. `test/policy.test.js` (36) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
-restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (12) covers the pool, preset
+restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (14) covers the pool, preset
 weights, vision filtering, `maxPerTask`, effort-vocabulary mapping and hysteresis;
-`test/plugin.test.js` (16) drives the host wiring with ctx/agent doubles, including a quiet tool loop
-that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (33)
+`test/plugin.test.js` (19) drives the host wiring with ctx/agent doubles, including a quiet tool loop
+that stays at its brief's class instead of climbing to `high`; `test/modes.test.js` (34)
 covers the three scopes, manual yield + resume, same-origin route guards (including a request whose Origin the
 Desktop proxy stripped, and one carrying `Origin: null`), pool/preset editing, a
 pinned task type, a third-party effort vocabulary, vision routing, subagent frugality, todo-driven
@@ -448,7 +448,48 @@ the seat face delegating to the session directory, the official selection semant
 unavailable subagent cell, a failed pick keeping its message, catalog errors offering a retry, and group
 order), the router half's control/pool/settings payloads and the `/effort-model` binding, the pool
 control that collapses the list and reopens it, and the declared `ui-chat` seat and `uiConversation`
-service.
+service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
+overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
+map is capped by least-recently-seen); `test/routes.test.js` (7) covers the panel token, the same-origin
+read guard and path redaction; `test/release.test.js` (8) covers the release gate (tag, version and
+CHANGELOG agreement plus tarball contents); `test/catalog.test.js` (20) validates the shipped catalog
+against its schema, pins the documented completeness warnings, proves the generator is deterministic and
+covers `findModel`; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
+PASS / WARN / SKIP / FAIL exit codes.
+
+## The model catalog
+
+Routing thresholds are code; model facts are data. `catalog/model-catalog.yaml` is the source of truth
+for what each addressable model costs, which reasoning-effort words it accepts, what its context window is,
+which channels carry it and what is scheduled to change — 19 models with an evidence date, written so that
+`unknown` stays `unknown` instead of being guessed. It is validated against
+`schema/model-catalog.schema.json` and compiled into `lib/catalog.js` by `scripts/build-catalog.py`.
+The generated module is committed and never edited by hand.
+
+```sh
+py -3 scripts/build-catalog.py          # regenerate lib/catalog.js from the YAML
+py -3 scripts/build-catalog.py --check  # fail if the two disagree
+node scripts/check-catalog.mjs          # structural validation, no Python needed
+```
+
+The router does not read the catalog yet: 0.15 wires telemetry, 0.16 turns catalog prices into cost
+estimates. Shipping the schema and the generator first is what makes those releases data changes rather
+than rewrites.
+
+## Release checks
+
+Every release goes through the same gate locally and in CI:
+
+```sh
+npm test                                # all tests
+npm run release:gate                    # tag = package.json = CHANGELOG, tarball contents
+py -3 scripts/build-catalog.py --check
+```
+
+`scripts/check-release.mjs` refuses a tarball that misses a promised file or ships test sources, and it is
+the reason a version bump, its CHANGELOG heading and the pushed tag can no longer drift apart. CI runs the
+suite on Node 20, 22 and 24; a tag run publishes with npm trusted publishing and a provenance attestation.
+See [PUBLISHING.md](PUBLISHING.md) for the full checklist and the rollback steps.
 
 ## License
 
