@@ -290,3 +290,20 @@ Docs updated with the release: README and README.zh gain the "prices, hard dates
 cost-units caveat, the real test counts and the corrected catalog paragraph (the router now reads the catalog for
 money and dates, but still scores by pool-relative `cost`); CHANGELOG gets the 0.15.1 section; package.json is
 0.15.1 with the new `./catalog-pricing` export.
+
+### Publish evidence (2026-10-26)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/0.15.1` from `e6382ef` (the 0.15.0 evidence commit), five commits, one merge |
+| push to main | `git push origin release/0.15.1:main` -> `e6382ef..92331bc` (fast-forward) |
+| tag | annotated `v0.15.1` (object `60fdc63922207501407bad75b3bb432b2fdb0ca1`) -> commit `92331bc` |
+| CI (tag) | Actions publish run [40280584353](https://github.com/Neptune810/dsh-model-router/actions/runs/40280584353) success: test node 20/22/24, release gate `--pack`, catalog regeneration, catalog validator, then the OIDC publish job |
+| CI (main) | Actions publish run 40280560596 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 40280584393 (tag) and 40280560603 (main) success, report uploaded as an artifact |
+| npm | `dist-tags.latest = 0.15.1`, tarball shasum `fed6bd56942032968d7c5533a377cd3cee1f7dcd`, published with provenance from the tag run |
+| staging window | npm held the first upload in its staging window for a few minutes (`version not found` right after the run); visible at 06:39Z, handled by the workflow's E409 branch, no re-publish needed |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.15.1 --save-exact`, dependency pinned to `0.15.1` (the desktop app must be restarted to load it) |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.15.0 latest` and `pnpm add` 0.15.0 in the
+profile; 0.15.1 reads 0.15.0 state without migration, so a downgrade is safe.
