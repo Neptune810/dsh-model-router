@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   CONTROL_SCOPES,
+  EFFORT_WORDS,
   ROUTING_DEFAULTS,
   chooseEntry,
   effortTierForClass,
@@ -161,10 +162,16 @@ test('an empty pool selects nothing', () => {
   assert.equal(chooseEntry(normalizePool({ provider: 'x', model: '' }), cfg({ pool: [] }), { stepClass: 'standard' }, {}), null)
 })
 
-test('effortTierForClass reads the route table and falls back to low', () => {
+test('effortTierForClass reads the route table and only falls back to low when unset', () => {
   assert.equal(effortTierForClass(cfg(), 'engineering'), 'high')
   assert.equal(effortTierForClass(cfg({ routes: {} }), 'hard'), 'low')
-  assert.equal(effortTierForClass(cfg({ routes: { hard: { effort: 'nonsense' } } }), 'hard'), 'low')
+  // Since 0.15.0 any configured word passes through verbatim, unknown ones
+  // included: the high-rank fallback happens downstream (stabilize/mapEffort),
+  // never here, so a hand-edited route is not silently downgraded to "low".
+  assert.equal(effortTierForClass(cfg({ routes: { hard: { effort: 'nonsense' } } }), 'hard'), 'nonsense')
+  assert.equal(effortTierForClass(cfg({ routes: { hard: { effort: '' } } }), 'hard'), 'low')
+  assert.equal(effortTierForClass(cfg({ routes: { hard: { effort: 42 } } }), 'hard'), 'low')
+  assert.equal(effortTierForClass(cfg({ routes: { hard: null } }), 'hard'), 'low')
 })
 
 test('mapEffort translates onto the target model vocabulary and degrades gracefully', () => {
@@ -188,4 +195,53 @@ test('control scopes and manual-override defaults are the documented ones', () =
   assert.deepEqual(CONTROL_SCOPES, ['full', 'effort', 'model'])
   assert.deepEqual(manualOverridePolicy({}), { yieldOnManual: true, resumeOnNextCommand: true })
   assert.deepEqual(manualOverridePolicy({ manualOverride: { yieldOnManual: false } }), { yieldOnManual: false, resumeOnNextCommand: true })
+})
+
+test('effortTierForClass passes the full nine-word vocabulary through verbatim', () => {
+  for (const word of EFFORT_WORDS) {
+    assert.equal(effortTierForClass(cfg({ routes: { trivial: { effort: word } } }), 'trivial'), word)
+  }
+  // The three words the old router downgraded to "low" are the point of the change.
+  for (const word of ['medium', 'xhigh', 'ultra']) {
+    assert.equal(effortTierForClass(cfg({ routes: { standard: { effort: word } } }), 'standard'), word)
+  }
+})
+
+test('stabilize ranks the route vocabulary: medium < high < xhigh, unknown counts as high', () => {
+  // medium is below high: a quiet streak is needed before lowering to it.
+  assert.deepEqual(stabilize('medium', 'high', 0, 2), { value: 'high', streak: 1 })
+  // high is below xhigh: same rule.
+  assert.deepEqual(stabilize('high', 'xhigh', 0, 2), { value: 'xhigh', streak: 1 })
+  // Raising is immediate across the same ranks.
+  assert.deepEqual(stabilize('xhigh', 'high', 0, 2), { value: 'xhigh', streak: 0 })
+  assert.deepEqual(stabilize('high', 'medium', 0, 2), { value: 'high', streak: 0 })
+  // An unknown route word ranks as high: no downgrade from high, an upgrade from low.
+  assert.deepEqual(stabilize('banana', 'high', 0, 2), { value: 'banana', streak: 0 })
+  assert.deepEqual(stabilize('banana', 'low', 0, 2), { value: 'banana', streak: 0 })
+  assert.deepEqual(stabilize('banana', 'max', 0, 2), { value: 'max', streak: 1 })
+})
+
+test('mapEffort resolves the nearest rank, and ties go to the higher effort (quality-first)', () => {
+  const deepseek = ['off', 'low', 'high', 'max']
+  // Quality-first tie rule: with two equally distant supported ids the
+  // higher-ranked one wins, so a mid-ladder intent never collapses downward.
+  // medium (rank 3) is equidistant from low (2) and high (4) => high.
+  assert.equal(mapEffort('medium', deepseek), 'high')
+  assert.equal(mapEffort('medium', ['low', 'high']), 'high')
+  assert.equal(mapEffort('medium', ['high', 'low']), 'high', 'supported order must not decide a tie')
+  // xhigh (5) is equidistant from high (4) and max (6) => max. Deliberate: an
+  // extreme-high intent ties upward; the catalog alias maps it to high instead.
+  assert.equal(mapEffort('xhigh', deepseek), 'max')
+  assert.equal(mapEffort('xhigh', ['low', 'high']), 'high', 'not a tie: high is strictly nearest')
+  // minimal (1) is equidistant from off (0) and low (2) => low.
+  assert.equal(mapEffort('minimal', deepseek), 'low')
+  // Words without a tie snap to the unique nearest neighbour.
+  assert.equal(mapEffort('none', deepseek), 'off')
+  assert.equal(mapEffort('ultra', deepseek), 'max')
+  // An unknown tier uses the high rank (4), exactly like the old behavior.
+  assert.equal(mapEffort('bogus', deepseek), 'high')
+  assert.equal(mapEffort('bogus', ['low', 'high']), 'high')
+  // Exact matches and the empty vocabulary keep working unchanged.
+  assert.equal(mapEffort('xhigh', ['off', 'low', 'xhigh']), 'xhigh')
+  assert.equal(mapEffort('medium', []), undefined)
 })

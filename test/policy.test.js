@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeRuntimeConfig, withSettings } from '../lib/config.js'
+import { EFFORT_RANK, EFFORT_WORDS, isKnownEffort } from '../lib/routing.js'
 import {
   AUTO_CEILING,
   DEFAULT_ROUTES,
+  EFFORTS,
   EFFORT_POINTS,
   STEP_CLASSES,
   classifyStep,
@@ -392,4 +394,82 @@ test('classifyStep only ever returns a known class', () => {
       assert.ok(STEP_CLASSES.includes(classifyStep(sig({ text, toolCalls }), cfg).stepClass))
     }
   }
+})
+
+test('EFFORT_POINTS documents the nine-word route vocabulary', () => {
+  // The wire vocabulary is unchanged: the adapter still serializes four ids.
+  assert.deepEqual(EFFORTS, ['off', 'low', 'high', 'max'])
+  assert.deepEqual(EFFORT_WORDS, ['off', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+  // policy.js documents a point value for every word routing.js can rank.
+  assert.deepEqual(Object.keys(EFFORT_POINTS), EFFORT_WORDS)
+  assert.deepEqual(Object.keys(EFFORT_RANK), EFFORT_WORDS)
+  assert.deepEqual(EFFORT_POINTS, {
+    off: 0,
+    none: 0,
+    minimal: 25,
+    low: 50,
+    medium: 62,
+    high: 75,
+    xhigh: 86,
+    max: 100,
+    ultra: 105,
+  })
+  assert.ok(Object.isFrozen(EFFORT_POINTS))
+})
+
+test('isKnownEffort accepts the nine route words and nothing else', () => {
+  for (const word of EFFORT_WORDS) assert.equal(isKnownEffort(word), true)
+  assert.equal(isKnownEffort('banana'), false)
+  assert.equal(isKnownEffort('High'), false, 'the vocabulary is lowercase')
+  assert.equal(isKnownEffort(''), false)
+  assert.equal(isKnownEffort(' '), false)
+  assert.equal(isKnownEffort(undefined), false)
+  assert.equal(isKnownEffort(null), false)
+  assert.equal(isKnownEffort(42), false)
+  assert.equal(isKnownEffort({}), false)
+  assert.equal(isKnownEffort(['high']), false)
+  // Prototype keys are not effort words.
+  assert.equal(isKnownEffort('toString'), false)
+  assert.equal(isKnownEffort('constructor'), false)
+})
+
+test('routes accept the full vocabulary and keep the shipped defaults identical', () => {
+  // 0.14.4 byte-identical defaults: trivial/standard low, engineering high, hard max.
+  const shipped = normalizeRuntimeConfig({})
+  assert.deepEqual(shipped.routes, {
+    trivial: { effort: 'low' },
+    standard: { effort: 'low' },
+    engineering: { effort: 'high' },
+    hard: { effort: 'max' },
+  })
+  assert.deepEqual(shipped.effortWarnings, [])
+  // policy.js merges route rows without filtering effort, so every documented
+  // word survives both the pure and the runtime normalizer and never warns.
+  for (const word of EFFORT_WORDS) {
+    assert.equal(normalizeConfig({ routes: { hard: { effort: word } } }).routes.hard.effort, word)
+    const c = normalizeRuntimeConfig({ routes: { hard: { effort: word } } })
+    assert.equal(c.routes.hard.effort, word)
+    assert.deepEqual(c.effortWarnings, [], word + ' is known, so it must not warn')
+  }
+})
+
+test('an unknown route effort is kept verbatim, reported, and treated as high', () => {
+  const c = normalizeRuntimeConfig({ routes: { hard: { effort: 'banana' } } })
+  assert.equal(c.routes.hard.effort, 'banana', 'the word is not silently rewritten')
+  assert.equal(c.effortWarnings.length, 1)
+  assert.equal(
+    c.effortWarnings[0],
+    'routes.hard.effort "banana" is not a known effort (known: off, none, minimal, low, medium, high, xhigh, max, ultra); it will be treated as high'
+  )
+  // Missing, empty and non-string efforts are "unset": they keep the shipped
+  // default (the routing layer maps them to "low") and must not produce a
+  // misleading "treated as high" warning.
+  const unset = normalizeRuntimeConfig({ routes: { hard: { effort: '' }, trivial: { effort: 42 } } })
+  assert.deepEqual(unset.effortWarnings, [])
+  assert.equal(unset.routes.hard.effort, '')
+  assert.equal(unset.routes.trivial.effort, 42)
+  // One warning per unknown class, never a duplicate message.
+  const many = normalizeRuntimeConfig({ routes: { trivial: { effort: 'banana' }, hard: { effort: 'banana' } } })
+  assert.equal(many.effortWarnings.length, 2)
+  assert.equal(new Set(many.effortWarnings).size, many.effortWarnings.length)
 })
