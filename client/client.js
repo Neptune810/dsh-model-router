@@ -304,13 +304,19 @@ window.__ModuleLoader__.load({
 			return "rgb(" + [over(top.r, base.r), over(top.g, base.g), over(top.b, base.b)].join(",") + ")"
 		}
 
-		async function api(path, options, retried) {
+		/**
+		 * One request to the plugin routes, handed back as the raw Response so the
+		 * caller can inspect status and headers (the conditional /state read needs
+		 * 304 and the ETag). api() below is the JSON convenience wrapper.
+		 */
+		async function apiRaw(path, options, retried) {
 			const controller = typeof AbortController !== "undefined" ? new AbortController() : undefined
 			const timer = controller ? setTimeout(() => controller.abort(), 10000) : undefined
 			try {
 				const headers = {}
 				if (options && options.body) headers["content-type"] = "application/json"
 				if (panelToken) headers["x-model-router-token"] = panelToken
+				if (options && options.headers) Object.assign(headers, options.headers)
 				const request = {
 					method: (options && options.method) || "GET",
 					cache: "no-store",
@@ -319,26 +325,41 @@ window.__ModuleLoader__.load({
 				}
 				if (controller) request.signal = controller.signal
 				const response = await fetch(BASE + path, request)
-				let json = null
-				try { json = await response.json() } catch (_noBody) { /* tolerate an empty body */ }
-				if (!response.ok) {
+				// 304 is not a failure: we asked conditionally and the resource did not
+				// change, so the untouched Response must reach the caller.
+				if (!response.ok && response.status !== 304) {
+					let json = null
+					try { json = await response.json() } catch (_noBody) { /* tolerate an empty body */ }
 					const message = (json && json.error) || ("HTTP " + response.status)
 					// The host mints a new token on every plugin reload, so a stale one
 					// is expected after an upgrade. Fetch a fresh token once, then replay.
+					// The refresh is marked retried, so a failing /state cannot recurse.
 					if (!retried && response.status === 403 && String(message).indexOf("panel token") >= 0) {
-						await api("/state")
-						return api(path, options, true)
+						await api("/state", undefined, true)
+						return apiRaw(path, options, true)
 					}
 					throw new Error(message)
 				}
-				if (json && typeof json.clientToken === "string") panelToken = json.clientToken
-				return json
+				return response
 			} catch (error) {
 				if (typeof console !== "undefined" && console.warn) console.warn("[model-router] request failed", path, String((error && error.message) || error))
 				throw error
 			} finally {
 				if (timer) clearTimeout(timer)
 			}
+		}
+
+		/** Every JSON body the routes return may carry the next panel token. */
+		function absorbToken(json) {
+			if (json && typeof json.clientToken === "string") panelToken = json.clientToken
+			return json
+		}
+
+		async function api(path, options, retried) {
+			const response = await apiRaw(path, options, retried)
+			let json = null
+			try { json = await response.json() } catch (_noBody) { /* tolerate an empty body (a 304 has none) */ }
+			return absorbToken(json)
 		}
 
 		function Icon(props) {
@@ -390,6 +411,11 @@ window.__ModuleLoader__.load({
 			const triggerRef = react.useRef(null)
 			const panelRef = react.useRef(null)
 			const rootRef = react.useRef(null)
+			// Validators for the conditional /state poll. They must never trigger a
+			// render, so they live in refs rather than state. A null etag means "send
+			// the read unconditionally", which is also how an old host is polled.
+			const etagRef = react.useRef(null)
+			const stateVersionRef = react.useRef(null)
 
 			react.useEffect(() => {
 				if (!props || !props.resolveCatalog) return
@@ -416,12 +442,35 @@ window.__ModuleLoader__.load({
 			}, [officialStore])
 			const official = react.useSyncExternalStore(officialSubscribe, officialRead)
 
+			react.useEffect(() => {
+				// A different conversation is a different state resource: the previous
+				// session's validator no longer applies, so its first read is unconditional.
+				etagRef.current = null
+				stateVersionRef.current = null
+			}, [sessionId])
+
 			const load = react.useCallback(() => {
 				// A brand-new conversation has no session id yet. The host still answers
 				// with the deployment-level state, so the panel must not freeze here.
 				const query = sessionId ? "?sessionId=" + encodeURIComponent(sessionId) : ""
-				api("/state" + query)
-					.then((next) => { setState(next); setError("") })
+				const conditional = etagRef.current
+					? { headers: { "if-none-match": etagRef.current } }
+					: undefined
+				apiRaw("/state" + query, conditional)
+					.then((response) => {
+						// Not modified: keep the rendered view (and any error text) exactly
+						// as it is instead of re-rendering identical data.
+						if (response.status === 304) return undefined
+						return response.json().then((next) => {
+							const etag = response.headers && response.headers.get("etag")
+							// A body without stateVersion, or a host without the header, is
+							// an old/plain server: keep polling unconditionally.
+							if (etag) etagRef.current = etag
+							if (next && Number.isFinite(next.stateVersion)) stateVersionRef.current = next.stateVersion
+							setState(absorbToken(next))
+							setError("")
+						})
+					})
 					.catch((reason) => setError(String((reason && reason.message) || reason)))
 			}, [sessionId])
 
@@ -431,12 +480,13 @@ window.__ModuleLoader__.load({
 			react.useEffect(() => {
 				// The host records every routed step; poll so the badge and the panel show
 				// the model and effort of the current step while a task is running. The
-				// interval is short because this is a local read-only route, and waking
-				// the window back up refreshes at once instead of waiting for the tick.
+				// read is conditional (ETag / 304), and 1200 ms keeps it live enough while
+				// costing less than the old tick; waking the window back up refreshes at
+				// once instead of waiting for the next one.
 				if (!sessionId || typeof setInterval !== "function") return undefined
 				const visible = () => !(typeof document !== "undefined" && document.hidden)
 				const onWake = () => { if (visible()) load() }
-				const timer = setInterval(() => { if (visible()) load() }, 700)
+				const timer = setInterval(() => { if (visible()) load() }, 1200)
 				const listensDocument = typeof document !== "undefined" && typeof document.addEventListener === "function"
 				const listensWindow = typeof window !== "undefined" && typeof window.addEventListener === "function"
 				if (listensDocument) document.addEventListener("visibilitychange", onWake)
