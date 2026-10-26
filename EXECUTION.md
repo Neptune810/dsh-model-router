@@ -12,7 +12,7 @@ Last updated: 2026-10-26.
 | --- | --- |
 | Repository | C:\DSH\dsh-model-router |
 | Remote | https://github.com/Neptune810/dsh-model-router |
-| Branch used for the release train | baseline/0.14.2 (0.14.3, 0.14.4), release/0.15.0 (0.15.0); each merged to main |
+| Branch used for the release train | one @@release/<version>@@ branch per milestone (@@baseline/0.14.2@@ for 0.14.3/0.14.4); each pushed to main |
 | Profile upgraded | C:\Users\97161\.dsh\profiles\web |
 | Node used locally | v24.21.0 (Windows) |
 | Python used locally | C:\Users\97161\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe (PyYAML 6.0.3) |
@@ -365,3 +365,67 @@ budget drill as their gate.
 Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.15.1 latest` and `pnpm add` 0.15.1 in the
 profile; 0.16.0 reads 0.15.1 state without migration and its routing is byte-identical with `costAware` off, so
 a downgrade changes nothing but the shadow fields.
+
+## 0.16.1 — channel health, failover, spend guard, the peak window (2026-10-26)
+
+**Goal.** Make official + account pool + relay + cross-brand first class without touching the quality
+policy: failover only on 429/5xx/timeout, and golden snapshots that stay byte-identical while
+`channels.failover` is off. Flipping `costAware` stays in 0.17.0 — the shadow needs more days, and
+adding channels and flipping the flag are two different risk classes.
+
+**What landed.**
+- `lib/channels.js` (new, 13.5 KB, pure, zero dependency): `classifyFailure` (status/code to rotate,
+  failover or none), `ChannelHealth` (rolling window, TTFT EWMA, success streak, cooldown, `cool()` to bench
+  a channel the moment a request fails), `orderChannels` / `channelRanks` (stable and lossless: benched
+  channels sink, they are never removed) and `fingerprint` (model mismatch, missing usage, missing
+  reasoning, TTFT outlier).
+- `lib/budget.js` (new, pure): session/day/month rows in tokens and USD, `softRatio` 0.8, `exceeded`,
+  `formatBudgetRow` / `budgetLine`, local day and month starts.
+- `lib/routing.js`: `crossCost` (scoreMargin 5, maxMultiple 3x), the `channels` block (failover off,
+  failThreshold 3, cooldownMs 60000, ewmaAlpha 0.3, maxTtftMs 30000, maxFailoversPerStep 1), `budget`,
+  `peakPolicy` defaulting to `inform`, `entry.channel` in `normalizePool`, and channel rank plus blocked
+  state in the `chooseEntry` ordering. Cost can still never leave a session unrouted (`costFallback`).
+- `lib/index.js`: `agent/request-error` records the failure on the channel ledger, benches the channel, and
+  asks for one `{kind:"retry"}` per `(turn, step)` only when a healthy alternative exists and the failure is
+  not the user doing; a brand whose every channel is benched fails over cross-brand, but only to a
+  catalog-priced entry, and `crossProvider: "never"` still wins. `agent/pre-step` refuses only a synthetic step
+  once a hard limit is crossed, and one release (`POST /model-router/budget` or `/router budget [once]`) lets the
+  next step through. `/state` gains `channels`, `budget`, `peak`, `lastError`, `lastVerify` and
+  `cross.costMultiple`; the decision reason list is published in full (cross-brand vetoes, failovers,
+  not-worth-a-review notes).
+- `lib/telemetry.js`: `router.decision/1` carries `peak` and `failoverFrom`, and `summarize` adds
+  `peakSteps` / `peakCostUsd` / `peakShare` / `failoverSteps` to `totals`.
+- `client/client.js`: a budget dot (near/over) on the trigger, a spend block with one bar per active row,
+  a peak note and a benched/quarantined channel line — bilingual, and absent on a host that sends no
+  such block.
+- Docs: CHANGELOG 0.16.1, both READMEs (the channel/spend/peak section plus the real test counts),
+  PLAN §3.1 and §5.6 marked delivered (catalog sync and the shadow review deferred to 0.17.0).
+
+**Freeze evidence.** `node --test` 368/368 pass (333 in 0.16.0: +18 channels, +3 routing, +1 telemetry,
++7 observation, +6 client), `node --check` clean on every touched file, golden snapshots byte-identical
+with `channels.failover` off, `scripts/check-release.mjs --pack` green (27 packed files, up from 25) and
+`scripts/check-catalog.mjs` OK (19 models / 15 channels / 4 calendar entries / 1 watchlist entry).
+
+**Deferred on purpose.** Catalog sync (the 2026-12-01 Gemini 4 Argon price and the GLM-4.5 retirement)
+rides with the 2027-01-01 price sync in 0.17.0, and the shadow mid-term review needs more than seven
+days of data.
+
+**Commits.** `f8d7b1d` the channels, budget, wiring, telemetry, client and tests work; `102415e`
+`chore(release): 0.16.1`.
+
+### Publish evidence (2026-10-26)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/0.16.1` from `d78f1ca` (the 0.16.0 evidence commit), two commits |
+| push to main | `git push origin release/0.16.1:main` -> `d78f1ca..102415e` (fast-forward) |
+| tag | annotated `v0.16.1` -> commit `102415e` |
+| CI (tag) | Actions publish run [40289447786](https://github.com/Neptune810/dsh-model-router/actions/runs/40289447786) success: test node 20/22/24, release gate `--pack`, catalog regeneration, catalog validator, then the OIDC publish job |
+| CI (main) | Actions publish run 40289443252 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 40289447819 success, report uploaded as an artifact |
+| npm | `dist-tags.latest = 0.16.1`, tarball shasum `8efd2f5b9a478f89fbc8061637b2d393e3e17bdb`, integrity `sha512-c4mzZ9ZJkzyD67rLKPov8wgn0TGZU8lP9uKoJgGU2ss3een+dQehKEoRmx4r5pBin8BFeIyOpWVLVUOhtZ+1PQ==`, published with provenance from the tag run |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.16.1 --save-exact`, dependency pinned to `0.16.1` (the desktop app must be restarted to load it) |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router@0.16.0 latest` and `pnpm add` 0.16.0 in
+the profile; 0.16.1 reads 0.16.0 state without migration, and with `channels.failover`, `budget.mode` and
+`crossProvider` left at their defaults the routing is byte-identical to 0.16.0.
