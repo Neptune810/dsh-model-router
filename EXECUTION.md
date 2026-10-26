@@ -12,7 +12,7 @@ Last updated: 2026-10-26.
 | --- | --- |
 | Repository | C:\DSH\dsh-model-router |
 | Remote | https://github.com/Neptune810/dsh-model-router |
-| Branch used for the release train | baseline/0.14.2, tracking main |
+| Branch used for the release train | baseline/0.14.2 (0.14.3, 0.14.4), release/0.15.0 (0.15.0); each merged to main |
 | Profile upgraded | C:\Users\97161\.dsh\profiles\web |
 | Node used locally | v24.21.0 (Windows) |
 | Python used locally | C:\Users\97161\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe (PyYAML 6.0.3) |
@@ -229,4 +229,13 @@ updated test counts and the catalog note; CHANGELOG gets the 0.15.0 section; pac
 
 ### Publish evidence
 
-(pending: push, tag, CI run and profile upgrade are recorded here after they happen)
+| step | evidence |
+| --- | --- |
+| push | `29bf8df..c9ea180 release/0.15.0 -> main`; tag `v0.15.0` (annotated object `3d326865b398e2aea5054ec7c333d7a12444e535`) -> `c9ea180` |
+| CI (tag) | run [40277432896](https://github.com/Neptune810/dsh-model-router/actions/runs/40277432896) success: test node 20/22/24, release gate, catalog generator check and validator all success; publish job `121423133217` success |
+| CI (main) | run [40277428519](https://github.com/Neptune810/dsh-model-router/actions/runs/40277428519) success |
+| npm | `dist-tags {"latest":"0.15.0"}`; version doc: `_npmUser` GitHub Actions, `dist.fileCount` 23, shasum `d17e5be8074f12c51b79ef9066ea3623ef4958d8`, integrity `sha512-lRXSZHxYsDqKc+3SgcHwVY+WyYKKdgwm2xRXVbu6Ipl+WhBQL7e6n+njXFaPu4hszIVBtEY27iZjPCap6NUFfg==`, provenance attestation on registry.npmjs.org |
+| tarball | 23 files unpacked to `C:\DSH\routing-plan-2026-10\npm-0.15.0\package`; `lib/telemetry.js`, `catalog/model-catalog.yaml`, `schema/model-catalog.schema.json` all present |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@0.15.0 --save-exact` ok in 10.4 s, installed 0.15.0, `node_modules/.../lib` includes `telemetry.js`; desktop DSH needs a restart to load it (peer-dependency WARNs are pre-existing) |
+
+Registry propagation lagged about a minute (dist-tags briefly showed `latest: 0.14.4` right after the publish job went green); the tag object differs from the commit SHA as expected for an annotated tag.
