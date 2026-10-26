@@ -9,6 +9,10 @@ import { apply } from '../lib/index.js'
 
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'model-router-modes-'))
 delete process.env.DSH_PROFILE_DIR
+// Panel mutations carry a per-process token (v0.14.3). These tests drive the
+// panel routes directly, so they run with the escape hatch on; one dedicated
+// test below clears it again and covers the token contract end to end.
+process.env.DSH_MODEL_ROUTER_NO_TOKEN = '1'
 
 const ROUTES = { trivial: { effort: 'low' }, standard: { effort: 'low' }, engineering: { effort: 'high' }, hard: { effort: 'high' } }
 /** A dense engineering brief classifies as "hard", which is what lifts the strong tier. */
@@ -777,3 +781,37 @@ test('changing the pool or the scope still asks again after a confirmation', asy
   assert.equal(edited.planConfirmed, false, 'an edited plan asks again')
 })
 
+
+test('the plugin mints a panel token, hands it out with /state and requires it on mutations (v0.14.3)', async () => {
+  // Everything else in this file runs with the token escape hatch on; clear it
+  // for this one boot so the real contract is exercised end to end.
+  delete process.env.DSH_MODEL_ROUTER_NO_TOKEN
+  try {
+    const host = makeHost({ pool: POOL, routes: ROUTES })
+    const statePath = '/model-router/state'
+    const state = JSON.parse((await call(host.routes.get(statePath), {
+      method: 'GET', url: statePath,
+    })).payload)
+    assert.match(String(state.clientToken), /^[0-9a-f]{32}$/)
+
+    const headers = { origin: 'http://localhost', host: 'localhost' }
+    const denied = await call(host.routes.get('/model-router/pool'), {
+      method: 'POST', url: '/model-router/pool', headers, body: { pool: POOL },
+    })
+    assert.equal(denied.status, 403)
+    assert.match(JSON.parse(denied.payload).error, /panel token/)
+
+    const allowed = await call(host.routes.get('/model-router/pool'), {
+      method: 'POST', url: '/model-router/pool',
+      headers: { ...headers, 'x-model-router-token': state.clientToken },
+      body: { pool: POOL },
+    })
+    assert.equal(allowed.status, 200)
+
+    // The state payload must not leak the profile path, only the file name.
+    assert.equal(state.stateFile, 'state.json')
+    if (state.prices) assert.equal(state.prices.file, 'state.json')
+  } finally {
+    process.env.DSH_MODEL_ROUTER_NO_TOKEN = '1'
+  }
+})

@@ -16,6 +16,9 @@ import { apply } from '../lib/index.js'
 
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'model-router-effort-model-'))
 delete process.env.DSH_PROFILE_DIR
+// These tests drive the panel routes directly; the panel token contract is
+// covered by test/routes.test.js and the dedicated test in test/modes.test.js.
+process.env.DSH_MODEL_ROUTER_NO_TOKEN = '1'
 
 const ROUTES = { trivial: { effort: 'low' }, standard: { effort: 'low' }, engineering: { effort: 'high' }, hard: { effort: 'high' } }
 /** A dense engineering brief classifies as "hard", which asks for "high" effort. */

@@ -22,6 +22,10 @@ window.__ModuleLoader__.load({
 		const NS = "dsh-model-router"
 		const BASE = "/model-router"
 		const STYLE_ID = "model-router-styles"
+		// Nonce the host hands out with /state and expects on mutations. It is not
+		// security against a local process (that can read the routes anyway), only
+		// against another page in this browser forging a cross-site POST.
+		let panelToken = null
 
 
 		const TEXT = {
@@ -300,21 +304,34 @@ window.__ModuleLoader__.load({
 			return "rgb(" + [over(top.r, base.r), over(top.g, base.g), over(top.b, base.b)].join(",") + ")"
 		}
 
-		async function api(path, options) {
+		async function api(path, options, retried) {
 			const controller = typeof AbortController !== "undefined" ? new AbortController() : undefined
 			const timer = controller ? setTimeout(() => controller.abort(), 10000) : undefined
 			try {
+				const headers = {}
+				if (options && options.body) headers["content-type"] = "application/json"
+				if (panelToken) headers["x-model-router-token"] = panelToken
 				const request = {
 					method: (options && options.method) || "GET",
 					cache: "no-store",
-					headers: options && options.body ? { "content-type": "application/json" } : undefined,
+					headers: Object.keys(headers).length > 0 ? headers : undefined,
 					body: options && options.body ? JSON.stringify(options.body) : undefined,
 				}
 				if (controller) request.signal = controller.signal
 				const response = await fetch(BASE + path, request)
 				let json = null
 				try { json = await response.json() } catch (_noBody) { /* tolerate an empty body */ }
-				if (!response.ok) throw new Error((json && json.error) || ("HTTP " + response.status))
+				if (!response.ok) {
+					const message = (json && json.error) || ("HTTP " + response.status)
+					// The host mints a new token on every plugin reload, so a stale one
+					// is expected after an upgrade. Fetch a fresh token once, then replay.
+					if (!retried && response.status === 403 && String(message).indexOf("panel token") >= 0) {
+						await api("/state")
+						return api(path, options, true)
+					}
+					throw new Error(message)
+				}
+				if (json && typeof json.clientToken === "string") panelToken = json.clientToken
 				return json
 			} catch (error) {
 				if (typeof console !== "undefined" && console.warn) console.warn("[model-router] request failed", path, String((error && error.message) || error))
