@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../lib/index.js'
@@ -333,4 +333,25 @@ test('auto mode pulls a pro conversation back to the flash model', async () => {
   )
   assert.equal(out.model, 'deepseek-flash')
   assert.equal(out.reasoningEffort, 'high')
+})
+
+test('package declares a dsh compatibility range and no host peer dependencies (v0.14.3)', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(pkg.engines.dsh, '>=0.1.7-rc.2 <0.2.0')
+  assert.equal(pkg.dsh.compat.dsh, pkg.engines.dsh)
+  // The host boot gate only reads peerDependencies and skips an unresolvable
+  // plugin silently, so a host package must never appear there.
+  const all = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}), ...(pkg.peerDependencies || {}) }
+  for (const name of Object.keys(all)) {
+    assert.ok(!name.startsWith('@deepseek-ai/'), 'host package must not be a dependency: ' + name)
+  }
+  const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
+  assert.match(patch, /@neptune810\/dsh-model-router/)
+})
+
+test('the shipped route table sends trivial steps to low (v0.14.3 upgrade note)', async () => {
+  const { DEFAULT_ROUTES } = await import('../lib/policy.js')
+  assert.equal(DEFAULT_ROUTES.trivial.effort, 'low')
+  assert.equal(DEFAULT_ROUTES.standard.effort, 'low')
+  assert.equal(DEFAULT_ROUTES.engineering.effort, 'high')
 })

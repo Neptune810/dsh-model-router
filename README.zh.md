@@ -325,12 +325,21 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 
 装完需要重启 `dsh web`。路由器的监听器在启动时注册，刷新页面不够。
 
-## 运行要求
+从 0.6.x / 0.13 升级：0.14.2 起内置路由表已把 `trivial` 送到 `low`，早年为抵消代码默认 `trivial -> off` 而在
+profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件会重写补丁层，这个 workaround 本来就是临时的）。
+0.14.3 的 `state.json` 会在加载时自动升到 version 2 并保留旧会话记录。
+
+## 运行要求与兼容性
 
 - Node 20 或更新。
-- 已在 `@deepseek-ai/dsh` 0.1.7-rc.2 上验证。插件用到 `agent/request`、`agent/inbox/claimed`
-  与 `session.deriveMessages()`。没有声明 `engines.dsh` 范围，因此插件市场会保持该条目可见，
-  而不是替它猜一个兼容性结论。
+- `engines.dsh` 声明为 `>=0.1.7-rc.2 <0.2.0`，在 `@deepseek-ai/dsh` 0.1.7-rc.2 上实测通过。
+  插件用到 `agent/request`、`agent/inbox/claimed`、`session.deriveMessages()` 与会话投影
+  （`modelSelection`、`todos`、`contextPressure`、`tokenUsage`）。
+- **不要**在插件根声明 `@deepseek-ai/*` 的 `peerDependencies`。宿主启动闸门只读 peerDependencies，
+  解析不到时会把整个插件静默跳过，而不是报错；`engines.dsh` 只用于 dshmarket 的安装兼容判断，
+  不参与启动。运行期防线是从 0.15 起的启动自检（缺契约时进入 degraded 并在面板说明）。
+- 目前只验证过 web 平台的 composer 座位（`conversation.input.model`）；宿主未声明该座位时自动
+  回退到 `conversation.input.right` 的 chip。
 
 ## 已知限制
 

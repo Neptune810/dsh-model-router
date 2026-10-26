@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.14.3
+
+**A hardening release: the panel no longer trusts any page that can reach the port, a conversation whose history is
+already poisoned is repaired on the same step instead of two steps later, the state file recovers instead of being
+silently rewritten, and the last dead config key starts working. Routing results are unchanged except where a bug
+fix applies.**
+
+- **Panel mutations carry a per-process token (D12).** `GET /model-router/state` hands out `clientToken`, and every
+  POST must echo it in `x-model-router-token`; a stale token (after a plugin reload) is refreshed once and the
+  request replayed. Reads are now same-origin checked too, because the state payload contains the user's plan.
+  `stateFile` and `prices.file` are reduced to bare file names, and every response carries `cache-control: no-store`.
+  `DSH_MODEL_ROUTER_NO_TOKEN=1` disables the token for a panel build or a local script that has not been updated;
+  the same-origin check stays on. This stops a cross-site page, not a local process — local code can call the host
+  API anyway.
+- **A poisoned history now pins effort `off` immediately (D7/S1).** The downgrade hysteresis (two quiet steps) used
+  to sit between the poison detector and the request, so the very step that detected a thinking-less tool call still
+  sent `high`/`max` and DeepSeek answered 400. The forced `off` bypasses `stabilize` and resets its streak.
+- **State file recovery and health (D13).** `state.json` is now version 2; version 1 files migrate on load. A corrupt
+  file is renamed to `state.json.corrupt-<ISO>` instead of being silently overwritten, and a newer version is served
+  read-only rather than downgraded. Write failures surface through a one-time warning, `storeHealth` in `/state`
+  (`ok`, `lastErrorAt`, `lastErrorCode`, `corruptBackup`, `readOnly`, `version`), and the session map is capped at
+  200 entries by least-recently-seen.
+- **`maxPerTask.strong` in the row config now applies (D9).** It is a default ceiling for strong pool entries that do
+  not set their own `maxPerTask`; an entry-level value still wins and the default stays "unlimited".
+- **`imagePolicy: "flash"` is retired (D15).** The value was documented in one place and treated as "keep" by the
+  decision engine. Stored settings migrate to `vision` with a warning; only `keep` | `vision` are accepted.
+- **Compatibility declared (D8).** `engines.dsh` and `dsh.compat.dsh` are `>=0.1.7-rc.2 <0.2.0`. No
+  `@deepseek-ai/*` peer dependency is declared: the host boot gate reads peers only and silently skips a plugin it
+  cannot resolve, which is exactly what a mistyped peer would cause (see dsh-better-sidebar 0.24.1). `engines.dsh`
+  feeds dshmarket's install check; the runtime self-check lands in 0.15.
+- **Upgrade note:** since 0.14.2 the shipped route table already sends `trivial` to `low`, so a profile override that
+  was added to cancel the old `trivial -> off` default can be deleted. The profile patch file is rewritten on a
+  plugin reinstall, so the workaround was only ever temporary.
+- 181 tests (`test/routes.test.js` 7 new; `test/store.test.js` 6 new; +1 each in policy, routing, plugin and modes).
+  Routing-result golden snapshots are unchanged for everything except the D7 fix.
 ## 0.14.2
 
 **The composer readout now tracks the host almost live: a shorter poll plus an immediate refresh the moment the window comes back.**

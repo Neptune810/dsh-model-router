@@ -373,12 +373,24 @@ dsh plugin --profile web add github:Neptune810/dsh-model-router
 Restart `dsh web` afterwards. Because the router registers listeners at boot, a reload is not
 enough.
 
-## Requirements
+Upgrading from 0.6.x / 0.13: since 0.14.2 the shipped route table already sends `trivial` to `low`, so a profile
+override `routes.trivial.effort: low` (added to cancel the old code default `trivial -> off`) can be deleted. A plugin
+reinstall rewrites the patch layer, so that workaround was only ever temporary. The 0.14.3 `state.json` migrates to
+version 2 on load and keeps the existing session records.
+
+## Requirements and compatibility
 
 - Node 20 or newer.
-- Verified against `@deepseek-ai/dsh` 0.1.7-rc.2. The plugin uses `agent/request`,
-  `agent/inbox/claimed`, and `session.deriveMessages()`. No `engines.dsh` range is declared, so the
-  plugin market keeps this entry visible rather than guessing it incompatible.
+- `engines.dsh` is declared as `>=0.1.7-rc.2 <0.2.0`; tested on `@deepseek-ai/dsh` 0.1.7-rc.2.
+  The plugin uses `agent/request`, `agent/inbox/claimed`, `session.deriveMessages()` and the
+  session projections (`modelSelection`, `todos`, `contextPressure`, `tokenUsage`).
+- **Do not** declare `@deepseek-ai/*` `peerDependencies` in the plugin root. The host boot gate only
+  reads peerDependencies and silently skips a plugin it cannot resolve instead of failing; `engines.dsh`
+  is used by dshmarket for install-time compatibility only and does not affect boot. The runtime
+  defence is the startup self-check planned for 0.15+ (a missing contract switches to degraded and
+  says so in the panel).
+- Only the web composer seat (`conversation.input.model`) is verified; when the host does not declare
+  that seat the panel falls back to the `conversation.input.right` chip.
 
 ## Limitations
 
