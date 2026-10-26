@@ -75,8 +75,15 @@ test('flush failure is surfaced through onError and lastError', () => {
   assert.equal(typeof failing.health().lastErrorAt, 'number')
   assert.ok(failing.lastError, 'lastError is exposed')
   assert.ok(failing.lastError.code, 'the fs error code is kept')
-  assert.equal(errors.length, 1)
-  assert.equal(errors[0].path, file)
+  // Linux answers the read of "<state dir>/state.json" (state dir is a plain
+  // file) with ENOTDIR and reports it too; Windows answers ENOENT and stays
+  // silent. Both are legitimate, so only the write failure itself is required.
+  assert.ok(errors.length >= 1, 'onError is called for the failed write')
+  assert.ok(
+    errors.every((error) => error.path === file && typeof error.code === 'string'),
+    'every reported error names the state file and keeps its fs code',
+  )
+  assert.deepEqual(errors[errors.length - 1], failing.lastError)
   assert.equal(store.health().ok, true)
 })
 
