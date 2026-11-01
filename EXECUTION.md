@@ -4,7 +4,7 @@ What was actually done to this repository and to the local DSH profile, with the
 proves it. Written while executing the 2026-10 roadmap
 (C:\DSH\routing-plan-2026-10\PLAN.md); this file is the running record, PLAN.md is the plan.
 
-Last updated: 2026-10-26.
+Last updated: 2026-11-01.
 
 ## Environment
 
@@ -584,3 +584,90 @@ decision: the shadow gate (G3/G4: ≥7 days and ≥300 priced steps) is still un
 Rollback if needed: `npm dist-tag add `neptune810/dsh-model-router`0.17.1 latest` and `pnpm add` 0.17.1 in
 the profile; 1.0.0 changes no state shape, so 0.17.1 reads the same store, and a 1.0.0 client simply loses
 the `schemaVersion` field it was already told to tolerate.
+
+## 1.0.1 — one clock, and a catalog re-verified (2026-11-01)
+
+**Goal.** A test must not depend on what time it is, and every catalog fact must be re-read from its
+source on the review day rather than inherited. No routing decision changes.
+
+**Why it had to be a release.** The 2026-11-01 monthly review started with `node --test` and found
+421 tests / 420 pass / 1 fail: `test/observation.test.js` asserted a 9.6x cross-brand saving for a
+`deepseek-v4-pro` switch, and the run said 4.8x. Both numbers are right. `blendedUsdPerMTok`
+(`lib/pricing2.js:115`) applies DeepSeek's peak/off-peak multiplier (peak Mon-Fri 09:00-12:00 and
+14:00-18:00 Asia/Shanghai, off-peak everywhere else including weekends): 1.236429 USD/MTok at
+2026-10-26 10:00 Monday against 0.1285 for Haiku is 9.62x, and 0.618214 at 2026-11-01 09:30 Sunday is
+4.81x. The suite had only ever passed because CI happened to run inside the CST peak window. A test
+whose expectation is a function of the wall clock is a test that will fail for the next person.
+
+**What landed.**
+
+- `lib/clock.js`: `now()`, `freeze(atMs)` and `isFrozen()`. `now()` returns a frozen instant when one
+  is set, else `DSH_MODEL_ROUTER_NOW` when it parses to a positive number, else `Date.now()`. Every
+  `Date.now()` in the plugin now goes through it: `lib/index.js` (24 call sites), `lib/pricing2.js` (4),
+  `lib/catalog-pricing.js` (4), `lib/budget.js` (2), `lib/feedback-store.js` (1), `lib/replay.js` (1).
+  `package.json` exports `./clock` (the sixteenth subpath).
+- The two call sites that made the failure possible: `lib/index.js:1043` passes the clock into
+  `parseOpenRouter(...)` (so `lib/pricing.js` stays import-free) and `lib/index.js:1411` sets
+  `eventAt = clockNow()`, which `pricesAt(catalogModel, eventAt)` uses to pick the peak or off-peak row.
+- `test/clock.test.js` (5 cases): wall clock fallback, freeze/release, `NaN` refused, the env hook and its
+  invalid values, and freeze winning over the env hook.
+- `test/observation.test.js` pins both sides: `PEAK_MS = Date.UTC(2026, 9, 26, 2, 0, 0)` keeps the 9.6x
+  case, and a new off-peak case pins `savingMultiple === 4.8` at `OFFPEAK_MS = Date.UTC(2026, 10, 1, 1,
+  30, 0)` — still above `cfg.crossCost.maxMultiple` (default 3), i.e. the switch is still worth reviewing.
+- `scripts/gate.mjs` runs the suite three times (real clock, pinned peak, pinned off-peak) and prints the
+  pinned instant; `.github/workflows/publish.yml` adds `Clock-independent suite (peak / off-peak; node 24)`
+  before the release gate, so a clock-dependent assertion can no longer reach `main` unnoticed.
+- Catalog re-verified against sources on 2026-11-01: Artificial Analysis moved from v4.3.2 to
+  **Intelligence Index v5.0** (nine different evaluations, so scores are not comparable across versions),
+  14 of 19 models now carry a score, `deepseek-v4-pro` gets its first (23) and lands *below*
+  `deepseek-flash` (32) — recorded as a 1.1.0 tier question, not acted on here. `evidenceDate` is
+  2026-11-01, all 19 `aaVersion` fields say `v5.0`.
+- DeepSeek's price page re-read: the two ids, the four peak/off-peak rows and the 50% off-peak rule are
+  unchanged; Search/Fetch became billable at CNY 5 per 1000 successful requests on 2026-11-01, which the
+  catalog calendar already said. OpenRouter cross-check kept both hard dates (`glm-4.5` expires
+  2026-12-31, `gemini-4-argon` still on promo, `gemini-3.8-flash` still on promo until 2027-01-01).
+- One listing is marked unusable instead of trusted: OpenRouter serves `deepseek/deepseek-v4-pro` at
+  $1.60/$3.20, which matches neither the official peak ($1.29/$3.86) nor the official off-peak
+  ($0.64/$1.93). The official page wins for pricing; the quirk says so. (`deepseek-v4.1-flash-1017` is
+  listed at the off-peak rate, because OpenRouter's listing follows DeepSeek's peak/off-peak clock while
+  the catalog stores the peak row — also recorded as a quirk.)
+- The one standing completeness warning is gone: `claude-sonnet-5-5` gained its `aaVariant`
+  (`max with fallback`), so `check-catalog.mjs` now prints zero warnings.
+- `test/fixtures/replay-l1.json` + `test/replay-l1.test.js`: twenty reviewed routes, five pools × four
+  step classes, labelled from the scoring rules first and then replayed through
+  `lib/replay.js --fail-on-change`, so a catalog or scoring change that moves one of them fails in the
+  suite instead of on the bill. The fixture says `cheap` or `strong` only — see the commit below.
+
+**Freeze evidence.** `node --test` 431/431 pass (1.0.0: 421; +5 clock, +1 off-peak observation, +4
+replay-l1). `node scripts/gate.mjs` exit 0 in 20.6 s: 431/431 at the real clock, 431/431 at
+`DSH_MODEL_ROUTER_NOW=1792980000000` (2026-10-26 10:00 +08:00, peak) and 431/431 at
+`1793496600000` (2026-11-01 09:30 +08:00, off-peak), then `check-release` (version 1.0.1, changelog
+1.0.1, packed files 39) and `check-catalog` (19 models / 15 channels / 4 calendar / 1 watchlist, zero
+warnings, and the honest 11 null price fields, 6 empty effort vocabularies, 57 relay entries with
+`billingMode: unknown`).
+
+**Commits.** `664ee05` the clock and the three-clock gate; `d0d0392` the catalog re-verified against
+v5.0; `df42844` the twenty reviewed routes; `a73f368` `chore(release): 1.0.1`; `5ad3069` the fixture
+tier vocabulary fix (post-tag; it changes no product code).
+
+### Publish evidence (2026-11-01)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/1.0.1` from `dbccd1f` (the 1.0.0 evidence commit) |
+| push to main | `git push origin release/1.0.1:main` -> `dbccd1f..a73f368` |
+| tag | annotated `v1.0.1` -> commit `a73f368` |
+| CI (tag) | Actions publish run [41263414047](https://github.com/Neptune810/dsh-model-router/actions/runs/41263414047) success: test node 20/22/24, the node 24 clock-independent suite (two pinned instants), release gate `--pack`, catalog regeneration and validator, then the OIDC publish job (`Publish` step success) |
+| CI (main) | Actions publish run 41263410400 success (tests + gate, publish job skipped: not a tag) |
+| drift workflow | catalog-diff run 41263414104 success |
+| npm | `dist-tags.latest = 1.0.1`, tarball shasum `e65caa9416b498830c0256f6b1df874206af292b`, integrity `sha512-i7fzdo/9GeyUFWqy5sJ4A8mgRhbmFZKN7qrZgqZeFcwr73w2SBag8xZe+gaDjb9A+KdzzmaaByadULwtSratUw==`, 39 files (up from 38: `lib/clock.js`), provenance attestation `https://registry.npmjs.org/-/npm/v1/attestations/@neptune810%2fdsh-model-router@1.0.1`; published from the tag run with `engines.node >=20` / `engines.dsh >=0.1.7-rc.2 <0.2.0` |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@1.0.1 --save-exact` — dependency now `1.0.1`, 16 exports present, `lib/clock.js` installed (dsh-better-sidebar 0.24.1, dsh-cost-meter 1.7.45, dshmarket ^1.66.5, dsh-image-generation ^0.1.3 unchanged); pnpm added the version to `minimumReleaseAgeExclude`; the desktop app must be restarted to load it |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router 1.0.0 latest` and `pnpm add` 1.0.0 in
+the profile; 1.0.1 adds a module and an internal clock, changes no state shape and no route, so 1.0.0
+reads the same store and the panel loses nothing it was promised.
+
+**Review record.** The whole 2026-11-01 review (catalog diff table, tool limitations, the two
+judgement calls, the L1 method, the grooming decision that set 1.1.0 for 2026-12-01) is written up in
+`C:\DSH\routing-plan-2026-10\review-2026-11-01.md`; `PLAN.md` §3.1 and §5.10 and
+`release-calendar.csv` rows 14-16 were updated at the same time.
