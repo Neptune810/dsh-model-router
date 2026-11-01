@@ -31,6 +31,7 @@ test('the level-1 label set covers five pools and all four step classes', () => 
     const ids = new Set(fixture.pools[name].pool.map((entry) => entry.id))
     for (const row of mine) assert.ok(ids.has(row.chosen.provider + '/' + row.chosen.model), name + ' expects a model from its own pool')
     assert.ok(fixture.pools[name].pool.length >= 1, name + ' is not empty')
+    for (const entry of fixture.pools[name].pool) assert.ok(entry.tier === 'cheap' || entry.tier === 'strong', name + ' only uses the two tier words normalizePool keeps; anything else is silently coerced to cheap')
   }
   const withoutStrong = Object.keys(fixture.pools).filter((name) => !fixture.pools[name].pool.some((entry) => entry.tier === 'strong'))
   assert.deepEqual(withoutStrong, ['price-first'], 'exactly one pool has no strong entry, so the set also proves a cheap-only pool still routes hard work')

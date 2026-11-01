@@ -1,5 +1,5 @@
 {
-  "note": "Level-1 replay labels for the 2026-11-01 monthly review (m05910). Each case is a reviewed expectation about what the shipped router would pick for one step class against one pool, decided before the run and then diffed against the code. The labels are rule-derived and hand-reviewed, not human ground truth: the point is that a future catalog, config or scoring change that moves any of these routes turns the test red, so the move is a decision instead of an accident. Coverage: 5 pools x 4 step classes = 20 cases; cheap/strong scoring, the engineering and hard bonuses, effort ladders with and without every requested word, a strong-only pool that must still route cheap steps, and a relay/official tie that the official entry wins.",
+  "note": "Level-1 replay labels for the 2026-11-01 monthly review (m05910). Each case is a reviewed expectation about what the shipped router would pick for one step class against one pool, decided before the run and then diffed against the code. The labels are rule-derived and hand-reviewed, not human ground truth: the point is that a future catalog, config or scoring change that moves any of these routes turns the test red, so the move is a decision instead of an accident. Coverage: 5 pools x 4 step classes = 20 cases; cheap/strong scoring, the engineering and hard bonuses, effort ladders with and without every requested word, a strong-only pool that must still route cheap steps, and a relay/official tie that the official entry wins. Pool entries only ever use the two tier words the router understands (cheap/strong): normalizePool coerces anything else to cheap, so writing \"standard\" would have implied a third tier that does not exist.",
   "reviewedAt": "2026-11-01",
   "reviewedAgainst": "catalog evidenceDate 2026-11-01, AA Intelligence Index v5.0",
   "pools": {
@@ -31,7 +31,7 @@
         },
         {
           "id": "moonshot-official/kimi-k3.1-pro",
-          "tier": "standard",
+          "tier": "cheap",
           "cost": 2
         },
         {
@@ -60,7 +60,7 @@
         },
         {
           "id": "moonshot-official/kimi-k3.1-pro",
-          "tier": "standard",
+          "tier": "cheap",
           "cost": 1
         }
       ]
