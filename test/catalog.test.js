@@ -38,9 +38,9 @@ const clone = () => JSON.parse(JSON.stringify(CATALOG))
 
 test('catalog header describes a dated evidence snapshot', () => {
   assert.equal(CATALOG.schemaVersion, '1.0.0')
-  assert.equal(CATALOG.evidenceDate, '2026-10-26')
+  assert.equal(CATALOG.evidenceDate, '2026-11-01')
   assert.match(CATALOG.generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
-  assert.equal(CATALOG.aaVersion, 'v4.3.2')
+  assert.equal(CATALOG.aaVersion, 'v5.0')
   assert.equal(CATALOG.fxRate.base, 'CNY')
   assert.equal(CATALOG.fxRate.quote, 'USD')
   assert.equal(CATALOG.fxRate.rate, 7)
@@ -216,17 +216,30 @@ test('Artificial Analysis scores carry the variant they were measured at', () =>
     if (!model.quality) continue
     if (model.quality.aaIndex === null) continue
     assert.ok(Number.isInteger(model.quality.aaIndex), model.id + ': aaIndex')
-    // Known gap: claude-sonnet-5-5 has a score but no variant recorded; every
-    // other scored model names one. Fix the YAML and this list shrinks.
-    if (model.quality.aaVariant === undefined) {
-      assert.equal(model.id, 'claude-sonnet-5-5')
-      continue
-    }
-    assert.equal(typeof model.quality.aaVariant, 'string')
-    assert.ok(model.quality.aaVariant.length > 0)
+    // Probe 2026-11-01 closed the last gap (claude-sonnet-5-5 -> "max with
+    // fallback"), so every scored model must now name its variant.
+    assert.equal(typeof model.quality.aaVariant, 'string', model.id + ': aaVariant')
+    assert.ok(model.quality.aaVariant.length > 0, model.id + ': empty aaVariant')
   }
+  // v5.0 (2026-11-01) scores fourteen of the nineteen models; the five without
+  // a public AA page stay null rather than guessed.
   const scored = MODELS.filter((model) => model.quality && model.quality.aaIndex !== null).map((model) => model.id)
-  assert.deepEqual(scored, ['deepseek-flash', 'gpt-6-astra', 'gpt-6.1-sol', 'claude-opus-5-5', 'claude-sonnet-5-5', 'gemini-4-argon', 'gemini-3.8-flash', 'muse-wonder', 'kimi-k3.1-pro'])
+  assert.deepEqual(scored, [
+    'deepseek-flash',
+    'deepseek-v4-pro',
+    'gpt-6-astra',
+    'gpt-6.1-sol',
+    'gpt-6-luna',
+    'claude-opus-5-5',
+    'claude-sonnet-5-5',
+    'claude-haiku-5-5',
+    'gemini-4-argon',
+    'gemini-3.8-flash',
+    'grok-4.7',
+    'muse-wonder',
+    'kimi-k3.1-pro',
+    'minimax-m3.1-flash'
+  ])
 })
 
 test('every model names at least one addressable channel', () => {
@@ -334,17 +347,10 @@ test('validateCatalog rejects structurally broken catalogs', () => {
 
 test('the shipped catalog has exactly the known completeness warnings', () => {
   const warnings = collectWarnings(CATALOG)
-  assert.equal(warnings.length, 1, warnings.join('\n'))
-  // Registry gap: closed on 2026-10-26 - every channel label a model references
-  // is now registered, including the Bailian Singapore regional endpoint.
-  const unregistered = warnings.filter((warning) => warning.startsWith('catalog.channels:')).map((warning) => warning.match(/channel "([^"]+)"/)[1])
-  assert.deepEqual(unregistered, [])
-  // Remaining data gap: one AA score without the variant it was measured at.
-  // Kept on purpose - no public source pins which effort variant was scored.
-  assert.deepEqual(
-    warnings.filter((warning) => warning.includes('aaVariant')).map((warning) => warning.match(/models\("([^"]+)"\)/)[1]),
-    ['claude-sonnet-5-5']
-  )
+  // 2026-11-01 monthly review: zero warnings. The last one (an AA score with no
+  // recorded effort variant) closed when the AA v5.0 probe pinned
+  // claude-sonnet-5-5 to "max with fallback". A new warning is a real gap.
+  assert.deepEqual(warnings, [])
 })
 
 test('findModel resolves every addressable form', () => {
@@ -378,7 +384,7 @@ test('the generated module is frozen, JSON-safe, and marked generated', () => {
   assert.ok(source.endsWith('}\n'))
   assert.ok(!source.endsWith('\n\n'))
   const yaml = readFileSync(new URL('../catalog/model-catalog.yaml', import.meta.url), 'utf8')
-  assert.match(yaml, /^evidenceDate: "2026-10-26"$/m)
+  assert.match(yaml, /^evidenceDate: "2026-11-01"$/m)
   assert.match(yaml, /^schemaVersion: "1\.0\.0"$/m)
 })
 

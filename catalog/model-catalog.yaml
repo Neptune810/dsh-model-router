@@ -1,15 +1,18 @@
 # model-catalog.yaml
 # 机器可读模型目录 · @neptune810/dsh-model-router 0.16 成本引擎与每日目录更新流水线消费
-# 证据时点（evidenceDate）：2026-10-26。价格一律「每 1,000,000 tokens」，货币见 pricing.currency。
+# 证据时点（evidenceDate）：2026-11-01。价格一律「每 1,000,000 tokens」，货币见 pricing.currency。
 # 数据来源与置信度逐条写在 sources[]；unknown 表示未核实，禁止推断成数字（下游必须显式处理）。
 # 本文件为手写 + 校验产物；生成/校验见 model-catalog.README.md。
 
 schemaVersion: "1.0.0"
-generatedAt: "2026-10-26T12:30:00+08:00"
-evidenceDate: "2026-10-26"
+generatedAt: "2026-11-01T09:55:00+08:00"
+evidenceDate: "2026-11-01"
 evidenceTool: "web_fetch / OpenRouter models API / PyYAML 6.0.3 校验"
 fxRate: { base: CNY, quote: USD, rate: 7.0, note: "由 OpenRouter 对 DeepSeek 的挂牌价反推，仅用于 usdApprox 参考" }
-aaVersion: "v4.3.2"
+# AA Intelligence Index v5.0（9 项评测，2026-11-01 复核；v4.3.2 分数与 v5.0 不可比）
+# 口径：https://artificialanalysis.ai/models
+# 复核范围：AA 全部 14 个可查模型分数、DeepSeek 官方价、OpenRouter 在售/到期日；Google 官方定价页当日不可达（见月度评审记录）
+aaVersion: "v5.0"
 modelCount: 19
 
 # ── 渠道注册表 ───────────────────────────────────────────────────────────────
@@ -239,10 +242,10 @@ models:
       fim: true
       fimNote: "FIM 仅非思考模式可用"
     quality:
-      aaIndex: 45
-      aaVersion: "v4.3.2"
+      aaIndex: 32
+      aaVersion: "v5.0"
       aaVariant: "max"
-      aaCostPerTaskUsd: 0.26
+      aaCostPerTaskUsd: 0.6
       swebenchVerified: null
       terminalBench4: 42.3
       otherBenchmarks:
@@ -281,11 +284,11 @@ models:
       - "旧 id deepseek-v4-flash / deepseek-v4-flash-vision-exp 仍可调用，但已被静默路由到 V4.1-Flash 并按 Flash 计费"
       - "reasoning_effort=max 时 max_tokens 默认 128K；思考模式默认 64K；非思考默认 8K"
     sources:
-      - { url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", checkedAt: "2026-11-01", confidence: high }
       - { url: "https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/", checkedAt: "2026-10-26", confidence: high }
       - { url: "https://api-docs.deepseek.com/api/create-chat-completion", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/deepseek-v4-1-flash-1017", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/deepseek-v4-1-flash-1017", checkedAt: "2026-11-01", confidence: medium }
 
   - id: deepseek-v4-pro
     provider: deepseek
@@ -339,8 +342,10 @@ models:
       fim: true
       fimNote: "FIM 仅非思考模式可用"
     quality:
-      aaIndex: null
-      aaVersion: "v4.3.2"
+      aaIndex: 23
+      aaVersion: "v5.0"
+      aaVariant: "max"
+      aaCostPerTaskUsd: 1.77
       swebenchVerified: null
       terminalBench4: null
       otherBenchmarks:
@@ -373,9 +378,10 @@ models:
       - "不支持图像输入（只有 flash 支持）"
       - "并发上限 500（flash 为 2500）"
     sources:
-      - { url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", checkedAt: "2026-11-01", confidence: high }
       - { url: "https://api-docs.deepseek.com/zh-cn/updates", checkedAt: "2026-10-26", confidence: high }
       - { url: "https://api-docs.deepseek.com/api/create-chat-completion", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/deepseek-v4-pro", checkedAt: "2026-11-01", confidence: medium }
 
   # ── OpenAI GPT-6 家族（USD）──────────────────────────────────────────────
   - id: gpt-6-astra
@@ -426,10 +432,10 @@ models:
       vision: true
       fim: false
     quality:
-      aaIndex: 53
-      aaVersion: "v4.3.2"
+      aaIndex: 57
+      aaVersion: "v5.0"
       aaVariant: "max"
-      aaCostPerTaskUsd: 3.26
+      aaCostPerTaskUsd: 6.24
       swebenchVerified: null
       terminalBench4: null
       confidence: medium
@@ -453,8 +459,8 @@ models:
       - "knowledge cutoff 2026-04-30"
     sources:
       - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/gpt-6-astra", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gpt-6-astra", checkedAt: "2026-11-01", confidence: medium }
 
   - id: gpt-6.1-sol
     provider: openai
@@ -504,10 +510,10 @@ models:
       vision: true
       fim: false
     quality:
-      aaIndex: 52
-      aaVersion: "v4.3.2"
+      aaIndex: 55
+      aaVersion: "v5.0"
       aaVariant: "max"
-      aaCostPerTaskUsd: 0.72
+      aaCostPerTaskUsd: 1.27
       swebenchVerified: null
       terminalBench4: null
       confidence: medium
@@ -531,8 +537,8 @@ models:
       - "长上下文整单计价（>272K → 4/15）"
     sources:
       - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/gpt-6.1-sol", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gpt-6.1-sol", checkedAt: "2026-11-01", confidence: medium }
 
   - id: gpt-6-sol
     provider: openai
@@ -583,7 +589,7 @@ models:
       fim: false
     quality:
       aaIndex: null
-      aaVersion: "v4.3.2"
+      aaVersion: "v5.0"
       swebenchVerified: null
       terminalBench4: null
       confidence: low
@@ -602,7 +608,7 @@ models:
       - "缓存读比 6.1-sol 贵一倍（0.20 vs 0.10），长会话成本更高"
     sources:
       - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
 
   - id: gpt-6-luna
     provider: openai
@@ -651,7 +657,7 @@ models:
       anthropicApi: false
       vision: true
       fim: false
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: 28, aaVersion: "v5.0", aaVariant: "max", aaCostPerTaskUsd: 0.15, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: openai-official, qualifiedId: "openai-official/gpt-6-luna", modelId: gpt-6-luna }
@@ -667,7 +673,8 @@ models:
       - "函数工具必须走 Responses API"
     sources:
       - { url: "https://docs.timbal.ai/models/openai", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gpt-6-luna", checkedAt: "2026-11-01", confidence: medium }
 
   # ── Anthropic Claude 5.x（USD）───────────────────────────────────────────
   - id: claude-opus-5-5
@@ -717,13 +724,13 @@ models:
       fim: false
     quality:
       aaIndex: 58
-      aaVersion: "v4.3.2"
+      aaVersion: "v5.0"
       aaVariant: "max with fallback"
-      aaCostPerTaskUsd: 5.98
+      aaCostPerTaskUsd: 10.04
       swebenchVerified: null
       terminalBench4: null
       confidence: medium
-    perf: { speedTps: 96.2, ttftMs: null, verbosityMTokensPerIndexRun: 260, confidence: medium }
+    perf: { speedTps: 96.6, ttftMs: null, verbosityMTokensPerIndexRun: 220, confidence: medium }
     channels:
       official: { channel: anthropic-official, qualifiedId: "anthropic-official/claude-opus-5-5", modelId: claude-opus-5-5 }
       accountPool: []
@@ -737,11 +744,11 @@ models:
       - "tool_choice=any/tool 返回 400（不支持强制工具选择）"
       - "fast mode 需 extra_body {speed: fast} + header anthropic-beta: fast-mode-2026-02-01"
       - "流中断（无 message_delta）仍收 prompt 侧费用，output 不计费"
-      - "aaIndex 58 为全球第一；verbosity 260M 输出 token（最啰嗦之一）→ 长任务成本高"
+      - "aaIndex 58 = v5.0 第 2（仅次于 Gemini 4 Carbon 59）；verbosity 220M 输出 token（最啰嗦之一）→ 长任务成本高"
     sources:
       - { url: "https://docs.timbal.ai/models/anthropic", checkedAt: "2026-10-26", confidence: high }
       - { url: "https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/claude-opus-5-5", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://artificialanalysis.ai/models/claude-opus-5-5", checkedAt: "2026-11-01", confidence: medium }
 
   - id: claude-sonnet-5-5
     provider: anthropic
@@ -787,7 +794,7 @@ models:
       anthropicApi: true
       vision: true
       fim: false
-    quality: { aaIndex: 56, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: medium }
+    quality: { aaIndex: 54, aaVersion: "v5.0", aaVariant: "max with fallback", aaCostPerTaskUsd: 10.02, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: anthropic-official, qualifiedId: "anthropic-official/claude-sonnet-5-5", modelId: claude-sonnet-5-5 }
@@ -800,11 +807,12 @@ models:
       openrouterPriceUsd: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 }
     quirks:
       - "thinking=disabled → 400；需改用 between_tools"
-      - "AA 56 分 @ 2/10，是本表里 $/分的第二优（仅次于 DeepSeek）"
+      - "AA 54 分 @ 2/10（v5.0）；$/分仍优于 Opus，但不再领先 Kimi/Gemini 同级"
     sources:
       - { url: "https://docs.timbal.ai/models/anthropic", checkedAt: "2026-10-26", confidence: high }
       - { url: "https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/claude-sonnet-5-5", checkedAt: "2026-11-01", confidence: medium }
 
   - id: claude-haiku-5-5
     provider: anthropic
@@ -856,7 +864,7 @@ models:
       anthropicApi: true
       vision: true
       fim: false
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: 36, aaVersion: "v5.0", aaVariant: "max", aaCostPerTaskUsd: 0.41, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: anthropic-official, qualifiedId: "anthropic-official/claude-haiku-5-5", modelId: claude-haiku-5-5 }
@@ -873,7 +881,8 @@ models:
     sources:
       - { url: "https://docs.timbal.ai/models/anthropic", checkedAt: "2026-10-26", confidence: high }
       - { url: "https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/claude-haiku-5-5", checkedAt: "2026-11-01", confidence: medium }
 
   # ── Google Gemini（USD；两条已官宣的价格日历）────────────────────────────
   - id: gemini-4-argon
@@ -929,7 +938,7 @@ models:
       video: true
       pdf: true
       fim: false
-    quality: { aaIndex: 53, aaVersion: "v4.3.2", aaVariant: "high", aaCostPerTaskUsd: 1.99, swebenchVerified: null, terminalBench4: null, confidence: medium }
+    quality: { aaIndex: 50, aaVersion: "v5.0", aaVariant: "high", aaCostPerTaskUsd: 7.68, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: 80.8, ttftMs: null, verbosityMTokensPerIndexRun: 110, confidence: medium }
     channels:
       official: { channel: google-official, qualifiedId: "google-official/gemini-4-argon", modelId: gemini-4-argon }
@@ -947,7 +956,8 @@ models:
       - "上下文/输出口径冲突：官方写 1,048,576 / 65,536；OpenRouter 的 top_provider.max_completion_tokens=943,718（疑为异步模式上限）"
     sources:
       - { url: "https://docs.timbal.ai/models/google", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gemini-4-argon", checkedAt: "2026-11-01", confidence: medium }
 
   - id: gemini-3.8-flash
     provider: google
@@ -1001,7 +1011,7 @@ models:
       video: true
       pdf: true
       fim: false
-    quality: { aaIndex: 52, aaVersion: "v4.3.2", aaVariant: "high", aaCostPerTaskUsd: 1.24, swebenchVerified: null, terminalBench4: null, confidence: medium }
+    quality: { aaIndex: 31, aaVersion: "v5.0", aaVariant: "high", aaCostPerTaskUsd: 7.77, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: 136.9, ttftMs: null, verbosityMTokensPerIndexRun: 170, confidence: medium }
     channels:
       official: { channel: google-official, qualifiedId: "google-official/gemini-3.8-flash", modelId: gemini-3.8-flash }
@@ -1018,8 +1028,8 @@ models:
       - "被 Google 路由的上代 gemini-3.5-flash 会 redirect 到 3.6-flash（弃用前兆，目录需监控）"
     sources:
       - { url: "https://docs.timbal.ai/models/google", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/gemini-3-8-flash", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/gemini-3-8-flash", checkedAt: "2026-11-01", confidence: medium }
 
   # ── xAI / Meta ──────────────────────────────────────────────────────────
   - id: grok-4.7
@@ -1069,7 +1079,7 @@ models:
       anthropicApi: false
       vision: true
       fim: false
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: 34, aaVersion: "v5.0", aaVariant: "xhigh", aaCostPerTaskUsd: 7.51, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: xai-official, qualifiedId: "xai-official/grok-4.7", modelId: grok-4.7 }
@@ -1088,7 +1098,8 @@ models:
       - "maxOutput 口径：官方称无独立输出上限，OpenRouter 记 450,000"
     sources:
       - { url: "https://docs.timbal.ai/models/xai", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/grok-4-7", checkedAt: "2026-11-01", confidence: medium }
 
   - id: muse-wonder
     provider: meta
@@ -1123,7 +1134,7 @@ models:
       reasoningPassthrough: optional
       notes: "OpenRouter supported_parameters 含 reasoning_effort，但具体档位词表未核实 → vocab 留空，下游需 capability-probe"
     caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: false, responsesApi: false, anthropicApi: false, vision: true, fim: false }
-    quality: { aaIndex: 56, aaVersion: "v4.3.2", aaVariant: "full", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: 43, aaVersion: "v5.0", aaVariant: "max", aaCostPerTaskUsd: 6.95, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: null, qualifiedId: null, modelId: null }
@@ -1138,8 +1149,8 @@ models:
       - "AA 称 Muse Wonder Full 56 分（第 3），口径为元宝/Meta 自报 + AA 复测，置信度低"
       - "无官方直连渠道证据（仅 OpenRouter / 中转）"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/muse-wonder", checkedAt: "2026-10-26", confidence: low }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/muse-wonder", checkedAt: "2026-11-01", confidence: low }
 
   # ── Kimi / MiniMax / Qwen / GLM（中文生态）───────────────────────────────
   - id: kimi-k3.1-pro
@@ -1176,10 +1187,10 @@ models:
       notes: "始终推理、不可关；不传 reasoning_effort 时默认 max（最贵）→ router 必须显式传档"
     caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: false, responsesApi: false, anthropicApi: false, vision: true, fim: false }
     quality:
-      aaIndex: 55
-      aaVersion: "v4.3.2"
+      aaIndex: 46
+      aaVersion: "v5.0"
       aaVariant: "default(max)"
-      aaCostPerTaskUsd: 2.11
+      aaCostPerTaskUsd: 3.68
       swebenchVerified: null
       terminalBench4: 67.0
       otherBenchmarks:
@@ -1207,8 +1218,8 @@ models:
     sources:
       - { url: "https://platform.kimi.ai/docs/guide/use-reasoning-effort.md", checkedAt: "2026-10-26", confidence: high }
       - { url: "https://artificialanalysis.ai/articles/kimi-k3-1-pro-launch-benchmarks", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://artificialanalysis.ai/models/kimi-k3-1-pro", checkedAt: "2026-10-26", confidence: medium }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://artificialanalysis.ai/models/kimi-k3-1-pro", checkedAt: "2026-11-01", confidence: medium }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
 
   - id: minimax-m3.1-flash
     provider: minimax
@@ -1245,7 +1256,7 @@ models:
       reasoningPassthrough: optional
       notes: "深度思考始终开启，无档位可调（router 侧只能按「开/关思考」都不行，只能整体选/不选）"
     caps: { tools: true, parallelTools: false, structuredOutput: true, prefixCompletion: false, responsesApi: false, anthropicApi: false, vision: true, video: true, fim: false }
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: 29, aaVersion: "v5.0", aaVariant: "default", aaCostPerTaskUsd: 0.49, swebenchVerified: null, terminalBench4: null, confidence: medium }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: minimax-official, qualifiedId: "minimax-official/minimax-m3.1-flash", modelId: minimax-m3.1-flash }
@@ -1261,8 +1272,9 @@ models:
       - "parallel_tool_calls 不生效；tool_choice 仅支持 auto"
       - "无 effort 档位可用，无法做「同模型降档省钱」"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
       - { url: "https://help.aliyun.com/zh/model-studio/", checkedAt: "2026-10-26", confidence: medium }
+      - { url: "https://artificialanalysis.ai/models/minimax-m3-1-flash", checkedAt: "2026-11-01", confidence: medium }
 
   - id: qwen3.8-max-prime
     provider: alibaba
@@ -1297,7 +1309,7 @@ models:
       reasoningPassthrough: optional
       notes: "Qwen3.8 系用 enable_thinking 开关 + token 预算（flash 的 CoT 上限 262,144）；max-prime 的具体预算区间未核实"
     caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: false, anthropicApi: false, vision: false, fim: false }
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: null, aaVersion: "v5.0", swebenchVerified: null, terminalBench4: null, confidence: low }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: aliyun-bailian, qualifiedId: "aliyun-bailian/qwen3.8-max-prime", modelId: qwen3.8-max-prime }
@@ -1312,7 +1324,7 @@ models:
       - "同系列三档价格跨度大：max-prime 4/12、max-0902 2/6、flash 0.113/0.382 → 路由时应优先试低价档"
       - "Qwen 4 尚未 GA（仅 CometAPI Coming soon 与媒体专文，置信度低）"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
       - { url: "https://www.alibabacloud.com/help/zh/model-studio/qwen3-8-flash", checkedAt: "2026-10-26", confidence: medium }
 
   - id: qwen3.8-flash
@@ -1350,7 +1362,7 @@ models:
       reasoningPassthrough: optional
       notes: "开关式思考 + 预算上限 262,144；具体档位区间未核实"
     caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: true, anthropicApi: true, vision: true, video: true, fim: false }
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: null, aaVersion: "v5.0", swebenchVerified: null, terminalBench4: null, confidence: low }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: aliyun-bailian, qualifiedId: "aliyun-bailian/qwen3.8-flash", modelId: qwen3.8-flash }
@@ -1401,7 +1413,7 @@ models:
       reasoningPassthrough: optional
       notes: "开关式 thinking + 最大思维链 131,072（按 GLM-5 官方参数表外推，5.3 未逐项核实）"
     caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: false, anthropicApi: false, vision: false, fim: false }
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: null, aaVersion: "v5.0", swebenchVerified: null, terminalBench4: null, confidence: low }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: zhipu-official, qualifiedId: "zhipu-official/glm-5.3-prime", modelId: glm-5.3-prime }
@@ -1416,7 +1428,7 @@ models:
       - "定位 Agentic Engineering，仅文本输入输出"
       - "GLM-5 海外曾大幅涨价（媒体标题证据，置信度低）"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
       - { url: "https://help.aliyun.com/zh/model-studio/glm-5-by-zhipu", checkedAt: "2026-10-26", confidence: medium }
 
   - id: glm-5.3-flashx
@@ -1452,7 +1464,7 @@ models:
       reasoningPassthrough: optional
       notes: "同 GLM-5.3 家族（开关式），未逐项核实"
     caps: { tools: true, parallelTools: true, structuredOutput: true, prefixCompletion: true, responsesApi: false, anthropicApi: false, vision: false, fim: false }
-    quality: { aaIndex: null, aaVersion: "v4.3.2", swebenchVerified: null, terminalBench4: null, confidence: low }
+    quality: { aaIndex: null, aaVersion: "v5.0", swebenchVerified: null, terminalBench4: null, confidence: low }
     perf: { speedTps: null, ttftMs: null, verbosityMTokensPerIndexRun: null, confidence: low }
     channels:
       official: { channel: zhipu-official, qualifiedId: "zhipu-official/glm-5.3-flashx", modelId: glm-5.3-flashx }
@@ -1467,14 +1479,14 @@ models:
       - "1M 上下文 + 0.37/1.25，长文档/批量场景的价格优势明显"
       - "仅文本，不支持图像"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
 
 # ── 日历（从各 pricing.effectiveFrom / next / perCall 派生，便于人工核对）────
 calendar:
   - date: "2026-10-23"
     type: release
     models: [kimi-k3.1-pro]
-    description: "Kimi K3.1 Pro 发布（AA 55，TB4.0 67%，2/10）"
+    description: "Kimi K3.1 Pro 发布（TB4.0 67%，2/10；AA v5.0 46 分）"
   - date: "2026-11-01"
     type: billing_start
     models: [deepseek-flash, deepseek-v4-pro]
@@ -1501,4 +1513,4 @@ watchlist:
     action: "到期后不要把 GLM-4.5 加回池；已有旧条目按 404/不可用处理，切到 glm-5.3-prime"
     note: "OpenRouter 上 z-ai/glm-4.5 与 z-ai/glm-4.5v 的 expiration_date=2026-12-31。目录未收录该模型（不在池内），只做日历提醒"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-10-26", confidence: "high" }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: "high" }
