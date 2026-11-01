@@ -264,6 +264,13 @@ monotonic counter the client watches. On a host with no ETag it degrades to unco
 `webServer`/`commands`/`llm` only degrades features. Missing pieces are logged once and surfaced in
 `GET /state.compat.missing`, so the panel can say the host is incomplete.
 
+**One clock, so a test cannot depend on the hour (1.0.1).** Everything time-dependent reads
+`lib/clock.js` (subpath `./clock`): the DeepSeek peak/off-peak rate, the day a `pricing.next` block takes over, the
+budget's local day and month boundaries, and every telemetry timestamp. `DSH_MODEL_ROUTER_NOW=<epoch ms>` pins the
+whole process to one instant, and in-process tests may call `freeze(ms)` / `freeze(null)` instead. `npm run test:gate`
+now runs the suite twice more at a pinned peak (Monday 10:00 +08:00) and off-peak instant, so a test that reads
+`Date.now()` directly fails locally instead of on the one CI run that happens to land inside CST peak hours.
+
 ## Prices, hard dates and catalog drift (v0.15.1)
 
 v0.15.1 prices observations; it does not change a route. Same model choice, same effort, same score - the
@@ -482,7 +489,7 @@ surface legible rather than adding capability.
 
 - **A versioned envelope.** Every HTTP response from the panel's router — including the 403, 405 and
   400 answers produced by the transport — now carries `"schemaVersion": 1`. A reader can refuse an
-  envelope it does not understand instead of guessing; `docs/api.md` documents the fifteen routes and
+  envelope it does not understand instead of guessing; `docs/api.md` documents the sixteen routes and
   the module entry points published through `package.json#exports`.
 - **The contract is tested, not just described.** `test/contract.test.js` fails if `docs/api.md` and
   the registered routes disagree, if a host event the plugin listens to is missing from
@@ -693,7 +700,8 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-421 tests. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+427 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
+hook, and the refusal to pin a non-finite instant. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
@@ -750,13 +758,14 @@ PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decis
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
 costs nothing), a once-only error, the off switch, and the effort-mapping counters;
-`test/observation.test.js` (23) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
+`test/observation.test.js` (24) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
 `/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`, and the cost
 shadow: the model a cost-aware router would have picked, the agreement a cheap-live route records, the flag
 actually moving the route, and a pool the catalog cannot price recording neither a rate nor a shadow; plus the
 0.16.1 surface: the spend guard refusing a synthetic step and releasing one, an inform budget that only warns, a
 benched channel moving the retry to another provider, failover off leaving the route alone, and the cross-brand
-proposal appearing only when the switch is clearly better or cheaper);
+proposal appearing only when the switch is clearly better or cheaper, and the same switch halving at a
+pinned off-peak instant);
 `test/pricing2.test.js` (15) covers the blended rate (peak, off-peak and the weekend, cache-only and output-only
 mixes), the long-context tiers (the largest threshold wins, `effectiveFrom` is respected, `whole_request` vs
 `excess`), `stepCost` matching the catalog price at three instants, and the per-call rows before and after

@@ -219,6 +219,12 @@ ETag 时退化为无条件轮询（0.14 行为）。调试可用 `DSH_MODEL_ROUT
 **宿主兼容自检。** 启动后插件检查宿主契约：`sessionProjections` 是必需的，`webServer`/`commands`/`llm`
 缺失只降级不崩。缺失项以一条 warn 记录，并出现在 `GET /state.compat.missing`，面板据此提示「当前宿主不完整」。
 
+**同一个时钟，测试不再依赖「现在是几点」（1.0.1）。** 所有与时间有关的读取都走 `lib/clock.js`（子路径
+`./clock`）：DeepSeek 的峰谷价、`pricing.next` 的生效日、预算的本地日/月边界，以及每一条遥测时间戳。
+`DSH_MODEL_ROUTER_NOW=<epoch ms>` 把整个进程钉在某一瞬间；测试内也可以 `freeze(ms)` / `freeze(null)`。
+`npm run test:gate` 现在会在钉住的高峰（周一 10:00 +08:00）与空闲两个瞬间各再跑一遍全量用例，于是「直接读
+`Date.now()` 的测试」会在本地就红，而不是只在恰好落进中国高峰时段的某次 CI 里变绿。
+
 ## 价格、硬日期与目录漂移（v0.15.1）
 
 v0.15.1 只是把观测变成钱和日期，不改路由：模型、档位、分数都不变，golden 快照与 0.15.0 逐字节一致。
@@ -401,7 +407,7 @@ experiments: { enabled: false, apply: false, epsilon: 0.1, seed: null }
 1.0 承诺的是「什么不会再变」，所以这一版主要是把既有表面写清楚、测住，而不是加能力。
 
 - **带版本的信封。** 面板路由的每一个 HTTP 应答——包括传输层自己产生的 403 / 405 / 400——现在都带
-  `"schemaVersion": 1`。读方可以拒收看不懂的信封，而不是猜；`docs/api.md` 记录了 15 条路由与
+  `"schemaVersion": 1`。读方可以拒收看不懂的信封，而不是猜；`docs/api.md` 记录了 16 条路由与
   `package.json#exports` 发布的模块入口。
 - **契约是被测的，不只是被写的。** `test/contract.test.js` 会在这些情况失败：`docs/api.md` 与已注册
   路由不一致、插件监听的宿主事件没出现在 `docs/compat.md`、某个导出解析不到或跑出了发布目录、
@@ -595,7 +601,8 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-421 个用例。`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
+427 个用例。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
+环境钩子，以及「拒绝把非有限值钉成时间」；`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、
 `engineering` 恢复 0.9.0 之前的规则、其它取值一律取 `standard`）；`test/routing.test.js`（26 个）覆盖模型池、
 预设权重、视觉过滤、`maxPerTask`、effort 词表映射与迟滞，以及成本项（加权扣分与上限）、成本守卫的四种拒绝
@@ -621,9 +628,9 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 写法、开关状态、英文界面，以及宿主不发 `costAware` 块时的安静）、预算闸门（临近上限的圆点与用量条、超支时长度
 夹到 100%、token 行、限制为 0 与畸形块都保持安静）、`inform` 与 `shift` 下的峰谷提示（关闭或非高峰时安静）、
 中英双语的渠道冷却/隔离行、档位映射那一行（别名、就近取档、模型不接档位、原样落地与畸形块都安静、英文界面），以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误、关闭开关与档位映射计数；`test/observation.test.js`（23 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误、关闭开关与档位映射计数；`test/observation.test.js`（24 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
 放行一次、inform 模式只警告不拦、被停用的渠道让重试换到另一供应商、关闭故障转移时路由保持不动，以及跨品牌
-提案只在明显更好或更便宜时出现；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/feedback.test.js`（8 个）覆盖三个标签及其别名、归一化记录（备注折叠、长度上限、缺省 provider）、结果对、跳过坏行的读取器、聚合（按标签、按任务类型、覆盖占比、被回答的结果），以及关闭时不写任何东西；`test/classifier2.test.js`（6 个）覆盖散文里的结构化结论、置信度闸门、「上调一档而不是猜」、有界重试与连续三次失败打开的熔断器；`test/experiments.test.js`（7 个）覆盖哪些任务类型可探索、种子抽签、每一种拒绝理由、exploit 与 explore、epsilon 夹取与按臂报告；`test/effort.test.js`（7 个）覆盖八档阶梯与分值、未知词按 `high` 归类、预算表与按模型覆盖、`maxOutput` 夹取、四种 `why`、按类型/组合的汇总与畸形输入；`test/replay.test.js`（5 个）用冻结账本驱动 `lib/replay.js`（原样回放、今天会换路由的一步、`--fail-on-change`、暴露别名塌缩的配置、`--since`/`--until` 窗口、两条 exit 2 路径）；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
+提案只在明显更好或更便宜时出现，以及在钉住的空闲时刻同一个切换会减半；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/feedback.test.js`（8 个）覆盖三个标签及其别名、归一化记录（备注折叠、长度上限、缺省 provider）、结果对、跳过坏行的读取器、聚合（按标签、按任务类型、覆盖占比、被回答的结果），以及关闭时不写任何东西；`test/classifier2.test.js`（6 个）覆盖散文里的结构化结论、置信度闸门、「上调一档而不是猜」、有界重试与连续三次失败打开的熔断器；`test/experiments.test.js`（7 个）覆盖哪些任务类型可探索、种子抽签、每一种拒绝理由、exploit 与 explore、epsilon 夹取与按臂报告；`test/effort.test.js`（7 个）覆盖八档阶梯与分值、未知词按 `high` 归类、预算表与按模型覆盖、`maxOutput` 夹取、四种 `why`、按类型/组合的汇总与畸形输入；`test/replay.test.js`（5 个）用冻结账本驱动 `lib/replay.js`（原样回放、今天会换路由的一步、`--fail-on-change`、暴露别名塌缩的配置、`--since`/`--until` 窗口、两条 exit 2 路径）；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 `test/contract.test.js`（7 个）把 1.0 契约本身钉住：每个应答都带 `schemaVersion`（连拒绝应答也算）、`docs/api.md` 里的路由与注册的路由完全一致、插件监听的每个宿主事件都出现在 `docs/compat.md`、每个导出都能解析且落在发布目录内、包声明了它支持的宿主且从不 peer 依赖宿主、1.0 的文档集齐全、面板点名的降级都有文档对应。
 
 ## 模型目录

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG, scoreOf } from '../lib/policy.js'
 import { apply } from '../lib/index.js'
+import { freeze } from '../lib/clock.js'
 
 // Every host gets its own state + telemetry directory.
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'model-router-obs-'))
@@ -13,6 +14,12 @@ delete process.env.DSH_PROFILE_DIR
 process.env.DSH_MODEL_ROUTER_NO_TOKEN = '1'
 
 const ROUTES = { trivial: { effort: 'low' }, standard: { effort: 'low' }, engineering: { effort: 'high' }, hard: { effort: 'high' } }
+// The catalog prices DeepSeek-V4-Pro off-peak (weekday nights and weekends at
+// half rate), so any assertion on a cost *multiple* only means something at a
+// pinned instant: Monday 10:00 in Shanghai, inside the peak window, and Sunday
+// 09:30, outside it.
+const PEAK_MS = Date.UTC(2026, 9, 26, 2, 0, 0)
+const OFFPEAK_MS = Date.UTC(2026, 10, 1, 1, 30, 0)
 const HARD_BRIEF = '重构 架构 设计 规划 迁移 优化 性能 并发 并行 调试 诊断'
 const POOL = [
   { id: 'deepseek-official/deepseek-flash', cost: 1, tier: 'cheap' },
@@ -583,7 +590,9 @@ test('with failover off a failure is reported and the route is left alone', asyn
 
 // --- v0.16.1: crossing a brand needs a reason -------------------------------
 
-test('a cross-brand switch is proposed only when it is clearly better or cheaper', async () => {
+test('a cross-brand switch is proposed only when it is clearly better or cheaper', async (t) => {
+  t.after(() => freeze(null))
+  freeze(PEAK_MS)
   // Better fit: the candidate wins on score by more than the margin.
   const fit = makeHost({ pool: CROSS_POOL, routes: ROUTES, presets: crossPresets({ 'deepseek-official/deepseek-v4-pro': 90, 'google-official/gemini-3.8-flash': 96 }) })
   const fitAgent = agentWith()
@@ -610,6 +619,22 @@ test('a cross-brand switch is proposed only when it is clearly better or cheaper
   assert.equal(cheapState.cross.proposal.savingMultiple, 9.6)
   assert.ok(cheapState.cross.proposal.scoreDelta < 5)
   assert.ok(cheapState.cross.proposal.usdPerMTok < cheapState.cross.proposal.sameUsdPerMTok)
+})
+
+test('off-peak pricing halves the same switch and it is still worth the review', async (t) => {
+  t.after(() => freeze(null))
+  freeze(OFFPEAK_MS)
+  const cheap = makeHost({ pool: HAIKU_POOL, routes: ROUTES, presets: crossPresets({ 'deepseek-official/deepseek-v4-pro': 88, 'anthropic-official/claude-haiku-5-5': 88 }) })
+  const agent = agentWith()
+  emit(cheap, 'agent/inbox/claimed', { agent, ...claimed('接口文档') })
+  await request(cheap, { agent, turn: 1, step: 0 }, seed())
+  const state = await stateOf(cheap)
+  // Same models, same token mix, Sunday 09:30 instead of Monday 10:00: the
+  // peak-rate multiple of 9.6 becomes the off-peak 4.8, still above the 3x
+  // bar, so the review is still asked for — and the number follows the clock.
+  assert.equal(state.cross.proposal.why, 'cost')
+  assert.equal(state.cross.proposal.savingMultiple, 4.8)
+  assert.ok(state.cross.proposal.usdPerMTok < state.cross.proposal.sameUsdPerMTok / 3)
 })
 
 test('a switch that saves a few percent is not worth interrupting the user', async () => {

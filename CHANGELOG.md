@@ -1,3 +1,36 @@
+# Changelog
+
+## 1.0.1
+
+**A correctness patch about time: every read of "now" goes through one injectable clock, so the suite no longer
+passes only when it happens to run inside CST peak hours. No routing decision, no state shape and no envelope
+changes.**
+
+- **One clock (`lib/clock.js`, new subpath `./clock`).** `now()` is the plugin's only source of the current
+  instant; `freeze(atMs)` pins it in-process and `DSH_MODEL_ROUTER_NOW=<epoch ms>` pins a whole shell or CI job.
+  `lib/index.js`, `lib/pricing2.js`, `lib/catalog-pricing.js`, `lib/budget.js`, `lib/feedback-store.js` and
+  `lib/replay.js` all route their `Date.now()` through it, so a decision, a price and a budget boundary always
+  agree on what time it is.
+- **Why it mattered.** `deepseek-v4-pro` is priced off-peak at half rate on weekday nights and weekends, so
+  `test/observation.test.js` asserted a 9.6x cross-brand saving that is really 4.8x on a Sunday: the suite was
+  green inside the weekday 09:00-12:00 / 14:00-18:00 window and red at every other hour. The release CI happened
+  to run inside the window, which is exactly the kind of luck a gate is supposed to remove. The test now pins the
+  instant it means, and a new case asserts that off-peak really does halve the multiple.
+- **The gate runs the suite three times.** `scripts/gate.mjs` runs `node --test` on the real clock, then at a
+  pinned peak instant (Monday 10:00 +08:00) and a pinned off-peak instant (Sunday 09:30 +08:00); the CI job does
+  the same two pinned runs on node 24. A new test that reads `Date.now()` fails locally instead of going red in a
+  nightly run nobody watches.
+- **Documentation.** `README` and `docs/api.md` describe the clock and its two hooks; `docs/api.md` documents the
+  new `./clock` export. The 1.0.0 documentation claim of "the fifteen routes" is corrected to sixteen (the route
+  table has sixteen rows, and has since 0.15.0).
+
+Tests: 427 (1.0.0: 421). 1.0.1 adds `test/clock.test.js` (5 cases) and one off-peak case in
+`test/observation.test.js`; nothing else moves.
+
+Upgrade note: no state migration and no behaviour change. `./clock` is additive, `freeze()` only affects the
+process that calls it, and a host that never sets `DSH_MODEL_ROUTER_NOW` reads the wall clock exactly as before.
+Rolling back to 1.0.0 leaves the state file readable.
+
 ## 1.0.0
 
 **A stability release: the surface the panel and any other client talk to is now versioned, documented and
@@ -17,7 +50,7 @@ changes; `costAware` stays `false`.**
   (today `sessionProjections`), `optional` lists the rest (`webServer`, `commands`, `llm`). The panel renders the
   missing list in the chat language (`data-mr-compat`), so an old host reads as a shortcoming rather than as
   features that quietly do nothing.
-- **Documentation set.** `docs/api.md` (the envelope, the fifteen routes, the published modules, the 1.x
+- **Documentation set.** `docs/api.md` (the envelope, the sixteen routes, the published modules, the 1.x
   stability promise), `docs/compat.md` (host contracts, verified against dsh 0.1.7-rc.2),
   `docs/migration-0.14-to-1.0.md` (no state migration; the keys added since 0.14.2; the single default that
   changed shape), `CONTRIBUTING.md` (layout and the four checks), `SECURITY.md` (what is stored, what is never
@@ -30,7 +63,6 @@ Tests: 421 (0.17.1: 413). 1.0.0 adds `test/contract.test.js` (7) and one panel c
 Upgrade note: no state migration and no behaviour change. Everything this release adds is a larger envelope
 (`schemaVersion`), a new `/state` field (`compat` was already there, the panel now reads it) and new
 documentation. Rolling back to 0.17.1 leaves the state file readable.
-# Changelog
 
 ## 0.17.1
 

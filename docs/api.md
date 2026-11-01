@@ -56,6 +56,21 @@ additive, and a field is only removed in a major version.
 | ./feedback | lib/feedback.js | Label normalisation and aggregation. |
 | ./feedback-store | lib/feedback-store.js | The local JSONL feedback log. |
 | ./replay | lib/replay.js | The offline replay CLI (`dsh-model-router-replay`). |
+| ./clock | lib/clock.js | The plugin's clock: `now()`, `freeze(ms)`, `isFrozen()`. |
+
+
+## Deterministic time
+
+Every time-dependent read in the plugin goes through `lib/clock.js`: catalog rates (including DeepSeek's
+peak/off-peak windows and a `pricing.next` takeover date), the budget's local day/month boundaries, and each
+telemetry timestamp. A consumer that wants a reproducible answer has two hooks, in precedence order:
+
+1. `freeze(atMs)` from the `./clock` subpath — pins the current process; `freeze(null)` releases it.
+2. `DSH_MODEL_ROUTER_NOW=<epoch ms>` — pins a whole shell or CI job; a non-numeric or non-positive value is ignored.
+
+Neither hook changes stored data; both only decide which rates and boundaries are in force. The release gate
+runs the whole suite a second and third time with the clock pinned to a peak and an off-peak instant, because
+the catalog's off-peak half-rate is otherwise a genuine source of hour-dependent test results.
 
 ## Stability promise
 

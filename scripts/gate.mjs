@@ -4,9 +4,13 @@
 // The CI job runs the suite and the release checks separately; this script is
 // the same sequence locally, in one command, with one exit code:
 //
-//   1. "node --test"              — the whole suite.
-//   2. "scripts/check-release.mjs" — version / changelog / manifest checks.
-//   3. "scripts/check-catalog.mjs" — the generated catalog stays valid.
+//   1. "node --test"              — the whole suite on the real clock.
+//   2. "node --test"              — again at a pinned peak instant and a pinned
+//                                   off-peak instant (DSH_MODEL_ROUTER_NOW), so a
+//                                   test that reads the wall clock instead of
+//                                   lib/clock.js fails here, not in CI at 3am.
+//   3. "scripts/check-release.mjs" — version / changelog / manifest checks.
+//   4. "scripts/check-catalog.mjs" — the generated catalog stays valid.
 //
 // A missing check script is reported as SKIP instead of failing, so the gate
 // also works in a worktree where a script has not been written yet. Every step
@@ -34,9 +38,11 @@ function tail(text) {
 }
 
 /** Run one child process with this Node binary; never throws. */
-function run(args) {
+function run(args, env) {
   const started = Date.now()
-  const result = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8' })
+  const options = { cwd: ROOT, encoding: 'utf8' }
+  if (env) options.env = { ...process.env, ...env }
+  const result = spawnSync(process.execPath, args, options)
   return {
     ok: !result.error && result.status === 0,
     elapsed: Date.now() - started,
@@ -50,9 +56,10 @@ function seconds(ms) {
 }
 
 /** Run a step and print its tail; returns { label, status, elapsed }. */
-function step(label, args) {
-  console.log('gate: node ' + args.join(' '))
-  const result = run(args)
+function step(label, args, env) {
+  const frozen = env && env.DSH_MODEL_ROUTER_NOW ? ' (DSH_MODEL_ROUTER_NOW=' + env.DSH_MODEL_ROUTER_NOW + ')' : ''
+  console.log('gate: node ' + args.join(' ') + frozen)
+  const result = run(args, env)
   if (result.error) console.log('  | spawn failed: ' + result.error.message)
   for (const line of tail(result.output)) console.log(line)
   const status = result.ok ? 'pass' : 'fail'
@@ -75,6 +82,12 @@ function main() {
 
   // Tests first: the other checks are only meaningful when the suite is green.
   results.push(step('tests (node --test)', ['--test']))
+  // The catalog prices DeepSeek-V4-Pro off-peak (half rate on weekday nights and
+  // weekends). A suite that reads Date.now() directly is green during CST peak
+  // hours and red otherwise, so the same suite runs twice more at pinned
+  // instants: Monday 10:00 +08:00 (peak) and Sunday 09:30 +08:00 (off-peak).
+  results.push(step('tests at a pinned peak instant', ['--test'], { DSH_MODEL_ROUTER_NOW: String(Date.UTC(2026, 9, 26, 2, 0, 0)) }))
+  results.push(step('tests at a pinned off-peak instant', ['--test'], { DSH_MODEL_ROUTER_NOW: String(Date.UTC(2026, 10, 1, 1, 30, 0)) }))
   results.push(scriptStep('scripts/check-release.mjs', 'release checks'))
   results.push(scriptStep('scripts/check-catalog.mjs', 'catalog checks'))
 

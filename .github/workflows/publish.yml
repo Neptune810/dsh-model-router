@@ -82,6 +82,17 @@ jobs:
           fi
           exit 1
 
+      # The catalog prices DeepSeek-V4-Pro off-peak (half rate on weekday nights
+      # and weekends), so a suite that reads the wall clock is green during CST
+      # peak hours and red at 3am. Both runs pin the instant through
+      # lib/clock.js; they cost ~7s each and catch that class of bug before a tag.
+      - name: Clock-independent suite (peak / off-peak; node 24)
+        if: matrix.node == '24'
+        run: |
+          set -eu
+          DSH_MODEL_ROUTER_NOW="$(node -p "Date.UTC(2026,9,26,2,0,0)")" node --test
+          DSH_MODEL_ROUTER_NOW="$(node -p "Date.UTC(2026,10,1,1,30,0)")" node --test
+
       - name: Release gate (tag, version, CHANGELOG, tarball contents; node 24)
         if: matrix.node == '24'
         run: node scripts/check-release.mjs --pack
