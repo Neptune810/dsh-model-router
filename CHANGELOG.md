@@ -23,9 +23,27 @@ changes.**
 - **Documentation.** `README` and `docs/api.md` describe the clock and its two hooks; `docs/api.md` documents the
   new `./clock` export. The 1.0.0 documentation claim of "the fifteen routes" is corrected to sixteen (the route
   table has sixteen rows, and has since 0.15.0).
+- **The catalog is re-verified (evidence 2026-11-01, AA Intelligence Index v5.0).** Artificial Analysis moved from
+  v4.3.2 to v5.0, which re-scores nine benchmarks and is not comparable with the old numbers, so every stored score
+  was replaced rather than blended: 14 of the 19 models now carry a v5.0 index (up from 9), `aaVersion` is `v5.0`,
+  and `deepseek-v4-pro` finally has a measured index (23) instead of `null`. DeepSeek's official price page was
+  re-read (peak/off-peak unchanged; Search/Fetch per-call billing starts today), the OpenRouter listing was re-read
+  for the two hard dates that matter (GLM-4.5 still expires 2026-12-31, the Gemini promos still end where the
+  calendar says), and the completeness warning list is now empty: `claude-sonnet-5-5` gained the `aaVariant` it was
+  missing.
+- **One listing is marked unusable instead of trusted.** `openrouter/deepseek-v4-pro` advertises $1.60/$3.20, which
+  matches neither the official peak ($1.29/$3.86) nor the off-peak rate, so the catalog keeps pricing that model
+  from the official page and the monthly review records the drift: a stale relay price must never become a routing
+  input.
+- **Twenty reviewed routes are pinned (`test/replay-l1.json`, `test/replay-l1.test.js`, 4 cases).** Five pools
+  (official only, mixed official, price-first, strong-only, relay plus official) × four step classes, each case
+  labelled with the model and effort the shipped router should pick and replayed through `lib/replay.js
+  --fail-on-change`. The labels were decided and reviewed, not copied from the code's own output: a catalog, config
+  or scoring change that moves an engineering step onto the strong tier, or lets a relay entry win a tie against the
+  official one, now fails the suite instead of quietly changing the bill.
 
-Tests: 427 (1.0.0: 421). 1.0.1 adds `test/clock.test.js` (5 cases) and one off-peak case in
-`test/observation.test.js`; nothing else moves.
+Tests: 431 (1.0.0: 421). 1.0.1 adds `test/clock.test.js` (5 cases), one off-peak case in
+`test/observation.test.js` and `test/replay-l1.test.js` (4 cases over 20 labelled routes); nothing else moves.
 
 Upgrade note: no state migration and no behaviour change. `./clock` is additive, `freeze()` only affects the
 process that calls it, and a host that never sets `DSH_MODEL_ROUTER_NOW` reads the wall clock exactly as before.

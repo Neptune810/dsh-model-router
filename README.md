@@ -700,8 +700,10 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-427 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
-hook, and the refusal to pin a non-finite instant. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+431 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
+hook, and the refusal to pin a non-finite instant. `test/replay-l1.test.js` (4) replays
+twenty reviewed routes across five pools through `lib/replay.js --fail-on-change`, so a
+catalog or scoring change that moves one of them fails here instead of at the bill. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
