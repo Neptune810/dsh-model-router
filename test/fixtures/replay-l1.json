@@ -1,0 +1,444 @@
+{
+  "note": "Level-1 replay labels for the 2026-11-01 monthly review (m05910). Each case is a reviewed expectation about what the shipped router would pick for one step class against one pool, decided before the run and then diffed against the code. The labels are rule-derived and hand-reviewed, not human ground truth: the point is that a future catalog, config or scoring change that moves any of these routes turns the test red, so the move is a decision instead of an accident. Coverage: 5 pools x 4 step classes = 20 cases; cheap/strong scoring, the engineering and hard bonuses, effort ladders with and without every requested word, a strong-only pool that must still route cheap steps, and a relay/official tie that the official entry wins.",
+  "reviewedAt": "2026-11-01",
+  "reviewedAgainst": "catalog evidenceDate 2026-11-01, AA Intelligence Index v5.0",
+  "pools": {
+    "deepseek-only": {
+      "pool": [
+        {
+          "id": "deepseek-official/deepseek-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "deepseek-official/deepseek-v4-pro",
+          "tier": "strong",
+          "cost": 3
+        }
+      ]
+    },
+    "mixed-official": {
+      "pool": [
+        {
+          "id": "deepseek-official/deepseek-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "anthropic-official/claude-haiku-5-5",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "moonshot-official/kimi-k3.1-pro",
+          "tier": "standard",
+          "cost": 2
+        },
+        {
+          "id": "google-official/gemini-4-argon",
+          "tier": "strong",
+          "cost": 4
+        },
+        {
+          "id": "anthropic-official/claude-opus-5-5",
+          "tier": "strong",
+          "cost": 8
+        }
+      ]
+    },
+    "price-first": {
+      "pool": [
+        {
+          "id": "google-official/gemini-3.8-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "minimax-official/minimax-m3.1-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "moonshot-official/kimi-k3.1-pro",
+          "tier": "standard",
+          "cost": 1
+        }
+      ]
+    },
+    "strong-only": {
+      "pool": [
+        {
+          "id": "deepseek-official/deepseek-v4-pro",
+          "tier": "strong",
+          "cost": 3
+        }
+      ]
+    },
+    "relay-plus-official": {
+      "pool": [
+        {
+          "id": "qiyue/deepseek-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "deepseek-official/deepseek-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "qiyue/deepseek-v4-pro",
+          "tier": "strong",
+          "cost": 3
+        },
+        {
+          "id": "deepseek-official/deepseek-v4-pro",
+          "tier": "strong",
+          "cost": 3
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "pool": "deepseek-only",
+      "ts": 1793000060000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793000120000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793000180000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793000240000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793000300000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-haiku-5-5",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-haiku-5-5",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793000360000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-haiku-5-5",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-haiku-5-5",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793000420000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-haiku-5-5",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-haiku-5-5",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793000480000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-4-argon",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "nearest",
+        "model": "google-official/gemini-4-argon",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "price-first",
+      "ts": 1793000540000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-3.8-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "google-official/gemini-3.8-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "price-first",
+      "ts": 1793000600000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-3.8-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "google-official/gemini-3.8-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "price-first",
+      "ts": 1793000660000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-3.8-flash",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "google-official/gemini-3.8-flash",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "price-first",
+      "ts": 1793000720000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-3.8-flash",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "nearest",
+        "model": "google-official/gemini-3.8-flash",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "strong-only",
+      "ts": 1793000780000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "strong-only",
+      "ts": 1793000840000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "strong-only",
+      "ts": 1793000900000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "strong-only",
+      "ts": 1793000960000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793001020000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793001080000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793001140000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793001200000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "max"
+      }
+    }
+  ]
+}
