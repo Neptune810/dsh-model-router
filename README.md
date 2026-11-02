@@ -306,9 +306,13 @@ answers `{evidenceDate, withinDays, alerts[{date, description, daysUntil}]}` for
 warning dot on the trigger and in the panel head and lists at most three dates under the price note.
 
 **Weekly drift report.** `node scripts/catalog-diff.mjs` compares the committed projection with the live OpenRouter
-models API and writes a markdown report (`--out`, `--now`, `--days`, `--offline <snapshot>`, `--json`, `--quiet`,
-`--fail-on-drift`). It is advisory - exit 0 by default - and it never edits the catalog: a human updates the YAML.
-`.github/workflows/catalog-diff.yml` runs it every Monday at 03:00 UTC and uploads the report.
+models API and writes a markdown report (`--out`, `--now`, `--days`, `--new-since <date|14d>`, `--offline <snapshot>`,
+`--json`, `--quiet`, `--fail-on-drift`). It is advisory - exit 0 by default - and it never edits the catalog: a human
+updates the YAML. `--new-since` keeps the new-model list to listings created inside a window: the upstream feed carries
+452 models and only a handful are new, so the unfiltered list was 260 rows of history every week. Models from provider
+families the catalog does not track get their own section instead of being dropped silently - a brand-new provider
+(particle-ai, 2026-10-28) is exactly what a weekly review should not miss - and that section never counts as drift.
+`.github/workflows/catalog-diff.yml` runs it every Monday at 03:00 UTC with `--new-since 14d` and uploads the report.
 
 ## Cost-aware routing, shipped off (v0.16.0)
 
@@ -700,7 +704,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-431 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
+437 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
 hook, and the refusal to pin a non-finite instant. `test/replay-l1.test.js` (4) replays
 twenty reviewed routes across five pools through `lib/replay.js --fail-on-change`, so a
 catalog or scoring change that moves one of them fails here instead of at the bill. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
@@ -755,7 +759,7 @@ CHANGELOG agreement plus tarball contents); `test/catalog.test.js` (21) validate
 against its schema, pins the documented completeness warnings, proves the generator is deterministic, checks the
 watchlist rules and covers `findModel`; `test/catalog-pricing.test.js` (18) covers the rate in force (`pricing.next`
 on its day, the peak/off-peak windows), the token split, the null-not-zero price rules and the alert window;
-`test/catalog-diff.test.js` (15) drives the drift report against a frozen OpenRouter snapshot; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
+`test/catalog-diff.test.js` (21) drives the drift report against a frozen OpenRouter snapshot, including the created-date window and the untracked-provider section; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
 PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decision events landing on disk, monthly
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but

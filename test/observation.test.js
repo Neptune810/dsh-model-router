@@ -174,10 +174,18 @@ test('routed steps are persisted to telemetry and /stats aggregates them', async
   await request(host, { agent, turn: 1, step: 1 }, seed())
   await tick()
 
-  const state = await stateOf(host)
+  // Telemetry writes happen off the caller's stack, so the flush is a separate
+  // tick. A single fixed sleep is enough on an idle machine but not when the
+  // whole suite runs in parallel, so wait for the counter with a bound instead
+  // of asserting on whatever a 30 ms sleep happened to catch.
+  let state = await stateOf(host)
+  for (let attempt = 0; attempt < 40 && state.telemetry.written < 2; attempt += 1) {
+    await tick()
+    state = await stateOf(host)
+  }
   assert.equal(state.cost.sessionTokens, 9000)
   assert.ok(state.cost.sessionCostUnits > 0, 'the second step spends cost units')
-  assert.equal(state.telemetry.written >= 2, true)
+  assert.equal(state.telemetry.written >= 2, true, 'both routed steps reach the telemetry log')
 
   const stats = JSON.parse((await call(host.routes.get('/model-router/stats'), { url: '/model-router/stats' })).payload)
   assert.equal(stats.ok, true)

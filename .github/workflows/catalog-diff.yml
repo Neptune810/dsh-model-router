@@ -27,7 +27,7 @@ jobs:
 
       - name: Generate catalog drift report
         continue-on-error: true
-        run: node scripts/catalog-diff.mjs --out "$RUNNER_TEMP/catalog-pending.diff.md"
+        run: node scripts/catalog-diff.mjs --new-since 14d --out "$RUNNER_TEMP/catalog-pending.diff.md"
 
       - name: Append report to job summary
         run: |

@@ -7,3 +7,4 @@ Thumbs.db
 
 # The Windows py launcher keeps its payload cache next to the cwd it ran in.
 Python/
+catalog-pending.diff.md

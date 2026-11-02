@@ -17,6 +17,7 @@ const SECTION_HEADERS = [
   '## Context changes',
   '## Missing upstream',
   '## New upstream models',
+  '## New models outside the tracked provider families',
   '## Calendar due',
   '## Source health',
 ]
@@ -47,6 +48,7 @@ test('parseOpenRouterPayload converts per-token USD into per-million USD', () =>
     data: [{
       id: 'openai/example',
       context_length: 200000,
+      created: 1792454400,
       pricing: {
         prompt: '0.000002',
         completion: '0.00001',
@@ -58,6 +60,7 @@ test('parseOpenRouterPayload converts per-token USD into per-million USD', () =>
   assert.deepEqual(parsed, [{
     id: 'openai/example',
     contextLength: 200000,
+    created: '2026-10-20',
     pricing: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 0.25 },
   }])
 })
@@ -98,8 +101,8 @@ test('parseOpenRouterPayload treats missing fields as null and rejects invalid p
     ],
   })
   assert.deepEqual(parsed, [
-    { id: 'a/no-pricing', contextLength: 1000, pricing: { input: null, output: null, cacheRead: null, cacheWrite: null } },
-    { id: 'a/no-context', contextLength: null, pricing: { input: 1, output: null, cacheRead: null, cacheWrite: null } },
+    { id: 'a/no-pricing', contextLength: 1000, created: null, pricing: { input: null, output: null, cacheRead: null, cacheWrite: null } },
+    { id: 'a/no-context', contextLength: null, created: null, pricing: { input: 1, output: null, cacheRead: null, cacheWrite: null } },
   ])
   assert.throws(() => parseOpenRouterPayload({ models: [] }), /invalid OpenRouter payload/)
   assert.throws(() => parseOpenRouterPayload(null), /invalid OpenRouter payload/)
@@ -207,8 +210,53 @@ test('diffCatalog reports new upstream models only for providers tracked in the 
     id: 'openai/gpt-6.2-astra',
     provider: 'openai',
     contextLength: 1050000,
+    created: null,
     pricing: { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 },
   }])
+})
+
+test('parseOpenRouterPayload carries the upstream created date as an ISO day', () => {
+  const parsed = parseOpenRouterPayload([
+    { id: 'a/dated', created: 1792454400, context_length: 1000, pricing: {} },
+    { id: 'a/undated', context_length: 1000, pricing: {} },
+    { id: 'a/bogus', created: 'yesterday', context_length: 1000, pricing: {} },
+  ])
+  assert.deepEqual(parsed.map((entry) => entry.created), ['2026-10-20', null, null])
+})
+
+test('diffCatalog filters new upstream models by their created date', () => {
+  const model = catalogModel({
+    id: 'gpt-6-astra',
+    channels: { openrouterId: 'openai/gpt-6-astra', openrouterPriceUsd: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 } },
+  })
+  const upstream = [
+    { id: 'openai/gpt-6-astra', contextLength: 1000, pricing: { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 } },
+    { id: 'openai/gpt-6.2-astra', contextLength: 1000, created: 1792454400, pricing: { input: 1, output: 2, cacheRead: null, cacheWrite: null } },
+    { id: 'openai/old-model', contextLength: 1000, created: 1727740800, pricing: { input: 1, output: 2, cacheRead: null, cacheWrite: null } },
+    { id: 'openai/legacy-model', contextLength: 1000, pricing: { input: 1, output: 2, cacheRead: null, cacheWrite: null } },
+  ]
+  const report = diffCatalog(miniCatalog([model]), upstream, { now: NOW, newSince: '2026-10-19' })
+  assert.deepEqual(report.newUpstream.map((entry) => [entry.id, entry.created]), [['openai/gpt-6.2-astra', '2026-10-20']])
+  assert.equal(report.newSince, '2026-10-19')
+  assert.equal(report.summary.new, 1)
+  assert.equal(report.summary.newSuppressed, 2)
+  assert.equal(report.drift, true)
+  const markdown = renderMarkdown(report)
+  assert.ok(markdown.includes('created on or after 2026-10-19'))
+  assert.ok(markdown.includes('2 older listing(s) were ignored'))
+  assert.ok(markdown.includes('| Created |'))
+  const quiet = diffCatalog(miniCatalog([model]), upstream, { now: NOW, newSince: '2026-10-21' })
+  assert.deepEqual(quiet.newUpstream, [])
+  assert.equal(quiet.drift, false)
+  assert.ok(renderMarkdown(quiet).includes('None created on or after 2026-10-21.'))
+})
+
+test('diffCatalog resolves a relative new-model window and rejects a bad one', () => {
+  const report = diffCatalog(miniCatalog([]), [], { now: NOW, newSince: '14d' })
+  assert.equal(report.newSince, '2026-10-12')
+  assert.equal(report.summary.newSuppressed, 0)
+  assert.throws(() => diffCatalog(miniCatalog([]), [], { now: NOW, newSince: 'fortnight' }), /--new-since/)
+  assert.throws(() => diffCatalog(miniCatalog([]), [], { now: NOW, newSince: '2026-13-01' }), /--new-since/)
 })
 
 test('diffCatalog lists calendar entries within the window and tolerates a missing watchlist', () => {
@@ -257,7 +305,7 @@ test('fixture snapshot exercises price, context, missing, new and calendar drift
     ['gpt-6-astra', 'input', 20],
   ])
   assert.deepEqual(report.contextChanges.map((change) => [change.model, change.old, change.new]), [
-    ['deepseek-flash', 1000000, 1048576],
+    ['gemini-4-argon', 1048576, 2100000],
   ])
   assert.ok(report.missingUpstream.some((missing) => missing.model === 'claude-opus-5-5'))
   assert.deepEqual(report.newUpstream.map((model) => model.id), ['openai/gpt-6.2-astra'])
@@ -284,6 +332,71 @@ test('CLI offline run writes the markdown report and honours exit codes', () => 
     const parsed = JSON.parse(asJson.stdout)
     assert.equal(parsed.drift, true)
     assert.equal(parsed.summary.price, 1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('diffCatalog treats a round million window reported as 1024 squared as the same window', () => {
+  const model = catalogModel({
+    id: 'context-model',
+    contextWindow: 1000000,
+    channels: { openrouterId: 'openai/context-model', openrouterPriceUsd: { input: 1, output: 2, cacheRead: null, cacheWrite: null } },
+  })
+  const binary = diffCatalog(miniCatalog([model]), [{
+    id: 'openai/context-model',
+    contextLength: 1048576,
+    pricing: { input: 1, output: 2, cacheRead: null, cacheWrite: null },
+  }], { now: NOW })
+  assert.deepEqual(binary.contextChanges, [])
+  const odd = catalogModel({
+    id: 'odd-model',
+    contextWindow: 1050000,
+    channels: { openrouterId: 'openai/odd-model', openrouterPriceUsd: { input: 1, output: 2, cacheRead: null, cacheWrite: null } },
+  })
+  const real = diffCatalog(miniCatalog([odd]), [{
+    id: 'openai/odd-model',
+    contextLength: 1048576,
+    pricing: { input: 1, output: 2, cacheRead: null, cacheWrite: null },
+  }], { now: NOW })
+  assert.deepEqual(real.contextChanges.map((change) => [change.old, change.new]), [[1050000, 1048576]])
+})
+
+test('diffCatalog keeps models from untracked provider families out of drift', () => {
+  const report = diffCatalog(CATALOG, readFixture(), { now: NOW, mode: 'offline', newSince: '2026-10-19' })
+  assert.deepEqual(report.newUpstream.map((model) => model.id), ['openai/gpt-6.2-astra'])
+  assert.deepEqual(report.newProviders.map((model) => [model.id, model.provider, model.created]), [
+    ['vendor/new-model', 'vendor', '2026-10-24'],
+  ])
+  assert.equal(report.summary.newProviders, 1)
+  const markdown = renderMarkdown(report)
+  assert.ok(markdown.includes('## New models outside the tracked provider families'))
+  assert.ok(markdown.includes('vendor/new-model'))
+  const handled = diffCatalog(CATALOG, [{
+    id: 'vendor/new-model',
+    contextLength: 131072,
+    created: 1792800000,
+    pricing: { input: 0.2, output: 0.8, cacheRead: null, cacheWrite: null },
+  }], { now: NOW, newSince: '2026-10-19' })
+  assert.equal(handled.newProviders.length, 1)
+})
+
+test('CLI applies --new-since and rejects an invalid window', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'catalog-diff-'))
+  try {
+    const out = join(dir, 'report.md')
+    const args = ['scripts/catalog-diff.mjs', '--offline', 'test/fixtures/openrouter-sample.json', '--now', NOW, '--out', out, '--json', '--quiet']
+    const recent = spawnSync(process.execPath, args.concat('--new-since', '2026-10-21'), { cwd: ROOT, encoding: 'utf8' })
+    assert.equal(recent.status, 0)
+    const parsedRecent = JSON.parse(recent.stdout)
+    assert.equal(parsedRecent.newSince, '2026-10-21')
+    assert.deepEqual(parsedRecent.newUpstream, [])
+    assert.equal(parsedRecent.summary.newSuppressed, 1)
+    const all = spawnSync(process.execPath, args.concat('--new-since', '14d'), { cwd: ROOT, encoding: 'utf8' })
+    assert.equal(all.status, 0)
+    assert.deepEqual(JSON.parse(all.stdout).newUpstream.map((model) => model.id), ['openai/gpt-6.2-astra'])
+    const bad = spawnSync(process.execPath, args.concat('--new-since', 'whenever'), { cwd: ROOT, encoding: 'utf8' })
+    assert.equal(bad.status, 2)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

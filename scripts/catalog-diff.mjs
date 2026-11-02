@@ -8,7 +8,8 @@
 //
 // Usage:
 //   node scripts/catalog-diff.mjs [--out <path>] [--now YYYY-MM-DD] [--days N]
-//     [--offline <json>] [--json] [--quiet] [--fail-on-drift]
+//     [--new-since YYYY-MM-DD|<n>d] [--offline <json>] [--json] [--quiet]
+//     [--fail-on-drift]
 //
 // Exit codes: 0 success (drift is advisory), 1 drift when --fail-on-drift is
 // set, 2 internal error (bad arguments, unreadable offline snapshot).
@@ -61,8 +62,13 @@ const PROVIDER_BY_PREFIX = {
  * long-context tier overrides (min_prompt_tokens) are ignored because the
  * catalog tracks those separately in pricing.longContext.
  *
+ * OpenRouter also publishes a `created` epoch (seconds). It is carried as an
+ * ISO date so a report can tell a model published last week from one that has
+ * been listed for a year: the catalog tracks a handful of providers, but their
+ * upstream listings are long and mostly historical.
+ *
  * @param {unknown} payload Raw OpenRouter response or a bare array of models.
- * @returns {{id: string, contextLength: number|null, pricing: {input: number|null, output: number|null, cacheRead: number|null, cacheWrite: number|null}}[]} Normalised models.
+ * @returns {{id: string, contextLength: number|null, created: string|null, pricing: {input: number|null, output: number|null, cacheRead: number|null, cacheWrite: number|null}}[]} Normalised models.
  */
 export function parseOpenRouterPayload (payload) {
   let entries = null
@@ -80,6 +86,7 @@ export function parseOpenRouterPayload (payload) {
     normalized.push({
       id: entry.id,
       contextLength: toFiniteNumber(entry.context_length),
+      created: isoFromEpochSeconds(entry.created),
       pricing,
     })
   }
@@ -113,6 +120,34 @@ function perMillion (value) {
 function toFiniteNumber (value) {
   const number = Number(value)
   return Number.isFinite(number) ? number : null
+}
+
+function isoFromEpochSeconds (value) {
+  if (value === null || value === undefined) return null
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return null
+  const date = new Date(number * 1000)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
+}
+
+function entryCreated (entry) {
+  if (entry === null || typeof entry !== 'object') return null
+  if (isIsoDate(entry.created)) return entry.created
+  return isoFromEpochSeconds(entry.created)
+}
+
+/**
+ * Some vendors document a round million-token window while OpenRouter reports the
+ * binary size (1,000,000 vs 1,048,576). That is a notation difference, not a new
+ * window, so it must not be a weekly false positive. The rule is deliberately
+ * narrow: only a catalog value that is a whole number of millions is compared
+ * against the binary equivalent, so a real change on any other number still shows.
+ */
+function sameContextWindow (catalogValue, upstreamValue) {
+  if (catalogValue === upstreamValue) return true
+  if (catalogValue % 1000000 !== 0) return false
+  return upstreamValue === (catalogValue / 1000000) * 1048576
 }
 
 function toCatalogPrice (value) {
@@ -164,6 +199,23 @@ function normalizeDays (value) {
   return days
 }
 
+function shiftIso (isoDate, deltaDays) {
+  return new Date(utcMs(isoDate) + deltaDays * DAY_MS).toISOString().slice(0, 10)
+}
+
+function resolveNewSince (value, now) {
+  if (value === undefined || value === null || value === '') return null
+  const text = String(value).trim()
+  const relative = /^(\d+)d$/.exec(text)
+  if (relative !== null) {
+    const days = Number(relative[1])
+    if (!Number.isInteger(days)) throw new Error('invalid --new-since value: ' + String(value))
+    return shiftIso(now, -days)
+  }
+  if (!isIsoDate(text)) throw new Error('invalid --new-since value (expected YYYY-MM-DD or <n>d): ' + String(value))
+  return text
+}
+
 /**
  * Compare a catalog projection with an upstream models payload.
  *
@@ -173,7 +225,7 @@ function normalizeDays (value) {
  *
  * @param {{models?: object[], calendar?: object[], watchlist?: object[]}} catalog Catalog projection to compare.
  * @param {unknown} upstream Raw OpenRouter payload or an already parsed array.
- * @param {{now?: string, days?: number, mode?: string, sourceStatus?: string, sourceError?: string}} [options] Comparison options.
+ * @param {{now?: string, days?: number, newSince?: string, mode?: string, sourceStatus?: string, sourceError?: string}} [options] Comparison options. `newSince` accepts an ISO date or a relative window such as `14d` and keeps only upstream models created on or after it.
  * @returns {object} Structured drift report.
  */
 export function diffCatalog (catalog, upstream, options) {
@@ -181,6 +233,7 @@ export function diffCatalog (catalog, upstream, options) {
   const now = opts.now === undefined || opts.now === null ? todayIso() : opts.now
   if (!isIsoDate(now)) throw new Error('invalid date (expected YYYY-MM-DD): ' + String(now))
   const days = opts.days === undefined || opts.days === null ? DEFAULT_DAYS : normalizeDays(opts.days)
+  const newSince = resolveNewSince(opts.newSince, now)
   const models = catalog !== null && typeof catalog === 'object' && Array.isArray(catalog.models) ? catalog.models : []
   const normalized = normalizeUpstream(upstream)
   const upstreamById = new Map()
@@ -196,6 +249,8 @@ export function diffCatalog (catalog, upstream, options) {
   const contextChanges = []
   const missingUpstream = []
   const newUpstream = []
+  const newProviders = []
+  let suppressed = 0
   if (sourceStatus === 'ok') {
     for (const model of models) {
       if (model === null || typeof model !== 'object') continue
@@ -221,7 +276,7 @@ export function diffCatalog (catalog, upstream, options) {
           priceChanges.push({ model: model.id, openrouterId, field, old: oldPrice, new: newPrice, percent })
         }
       }
-      if (typeof model.contextWindow === 'number' && live.contextLength !== null && model.contextWindow !== live.contextLength) {
+      if (typeof model.contextWindow === 'number' && live.contextLength !== null && !sameContextWindow(model.contextWindow, live.contextLength)) {
         contextChanges.push({ model: model.id, openrouterId, old: model.contextWindow, new: live.contextLength })
       }
     }
@@ -238,15 +293,32 @@ export function diffCatalog (catalog, upstream, options) {
       if (knownIds.has(entry.id) || findModel(entry.id) !== undefined) continue
       const slash = entry.id.indexOf('/')
       if (slash === -1) continue
-      const provider = PROVIDER_BY_PREFIX[entry.id.slice(0, slash)]
-      if (provider === undefined || !providerSet.has(provider)) continue
+      const prefix = entry.id.slice(0, slash)
+      const provider = PROVIDER_BY_PREFIX[prefix]
+      const created = entryCreated(entry)
+      if (newSince !== null && (created === null || created < newSince)) {
+        suppressed += 1
+        continue
+      }
+      if (provider === undefined || !providerSet.has(provider)) {
+        newProviders.push({
+          id: entry.id,
+          provider: provider === undefined ? prefix : provider,
+          contextLength: entry.contextLength,
+          created,
+          pricing: entry.pricing,
+        })
+        continue
+      }
       newUpstream.push({
         id: entry.id,
         provider,
         contextLength: entry.contextLength,
+        created,
         pricing: entry.pricing,
       })
     }
+    newProviders.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
     newUpstream.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
   }
   const calendar = collectCalendarDue(catalog, now, days)
@@ -255,12 +327,16 @@ export function diffCatalog (catalog, upstream, options) {
     context: contextChanges.length,
     missing: missingUpstream.length,
     new: newUpstream.length,
+    newProviders: newProviders.length,
+    newSince,
+    newSuppressed: suppressed,
     calendar: calendar.length,
     drift: priceChanges.length + contextChanges.length + missingUpstream.length + newUpstream.length > 0,
   }
   return {
     now,
     days,
+    newSince,
     threshold: PRICE_THRESHOLD,
     source,
     summary,
@@ -269,6 +345,7 @@ export function diffCatalog (catalog, upstream, options) {
     contextChanges,
     missingUpstream,
     newUpstream,
+    newProviders,
     calendar,
   }
 }
@@ -337,6 +414,7 @@ export function renderMarkdown (report) {
   lines.push('')
   lines.push('- Reference date: ' + report.now)
   lines.push('- Calendar window: +/- ' + String(report.days) + ' days')
+  if (report.newSince) lines.push('- New-model window: created on or after ' + report.newSince)
   lines.push('- Price threshold: more than ' + String(report.threshold) + '% per field')
   lines.push('')
   lines.push('## Summary')
@@ -355,6 +433,8 @@ export function renderMarkdown (report) {
   lines.push('| Context changes | ' + String(report.summary.context) + ' |')
   lines.push('| Missing upstream models | ' + String(report.summary.missing) + ' |')
   lines.push('| New upstream models | ' + String(report.summary.new) + ' |')
+  lines.push('| New models outside the tracked provider families | ' + String(report.summary.newProviders) + ' |')
+  if (report.newSince) lines.push('| New models outside the window | ' + String(report.summary.newSuppressed) + ' |')
   lines.push('| Calendar entries due | ' + String(report.summary.calendar) + ' |')
   lines.push('')
   lines.push('## Price changes')
@@ -398,14 +478,37 @@ export function renderMarkdown (report) {
   lines.push('## New upstream models')
   lines.push('')
   if (report.newUpstream.length === 0) {
-    lines.push('None.')
+    lines.push(report.newSince ? 'None created on or after ' + report.newSince + '.' : 'None.')
   } else {
     lines.push('Upstream models for providers already tracked in the catalog:')
+    if (report.newSince) {
+      lines.push('')
+      lines.push('Only models created on or after ' + report.newSince + ' are listed' + (report.summary.newSuppressed > 0 ? '; ' + String(report.summary.newSuppressed) + ' older listing(s) were ignored.' : '.'))
+    }
     lines.push('')
-    lines.push('| Model id | Catalog provider | Context length | Input (USD / 1M) | Output (USD / 1M) |')
-    lines.push('| --- | --- | --- | --- | --- |')
+    lines.push('| Model id | Catalog provider | Context length | Created | Input (USD / 1M) | Output (USD / 1M) |')
+    lines.push('| --- | --- | --- | --- | --- | --- |')
     for (const model of report.newUpstream) {
-      lines.push('| ' + formatCell(model.id) + ' | ' + formatCell(model.provider) + ' | ' + formatCell(model.contextLength) + ' | ' + formatUsd(model.pricing.input) + ' | ' + formatUsd(model.pricing.output) + ' |')
+      lines.push('| ' + formatCell(model.id) + ' | ' + formatCell(model.provider) + ' | ' + formatCell(model.contextLength) + ' | ' + formatCell(model.created) + ' | ' + formatUsd(model.pricing.input) + ' | ' + formatUsd(model.pricing.output) + ' |')
+    }
+  }
+  lines.push('')
+  lines.push('## New models outside the tracked provider families')
+  lines.push('')
+  if (report.newProviders.length === 0) {
+    lines.push('None.')
+  } else {
+    lines.push('Upstream models whose provider family is not in the catalog. Listed for a decision (add the family, or ignore), never counted as drift:')
+    lines.push('')
+    lines.push('| Model id | Upstream prefix | Context length | Created | Input (USD / 1M) | Output (USD / 1M) |')
+    lines.push('| --- | --- | --- | --- | --- | --- |')
+    const shown = report.newProviders.slice(0, 20)
+    for (const model of shown) {
+      lines.push('| ' + formatCell(model.id) + ' | ' + formatCell(model.provider) + ' | ' + formatCell(model.contextLength) + ' | ' + formatCell(model.created) + ' | ' + formatUsd(model.pricing.input) + ' | ' + formatUsd(model.pricing.output) + ' |')
+    }
+    if (report.newProviders.length > shown.length) {
+      lines.push('')
+      lines.push('Showing the first ' + String(shown.length) + ' of ' + String(report.newProviders.length) + ' entries; narrow the window with --new-since.')
     }
   }
   lines.push('')
@@ -442,6 +545,8 @@ function usage () {
     '  --out <path>        Report path (default: catalog-pending.diff.md at the repo root)',
     '  --now YYYY-MM-DD    Reference date for the calendar window (default: today)',
     '  --days <n>          Calendar window in days around --now (default: 45)',
+    '  --new-since <when>  Only list new upstream models created since a date',
+    '                      (YYYY-MM-DD) or within a window (14d); default: list all',
     '  --offline <json>    Saved OpenRouter /models response instead of the network',
     '  --json              Also print the structured report as JSON on stdout',
     '  --quiet             Suppress the console summary line',
@@ -455,6 +560,7 @@ function parseArgs (argv) {
     out: null,
     now: null,
     days: null,
+    newSince: null,
     offline: null,
     json: false,
     quiet: false,
@@ -479,13 +585,14 @@ function parseArgs (argv) {
       options.failOnDrift = true
       continue
     }
-    if (arg === '--out' || arg === '--now' || arg === '--days' || arg === '--offline') {
+    if (arg === '--out' || arg === '--now' || arg === '--days' || arg === '--new-since' || arg === '--offline') {
       const value = argv[index + 1]
       if (value === undefined || value.startsWith('--')) throw new Error('missing value for ' + arg)
       index += 1
       if (arg === '--out') options.out = value
       else if (arg === '--now') options.now = value
       else if (arg === '--days') options.days = value
+      else if (arg === '--new-since') options.newSince = value
       else options.offline = value
       continue
     }
@@ -551,6 +658,7 @@ async function main (argv) {
     report = diffCatalog(CATALOG, loaded.payload, {
       now: options.now === null ? undefined : options.now,
       days: options.days === null ? undefined : options.days,
+      newSince: options.newSince === null ? undefined : options.newSince,
       mode: loaded.mode,
       sourceStatus: loaded.error === null ? 'ok' : 'error',
       sourceError: loaded.error === null ? undefined : loaded.error,

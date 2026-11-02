@@ -2,6 +2,7 @@
   "data": [
     {
       "id": "deepseek/deepseek-v4.1-flash-1017",
+      "created": 1792195200,
       "canonical_slug": "deepseek/deepseek-v4.1-flash-1017-20261017",
       "context_length": 1048576,
       "pricing": {
@@ -28,6 +29,7 @@
     },
     {
       "id": "openai/gpt-6-astra",
+      "created": 1790812800,
       "canonical_slug": "openai/gpt-6-astra-20261001",
       "context_length": 1050000,
       "pricing": {
@@ -48,8 +50,9 @@
     },
     {
       "id": "google/gemini-4-argon",
+      "created": 1789430400,
       "canonical_slug": "google/gemini-4-argon-20260915",
-      "context_length": 1048576,
+      "context_length": 2100000,
       "pricing": {
         "prompt": "0.000002",
         "completion": "0.00001",
@@ -59,6 +62,7 @@
     },
     {
       "id": "openai/gpt-6.2-astra",
+      "created": 1792454400,
       "canonical_slug": "openai/gpt-6.2-astra-20261024",
       "context_length": 1050000,
       "pricing": {
@@ -70,6 +74,7 @@
     },
     {
       "id": "vendor/new-model",
+      "created": 1792800000,
       "canonical_slug": "vendor/new-model-20261020",
       "context_length": 131072,
       "pricing": {

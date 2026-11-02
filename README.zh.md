@@ -256,8 +256,11 @@ input/output 价格时成本为 `null`，不编数字。
 description, daysUntil}]}`；面板在触发器与面板标题各点一个黄点，并在价格说明下最多列三条。
 
 **每周漂移报告。** `node scripts/catalog-diff.mjs` 把随包投影与 OpenRouter 实时模型列表对比，输出 markdown 报告
-（`--out`、`--now`、`--days`、`--offline <snapshot>`、`--json`、`--quiet`、`--fail-on-drift`）。它是建议性的：默认
-exit 0，且**从不**自动改目录，由人更新 YAML。`.github/workflows/catalog-diff.yml` 每周一 03:00 UTC 运行并上传报告。
+（`--out`、`--now`、`--days`、`--new-since <日期|14d>`、`--offline <snapshot>`、`--json`、`--quiet`、
+`--fail-on-drift`）。它是建议性的：默认 exit 0，且**从不**自动改目录，由人更新 YAML。`--new-since` 只保留窗口内
+新建的模型：上游有 452 个模型，每周真正新增的只有几个，不过滤时「新模型」一栏是 260 行历史。目录没跟踪的供应商
+家族单独列一节、不被静默丢掉——一个新供应商（particle-ai，2026-10-28）正是周度评审最不该错过的；这一节从不计入
+漂移。`.github/workflows/catalog-diff.yml` 每周一 03:00 UTC 带 `--new-since 14d` 运行并上传报告。
 
 ## 成本感知路由：默认关闭（v0.16.0）
 
@@ -601,7 +604,7 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-431 个用例。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
+437 个用例。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
 环境钩子，以及「拒绝把非有限值钉成时间」；`test/replay-l1.test.js`（4 个）把二十条人工复核过的路由
 （五个池 × 四个步骤等级）通过 `lib/replay.js --fail-on-change` 回放一遍，目录或打分一变就会在这里红，
 而不是等到账单上才发现；`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
@@ -630,7 +633,7 @@ LLM 语义分类，以及跨品牌守卫（先问会拦下并给出 proposal、�
 写法、开关状态、英文界面，以及宿主不发 `costAware` 块时的安静）、预算闸门（临近上限的圆点与用量条、超支时长度
 夹到 100%、token 行、限制为 0 与畸形块都保持安静）、`inform` 与 `shift` 下的峰谷提示（关闭或非高峰时安静）、
 中英双语的渠道冷却/隔离行、档位映射那一行（别名、就近取档、模型不接档位、原样落地与畸形块都安静、英文界面），以及声明的 `ui-chat` 座位与
-`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（15 个）用冻结的 OpenRouter 快照驱动漂移报告；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误、关闭开关与档位映射计数；`test/observation.test.js`（24 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
+`uiConversation` 服务；`test/store.test.js`（6 个）覆盖状态文件恢复（损坏文件先备份、v1 版本迁移、写失败经 `storeHealth` 暴露、会话表按最久未出现淘汰）；`test/routes.test.js`（10 个）覆盖面板 token、同源读校验、路径脱敏、ETag/304 与 `/stats` 透传；`test/release.test.js`（8 个）覆盖发布门禁（tag/版本/CHANGELOG 一致性与 tarball 内容）；`test/catalog.test.js`（21 个）按 schema 校验随包模型目录、钉住已知告警清单、证明生成器可复现、校验 watchlist 规则并覆盖 `findModel`；`test/catalog-pricing.test.js`（18 个）覆盖当时生效的价格（`pricing.next` 到生效日切换、峰谷时段）、token 拆分、「未知即 null 不是 0」与提醒窗口；`test/catalog-diff.test.js`（20 个）用冻结的 OpenRouter 快照驱动漂移报告，并覆盖创建日期窗口与「目录外供应商」一节；`test/smoke.test.js`（11 个）用假宿主驱动 `scripts/smoke.mjs` 并校验 PASS/WARN/SKIP/FAIL 四种退出状态；`test/telemetry.test.js`（15 个）覆盖决策事件的落盘、按月分文件与 8 MB 轮转、flush、坏行容忍、聚合形状、token/美元账本（旧事件计为未定价）、成本影子账本（畸形的影子被跳过，无定价对的那一步计数但不计钱）、只报一次的错误、关闭开关与档位映射计数；`test/observation.test.js`（24 个）端到端串起 `/state` 观测面、ETag 304、`/stats` 聚合、`/router replay`、LLM 分类置信度过滤、九词路由守卫与 `scoreParts` 分项，以及成本影子（成本感知会选谁、实盘已经很便宜时记为一致、打开开关后路由真的跟着变、目录无法定价的池既不记单价也不记影子），以及 0.16.1 的观测面：预算闸门拒绝合成步骤并
 放行一次、inform 模式只警告不拦、被停用的渠道让重试换到另一供应商、关闭故障转移时路由保持不动，以及跨品牌
 提案只在明显更好或更便宜时出现，以及在钉住的空闲时刻同一个切换会减半；`test/pricing2.test.js`（15 个）覆盖混合单价（高峰、空闲与周末、纯缓存读与纯输出构成）、长上下文档（阈值最大者优先、`effectiveFrom` 生效、`whole_request` 与 `excess`）、`stepCost` 在三个时刻与目录价格逐位相同、以及千次调用行在生效日前后；`test/feedback.test.js`（8 个）覆盖三个标签及其别名、归一化记录（备注折叠、长度上限、缺省 provider）、结果对、跳过坏行的读取器、聚合（按标签、按任务类型、覆盖占比、被回答的结果），以及关闭时不写任何东西；`test/classifier2.test.js`（6 个）覆盖散文里的结构化结论、置信度闸门、「上调一档而不是猜」、有界重试与连续三次失败打开的熔断器；`test/experiments.test.js`（7 个）覆盖哪些任务类型可探索、种子抽签、每一种拒绝理由、exploit 与 explore、epsilon 夹取与按臂报告；`test/effort.test.js`（7 个）覆盖八档阶梯与分值、未知词按 `high` 归类、预算表与按模型覆盖、`maxOutput` 夹取、四种 `why`、按类型/组合的汇总与畸形输入；`test/replay.test.js`（5 个）用冻结账本驱动 `lib/replay.js`（原样回放、今天会换路由的一步、`--fail-on-change`、暴露别名塌缩的配置、`--since`/`--until` 窗口、两条 exit 2 路径）；`test/golden.test.js`（11 个）冻结十个代表性场景的路由结果（`GOLDEN_UPDATE=1` 才重写），任何非预期漂移都会失败。
 `test/contract.test.js`（7 个）把 1.0 契约本身钉住：每个应答都带 `schemaVersion`（连拒绝应答也算）、`docs/api.md` 里的路由与注册的路由完全一致、插件监听的每个宿主事件都出现在 `docs/compat.md`、每个导出都能解析且落在发布目录内、包声明了它支持的宿主且从不 peer 依赖宿主、1.0 的文档集齐全、面板点名的降级都有文档对应。

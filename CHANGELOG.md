@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+**Weekly catalog review (2026-11-02). No catalog fact changed this week, so nothing here is published yet; these tool
+changes go out with the next patch.**
+
+- **The drift report can name what is actually new.** `scripts/catalog-diff.mjs` now carries the upstream `created`
+  date (as an ISO day) and takes `--new-since <YYYY-MM-DD|Nd>`. Against the live feed on 2026-11-02 the new-model list
+  drops from 260 rows of history to the four `openai/gpt-6.1-terra*` listings; the 256 older ones are counted in the
+  summary, not hidden.
+- **A new provider is no longer invisible.** A model whose provider family the catalog does not track used to be
+  dropped from the report silently, which is exactly how a brand-new provider goes unnoticed. Such models now get
+  their own section (never counted as drift); the two-week window surfaced `particle-ai/particle-1` (2026-10-28,
+  $0.05/$0.50, 1M context) and `recursive/flint-v1.0:free`.
+- **A round million read as 1024 squared is not a change.** OpenRouter reports some windows as 1,048,576 where the
+  vendor documents 1,000,000, so every weekly run printed a fake context drift on `deepseek-flash`. The comparison now
+  treats that notation pair as one window and nothing else: a catalog value that is not a whole number of millions, or
+  a different binary size, still reports.
+- **The weekly workflow uses a two-week window.** `.github/workflows/catalog-diff.yml` runs the report with
+  `--new-since 14d`.
+- **One flaky assertion is fixed.** `test/observation.test.js` waited a single fixed 30 ms tick for the telemetry
+  flush and asserted on the counter; when the whole suite runs in parallel the flush can still be pending. It now
+  waits for the counter with a bound and then asserts. Tests: 437 (1.0.1: 431).
+
 ## 1.0.1
 
 **A correctness patch about time: every read of "now" goes through one injectable clock, so the suite no longer
