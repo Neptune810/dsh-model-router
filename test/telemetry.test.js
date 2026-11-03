@@ -584,3 +584,28 @@ test('summarize aggregates the cost-aware shadow and skips malformed ones', asyn
     savedRatio: 0.6,
   })
 })
+
+test('the default window includes a step stamped at exactly now', async (t) => {
+  // The pinned-clock gate found this: readDecisions treats `until` as exclusive,
+  // so with a frozen clock every event's ts equals now() and a default window of
+  // [now - 7d, now] read back empty. The default upper bound has to be inclusive.
+  const dir = tempDir(t)
+  const at = Date.UTC(2026, 9, 26, 2, 0, 0)
+  const tel = createTelemetry({ dir, now: () => at })
+  const event = {
+    ts: at,
+    stepClass: 'standard',
+    score: 50,
+    chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+    usage: { costUnits: 0.01 },
+  }
+  assert.equal(tel.writeDecision(event), true)
+  await tel.flush()
+
+  const summary = await tel.summarize()
+  assert.deepEqual(summary.window, { since: at - WEEK_MS, until: at, steps: 1 })
+  assert.equal(summary.totals.costUnits, 0.01)
+
+  assert.equal((await tel.summarize({ until: at })).window.steps, 0, 'an explicit until stays exclusive')
+  assert.equal((await tel.summarize({ until: at + 1 })).window.steps, 1, 'one millisecond later it is inside')
+})

@@ -4,7 +4,7 @@ What was actually done to this repository and to the local DSH profile, with the
 proves it. Written while executing the 2026-10 roadmap
 (C:\DSH\routing-plan-2026-10\PLAN.md); this file is the running record, PLAN.md is the plan.
 
-Last updated: 2026-11-01.
+Last updated: 2026-11-03.
 
 ## Environment
 
@@ -671,3 +671,50 @@ reads the same store and the panel loses nothing it was promised.
 judgement calls, the L1 method, the grooming decision that set 1.1.0 for 2026-12-01) is written up in
 `C:\DSH\routing-plan-2026-10\review-2026-11-01.md`; `PLAN.md` §3.1 and §5.10 and
 `release-calendar.csv` rows 14-16 were updated at the same time.
+
+## Shadow gate recheck — 2026-11-03
+
+The scheduled check asked whether `costAware` can be flipped by default: G3 cost at `<= 0.85x`, G4 quality not
+worse, on at least seven days and 300 priced shadow steps. The answer today is no, and the reason is upstream of the
+threshold.
+
+**What the environment says (all read on 2026-11-03, 09:30 +08:00).**
+
+| check | result |
+| --- | --- |
+| app profile | `DSH_PROFILE=desktop`, `DSH_PROFILE_DIR=C:\Users\97161\.dsh\profiles\desktop` |
+| plugin in that profile | `@neptune810/dsh-model-router` **0.14.2**, and `cordis.patch.yml:112` still has `- id: model-router` / `disabled: true` |
+| `/model-router/state`, `/model-router/stats` | HTTP 404 (nothing mounts the routes) |
+| `C:\Users\97161\.dsh\storages\model-router` | absent — no `decisions-YYYY-MM.jsonl`, so no decisions, no shadow, no outcomes |
+| `1.0.1` install target | `profiles\web`, a profile this app instance does not run (and it has no `storages\model-router` either) |
+
+**Gate reading.** `daysCovered 0 / 7`, `pricedSteps 0 / 300`, `G3 unknown` (nothing priced), `G4 not measurable`
+(no labelled runs). So: **not met — record it, change no default, re-check at the next monthly review.** Nothing in the
+routing code or the shipped defaults moved in this pass.
+
+**What landed instead.** `scripts/shadow-gate.mjs` (plus `npm run shadow-gate`), so the same question is one command
+and the answer carries its own evidence: it reads `decisions-*.jsonl` (including rotations) from
+`<DSH_HOME>/storages/model-router`, folds the `shadow` block the way `lib/telemetry.js` does, and prints days,
+shadow steps, priced steps, agree/diverged, current vs candidate USD, saved ratio and the G3 verdict. It exits 0 when
+the ledger is missing and says `missing` in words; `--require-pass` is what turns "not yet" into exit 1 for a CI job
+someone may add later. `test/shadow-gate.test.js` (9 cases) covers the gate opening on seven cheap days, staying shut
+at a 5% saving, unpriced steps counting as evidence but never as priced, rotated files, malformed lines and the CLI
+exit codes. Suite: **447/447**.
+
+**A real bug the pinned clock found.** Running the gate right after the shadow-gate work turned
+`tests at a pinned peak instant` red: four observation tests wrote their events (`state.telemetry.written >= 2`) but
+`/model-router/stats` reported zero steps. `readDecisions` in `lib/telemetry.js` treats `until` as exclusive, and a
+pinned clock stamps every event at exactly `now()`, so the default `[now - 7d, now]` window excluded the very events it
+had just written; the wall clock hides this because a real event is always a few milliseconds old. `lib/telemetry.js`
+and `lib/store.js` also defaulted to `Date.now` instead of the plugin clock, so the default window never followed
+`DSH_MODEL_ROUTER_NOW` — the peak step had in fact been rotting since 2026-11-02, when the pinned instant fell out of
+the rolling seven-day window. Both modules now read `lib/clock.js`, the default upper bound is inclusive (an explicit
+`until` stays exclusive), and `test/telemetry.test.js` pins the boundary with a step stamped at exactly `now()`:
+counted by the default window, excluded by an explicit one. Real, peak and off-peak clocks are all green at **447/447**.
+
+**Commits.** `b7d7fdc` the weekly review tooling (drift report) — see `review-2026-11-02-weekly.md`; `dbef084` the
+shadow-gate tool, the clock-window fix and its regression test; both ship with the next patch (1.0.2, 2026-11-15).
+
+**Open.** The flip stays blocked until the plugin is actually loaded in the profile the app runs — a decision only the
+user can make (asked on 2026-11-02, still open). Until then every monthly recheck will print the same zeros, which the
+script now says out loud instead of leaving it to be discovered.

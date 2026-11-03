@@ -19,9 +19,22 @@ changes go out with the next patch.**
   a different binary size, still reports.
 - **The weekly workflow uses a two-week window.** `.github/workflows/catalog-diff.yml` runs the report with
   `--new-since 14d`.
+- **The flip gate is one command.** `scripts/shadow-gate.mjs` (`npm run shadow-gate`) reads the monthly decisions
+  ledger and prints days covered, priced shadow steps, agreement, saved USD and the G3 cost ratio against the
+  documented bar (7 days, 300 priced steps, `<= 0.85x`); it exits 1 only with `--require-pass`, and it states
+  outright that G4 (quality) cannot come from the shadow, because the shadow records what would have been bought and
+  never whether the step went well. Recheck on 2026-11-03: **0/7 days and 0/300 priced steps** — the running profile
+  does not load the plugin, so there is no ledger at all; `costAware` stays `false` and no default moved.
+- **A frozen clock no longer hides the ledger from its own window.** Pinning the clock for the gate exposed what the
+  wall clock had been masking: `readDecisions` treats `until` as exclusive, so an event stamped at exactly the instant
+  it is read — always the case under a pinned clock — fell outside the default `[now - 7d, now]` window, and
+  `/model-router/stats` reported zero steps while the events sat on disk. The default upper bound is now inclusive
+  (an explicit `until` stays exclusive), and `lib/telemetry.js` and `lib/store.js` read the plugin clock
+  (`lib/clock.js`) instead of `Date.now`, without which the window never followed the injected instant. A regression
+  test writes one step stamped at exactly `now()` and asserts the default window counts it.
 - **One flaky assertion is fixed.** `test/observation.test.js` waited a single fixed 30 ms tick for the telemetry
   flush and asserted on the counter; when the whole suite runs in parallel the flush can still be pending. It now
-  waits for the counter with a bound and then asserts. Tests: 437 (1.0.1: 431).
+  waits for the counter with a bound and then asserts. Tests: 447 (1.0.1: 431).
 
 ## 1.0.1
 
