@@ -713,7 +713,9 @@ the rolling seven-day window. Both modules now read `lib/clock.js`, the default 
 counted by the default window, excluded by an explicit one. Real, peak and off-peak clocks are all green at **447/447**.
 
 **Commits.** `b7d7fdc` the weekly review tooling (drift report) — see `review-2026-11-02-weekly.md`; `dbef084` the
-shadow-gate tool, the clock-window fix and its regression test; both ship with the next patch (1.0.2, 2026-11-15).
+shadow-gate tool, the clock-window fix and its regression test; both merged to `main` in `6fce628` and shipped by CI
+(publish run [41561650151](https://github.com/Neptune810/dsh-model-router/actions/runs/41561650151): test node
+20/22/24 green, publish skipped — not a tag). They ship to npm with the next patch (1.0.2, 2026-11-15).
 
 **Open.** The flip stays blocked until the plugin is actually loaded in the profile the app runs — a decision only the
 user can make (asked on 2026-11-02, still open). Until then every monthly recheck will print the same zeros, which the
