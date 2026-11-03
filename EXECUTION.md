@@ -701,8 +701,19 @@ someone may add later. `test/shadow-gate.test.js` (9 cases) covers the gate open
 at a 5% saving, unpriced steps counting as evidence but never as priced, rotated files, malformed lines and the CLI
 exit codes. Suite: **447/447**.
 
-**Commits.** `b7d7fdc` the weekly review tooling (drift report) — see `review-2026-11-02-weekly.md`; the shadow-gate
-tool and this record ship with the next patch (1.0.2, 2026-11-15).
+**A real bug the pinned clock found.** Running the gate right after the shadow-gate work turned
+`tests at a pinned peak instant` red: four observation tests wrote their events (`state.telemetry.written >= 2`) but
+`/model-router/stats` reported zero steps. `readDecisions` in `lib/telemetry.js` treats `until` as exclusive, and a
+pinned clock stamps every event at exactly `now()`, so the default `[now - 7d, now]` window excluded the very events it
+had just written; the wall clock hides this because a real event is always a few milliseconds old. `lib/telemetry.js`
+and `lib/store.js` also defaulted to `Date.now` instead of the plugin clock, so the default window never followed
+`DSH_MODEL_ROUTER_NOW` — the peak step had in fact been rotting since 2026-11-02, when the pinned instant fell out of
+the rolling seven-day window. Both modules now read `lib/clock.js`, the default upper bound is inclusive (an explicit
+`until` stays exclusive), and `test/telemetry.test.js` pins the boundary with a step stamped at exactly `now()`:
+counted by the default window, excluded by an explicit one. Real, peak and off-peak clocks are all green at **447/447**.
+
+**Commits.** `b7d7fdc` the weekly review tooling (drift report) — see `review-2026-11-02-weekly.md`; `dbef084` the
+shadow-gate tool, the clock-window fix and its regression test; both ship with the next patch (1.0.2, 2026-11-15).
 
 **Open.** The flip stays blocked until the plugin is actually loaded in the profile the app runs — a decision only the
 user can make (asked on 2026-11-02, still open). Until then every monthly recheck will print the same zeros, which the
