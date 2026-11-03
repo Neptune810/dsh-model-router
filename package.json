@@ -53,7 +53,8 @@
     "test:gate": "node scripts/gate.mjs",
     "release:check": "node scripts/check-release.mjs",
     "release:gate": "node scripts/check-release.mjs --pack",
-    "replay": "node lib/replay.js"
+    "replay": "node lib/replay.js",
+  "shadow-gate": "node scripts/shadow-gate.mjs"
   },
   "dsh": {
     "compat": {

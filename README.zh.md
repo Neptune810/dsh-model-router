@@ -402,8 +402,9 @@ experiments: { enabled: false, apply: false, epsilon: 0.1, seed: null }
 ```
 
 **本版不做的事。** `costAware` 默认仍是 `false`：翻默认要等 G3/G4（七天、300 步已定价的影子样本、且至少重启到记录影子的
-构建上一次），本仓库如实记录这条门槛，而不是假装已经达到。在此之前，`npm run replay` 才是用真实流量回答「要不要翻」的
-诚实办法。
+构建上一次），本仓库如实记录这条门槛，而不是假装已经达到。`npm run shadow-gate` 直接读账本，打印距离这条线还差多少
+——覆盖天数、已定价影子步数、G3 成本比——并明确写出：G4（质量非劣）不可能从影子里读出来，影子只记录「本来会买什么」，
+不记录那一步到底顺不顺。在此之前，`npm run replay` 才是用真实流量回答「要不要翻」的诚实办法。
 
 ## 1.0.0 到底承诺了什么（v1.0.0）
 
@@ -604,8 +605,8 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-437 个用例。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
-环境钩子，以及「拒绝把非有限值钉成时间」；`test/replay-l1.test.js`（4 个）把二十条人工复核过的路由
+447 个用例。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
+环境钩子，以及「拒绝把非有限值钉成时间」；`test/shadow-gate.test.js`（9 个）用合成账本驱动 `scripts/shadow-gate.mjs`：七天便宜影子步开闸、只省 5% 不开闸、未定价影子步算证据但不算已定价、账本不存在就报「不存在」而不是报 0；`test/replay-l1.test.js`（4 个）把二十条人工复核过的路由
 （五个池 × 四个步骤等级）通过 `lib/replay.js --fail-on-change` 回放一遍，目录或打分一变就会在这里红，
 而不是等到账单上才发现；`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、
 证据升级、effort 钳制、中毒历史检测、tool-result 错误解析与 `toolCallClass` 开关（默认 `standard`、

@@ -442,8 +442,11 @@ elsewhere?". Two things it cannot replay, on purpose: classification and presets
 telemetry never stores, so the recorded `stepClass` is taken as given and presets are not re-applied.
 
 **What is not in this version.** `costAware` still defaults to `false`: the flip wants G3/G4 (≥7 days and ≥300 shadow
-steps, at least one restart on a build that records the shadow). The feedback loop, the classifier v2 and ε-greedy are
-0.17.1, together with the L2 experiment that decides whether the cost term becomes the default.
+steps, at least one restart on a build that records the shadow). `npm run shadow-gate` reads the ledger and prints
+exactly how far the evidence is from that bar — days covered, priced shadow steps, the G3 cost ratio — and states
+plainly that G4 (quality) cannot come from the shadow, because the shadow records what would have been bought, never
+whether the step went well. The feedback loop, the classifier v2 and ε-greedy are 0.17.1, together with the L2
+experiment that decides whether the cost term becomes the default.
 
 ## A feedback loop, a classifier that admits doubt, and exploration (v0.17.1)
 
@@ -704,8 +707,10 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-437 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
-hook, and the refusal to pin a non-finite instant. `test/replay-l1.test.js` (4) replays
+447 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
+hook, and the refusal to pin a non-finite instant. `test/shadow-gate.test.js` (9) drives `scripts/shadow-gate.mjs` against synthetic ledgers: seven days of cheap
+shadow steps open the flip gate, a 5% saving keeps it shut, unpriced steps count as evidence but never as priced
+ones, and a missing ledger is reported as missing rather than as zero. `test/replay-l1.test.js` (4) replays
 twenty reviewed routes across five pools through `lib/replay.js --fail-on-change`, so a
 catalog or scoring change that moves one of them fails here instead of at the bill. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
