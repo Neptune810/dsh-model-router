@@ -4,7 +4,7 @@ What was actually done to this repository and to the local DSH profile, with the
 proves it. Written while executing the 2026-10 roadmap
 (C:\DSH\routing-plan-2026-10\PLAN.md); this file is the running record, PLAN.md is the plan.
 
-Last updated: 2026-11-03.
+Last updated: 2026-11-05.
 
 ## Environment
 
@@ -720,3 +720,88 @@ shadow-gate tool, the clock-window fix and its regression test; both merged to `
 **Open.** The flip stays blocked until the plugin is actually loaded in the profile the app runs — a decision only the
 user can make (asked on 2026-11-02, still open). Until then every monthly recheck will print the same zeros, which the
 script now says out loud instead of leaving it to be discovered.
+
+## 1.1.0 — the mode pool and a pinned relay effort (2026-11-05)
+
+**Goal.** Two things the person paying the bill asked for directly: let the router pick the *host's*
+agent preset (标准模式 / PTC / 极简 / 创造) from a pool the same way it picks model and effort, and stop
+pretending a relay model has a thinking ladder — pin one effort per pool entry and say so.
+
+**Why the mode pool is a recommendation and not an automatic switch.** The host locks the preset the
+moment a session starts a turn: `agentPresets.select()` (`dsh-agent-preset-registry`, the `select`
+method) throws `RemoteError("agent-preset/locked", "This session has already started")` as soon as
+`turnBoundary.openTurnStartSeq !== null || turnBoundary.lastTurn > 0`. The only window that precedes a
+turn is `agent/inbox/inserted`, which `dsh-agent-loop` emits *synchronously* from `send()` before it
+calls `wakeDriver()`; `wakeDriver -> withInitiator -> kick -> turn()` then appends `turn/start` with no
+await in between, while `select()` is a microtask chain. Racing it is not a design, it is a coin toss
+that loses into the user's first message as a RemoteError. So the plugin **classifies the first message,
+records a recommendation, and stops**; the panel shows it and one click applies it for a session that
+has not started yet. `modeSetDefault` is the opt-in that also writes `selectedDefault` into
+`agent-preset-registry`, so the *next* session opens in the recommended mode — which is the honest way
+to influence a preset the host only lets you choose before turn one.
+
+**What landed.**
+
+- `lib/mode-pool.js` (new, zero imports): `MODE_IDS` (`standard`, `ptc`, `minimal`, `cordis`, in UI
+  order), `MODE_HINTS`, `normalizeModes` (unknown ids dropped, trimmed, de-duplicated, order kept,
+  frozen), `scoreMode`, `classifyMode` (returns `null` rather than guessing: empty pool, one mode, or
+  zero evidence; otherwise score-descending with a fixed tie order), `describeModes`.
+- `lib/routing.js`: `normalizePool` keeps a new `fixedEffort` per entry (`isKnownEffort` or dropped —
+  never silently coerced), on both the normal path and the empty-pool fallback.
+- `lib/config.js`: `modes`, `modeAuto` (default true), `modeSetDefault` (default false), `withModes`,
+  and the three keys added to the `withSettings` whitelist — a settings write that is not whitelisted
+  is dropped without an error, so this line is load-bearing.
+- `lib/index.js`: `currentAgentPreset(sessionId)` reads the `agentPreset` projection (header value plus
+  every `agent-preset/selected` event, so a manual UI switch is seen), `sessionStarted(agent)` reads
+  `turnBoundary`, `noteModeRecommendation` classifies once per session, `onInboxInserted` is the
+  listener, `applyMode` is the route handler; `api.state` now projects the ten pool fields and a
+  `modes` block; `/router modes` prints the pool, the session's mode and the last refusal.
+- **The dead code that made pinning impossible.** `supportedEfforts` called `llm().resolveModel(...)`,
+  which exists on the *adapter*, not on the service: every non-DeepSeek entry therefore advertised an
+  empty vocabulary and every relay model silently routed with no effort change at all. It now calls
+  `resolveModelInfo(provider, model)` and reads `info.reasoning.efforts[].id`. `manages()` also had its
+  pool check after the family regex, so a non-family entry in the pool on the default provider was
+  never managed; pool membership now wins.
+- The pin is applied *after* `mapEffort` and is overridden by nothing except the poisoned-history
+  guard: a route pinned to `high` still sends `off` when the history already contains a tool call
+  without thinking, because sending thinking there is a 400, not a preference.
+- `lib/routes.js`: the seventeenth route, `POST /model-router/modes` (`{ sessionId, mode, pool, auto,
+  setDefault }`).
+- Panel: a mode-pool section (each mode a row, the recommendation marked, a "locked" note once the
+  session has started, toggles for automatic recommendations and for writing the next session's
+  default) and a per-entry effort control `auto | off | low | high | max` next to the tier and cost
+  controls, in both render paths.
+
+**Freeze evidence.** `node --test` **471 / 471 pass, 0 fail** (1.0.1: 421; +18 `test/mode-pool.test.js`,
++6 `test/fixed-effort.test.js`, +26 the work merged after 1.0.1). `node scripts/gate.mjs` exit 0 in
+23.6 s: 471/471 at the real clock, 471/471 at `DSH_MODEL_ROUTER_NOW=1792980000000` (peak) and 471/471
+at `1793496600000` (off-peak), then `check-release` (version 1.1.0, changelog 1.1.0, packed files 40)
+and `check-catalog` (19 models / 15 channels / 4 calendar / 1 watchlist, evidence 2026-11-01).
+`test/contract.test.js` green: the documented route table and `routeTable` agree at seventeen entries,
+the new `agent/inbox/inserted` listener is in `docs/compat.md`, and `./mode-pool` resolves and ships.
+
+**Commits.** `c19a7f9` feat(modes): recommend a host agent preset and pin a relay effort (v1.1.0);
+`e6eb960` chore(release): 1.1.0.
+
+### Publish evidence (2026-11-05)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/1.1.0` from `a4f2cab` |
+| push to main | the git transport was down this morning (`github.com:443` refused connections; every alternate IP handshook TLS and then hung, no local proxy listening), so the three commits were replayed through the GitHub REST API — `POST /git/blobs`, `/git/trees`, `/git/commits` — and every replayed commit came back **byte-identical** (`a4f2cab`, `c19a7f9`, `e6eb960`), then `PATCH /git/refs/heads/main` fast-forwarded `6fce628..e6eb960` |
+| tag | annotated `v1.1.0` -> commit `e6eb960`, recreated through `POST /git/tags` + `POST /git/refs` (identical tag object `28969cd`) |
+| CI (tag) | Actions publish run [41964397463](https://github.com/Neptune810/dsh-model-router/actions/runs/41964397463) success: test node 20/22/24, the node 24 clock-independent suite at two pinned instants, release gate `--pack`, catalog regeneration and validator, then the OIDC publish job |
+| CI (main) | run [41964309305](https://github.com/Neptune810/dsh-model-router/actions/runs/41964309305) success (publish skipped, not a tag); drift run 41964397455 success |
+| npm | `dist-tags.latest = 1.1.0`, tarball shasum `43fad068fa10d9ff51aa8493347355d3959024c7`, integrity `sha512-4gWug5nW7g5wbFtGl4/0huB36JmRVbnE9iAaE5AdRrZzZ9xWxapYiYNpc8KxREkosgUq7N2OZHsdPtE+IwkZoA==`, **40 files** (1.0.1: 39; the newcomer is `lib/mode-pool.js`), provenance attestation present |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@1.1.0 --save-exact` — dependency pinned to `1.1.0`, 17 exports, `lib/mode-pool.js` installed; the desktop app must be restarted to load it |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router 1.0.1 latest` and `pnpm add` 1.0.1 in
+the profile. 1.1.0 adds a field to pool entries (`fixedEffort`) and three optional settings
+(`modes`/`modeAuto`/`modeSetDefault`); a 1.0.1 process reading that store ignores all four, so the
+downgrade is lossless apart from the pins.
+
+**Honest limits.** The mode pool cannot switch mid-task — the host forbids it — so "automatically uses
+the most suitable mode in a task" is delivered as *recommendation + one-click apply before the first
+turn*, plus an opt-in that makes the next session open in the recommended mode. The classifier is the
+same evidence-scoring approach as the task-type classifier (keyword weights, fixed tie order), not a
+model call; `modeAuto` off, or no clear evidence, means no recommendation at all rather than a guess.
