@@ -806,3 +806,70 @@ the most suitable mode in a task" is delivered as *recommendation + one-click ap
 turn*, plus an opt-in that makes the next session open in the recommended mode. The classifier is the
 same evidence-scoring approach as the task-type classifier (keyword weights, fixed tie order), not a
 model call; `modeAuto` off, or no clear evidence, means no recommendation at all rather than a guess.
+
+## 1.1.1 — a pin picker that only offers the words a route declares, and a catalog sync you can audit (2026-11-05)
+
+**Goal.** Nothing new to route; two things that were wrong. The fixed-effort picker offered the same nine
+words to every entry, including entries whose provider declares three, so a click could pin a value that
+would be rejected at request time. And `catalog-diff` compared only fields *both* sides priced, so a
+catalog `null` against a live upstream quote was invisible — a model missing a price looked exactly like a
+model with nothing to report.
+
+**What landed.**
+
+- `GET /model-router/catalog` now returns a per-model `efforts` array: the DeepSeek family keeps the
+  four-word vocabulary, every other model gets whatever `resolveModelInfo(provider, model)` declares
+  (`info.reasoning.efforts[].id`). The panel's `fixedEffort` control renders that list instead of the
+  global nine (`EFFORTS` in `lib/policy.js` is unchanged and still the coercion table).
+- The picker narrows but never silently rewrites: an existing pin the route no longer declares stays
+  visible and selected (so a stale pin is a thing you can see and fix, not a value that vanishes), and a
+  route that declares no vocabulary at all falls back to the nine words rather than an empty control.
+- `catalog-diff` grew an `## Unpriced fields` section plus `summary.gaps`: a field the catalog leaves
+  `null` while upstream quotes a number is reported there and **counted separately from drift**, so
+  `--fail-on-drift` still only fires on a real disagreement, and `summary.unpriced` is 0 when nothing is
+  missing.
+- Three price facts re-read from the upstream catalogue on 2026-11-05 and written into
+  `catalog/model-catalog.yaml` (`evidenceDate: 2026-11-05`): `glm-5.3-flashx` `cacheRead` 0.09 → 0.075,
+  `gemini-3.8-flash` `cacheWrite` filled in at 0.0416667, `qwen3.8-flash` given its OpenRouter projection
+  (0.15 in / 0.47 out / 0.016 cacheRead). `lib/catalog.js` regenerated from the source YAML.
+
+**Why it shipped early (2026-12-15 → 2026-11-05).** Neither item needs elapsed usage to be worth shipping:
+one is a UI that offers invalid values, the other is a blind spot in the tool built to prevent blind
+spots. The two calendar points that 1.1.1 was originally scheduled around — Gemini 4 Argon's 2026-12-01
+increase and GLM-4.5's 2026-12-31 retirement — were re-checked and are both still armed in the watchlist
+and `calendar`; there was nothing to sync for them yet.
+
+**Freeze evidence.** `node --test` **474 / 474 pass, 0 fail** (1.1.0: 471; +1 `test/catalog-diff.test.js` for the unpriced section and +2 `test/client.test.js` for the narrowed picker; `test/modes.test.js` and `test/catalog.test.js` keep their 34 and 21). `node scripts/gate.mjs` exit 0 in 22.1 s: 474/474 at the real clock,
+474/474 at `DSH_MODEL_ROUTER_NOW=1792980000000` (peak) and 474/474 at `1793496600000` (off-peak), then
+`check-release` (`version=1.1.1 changelog=1.1.1`, packed files 40) and `check-catalog` (19 models / 15
+channels / 4 calendar / 1 watchlist, evidence 2026-11-05; one standing warning, `claude-sonnet-5-5`
+`quality.aaVariant` missing next to `aaIndex: 56`).
+
+**Commits.** `46027d5` feat(catalog): sync three price facts and narrow the pin picker to the route's own
+words (v1.1.1) — README.md, README.zh.md, catalog/model-catalog.yaml, client/client.js, docs/api.md,
+lib/catalog.js, lib/index.js, scripts/catalog-diff.mjs, test/catalog-diff.test.js, test/catalog.test.js,
+test/client.test.js, test/modes.test.js (12 files, +321/−42); `ebed5e9` chore(release): 1.1.1 —
+CHANGELOG.md, package.json.
+
+### Publish evidence (2026-11-05)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/1.1.1` from `dbccd1f`; `main` had drifted five commits behind `release/1.1.0` since the transport outage, so the push landed both |
+| push to main | the git transport failed three times in a row (`Recv failure: Connection was reset`, then `Failed to connect to github.com:443 after 21047 ms`) while HTTPS to github.com and `api.github.com` answered 200, DNS resolved to 20.205.243.166, `Test-NetConnection` reached 443 *and* 22, no proxy was configured, and there was no SSH key to fall back on — a fourth plain `git push` succeeded with no change, which is the difference between this outage and the 1.1.0 one (that one never recovered and needed the REST replay). `main` fast-forwarded `6fce628..46027d5` |
+| tag | annotated `v1.1.1` -> commit `ebed5e9` (tag object `ebed5e9e4d36033f50cc5650140c3cd69a82cf05`) |
+| CI (tag) | Actions publish run [41993235461](https://github.com/Neptune810/dsh-model-router/actions/runs/41993235461) success: test node 20/22/24, the node 24 clock-independent suite at two pinned instants, release gate `--pack`, catalog regeneration and validator, then the OIDC publish job; drift run [41993235506](https://github.com/Neptune810/dsh-model-router/actions/runs/41993235506) success |
+| CI (main) | run [41993183266](https://github.com/Neptune810/dsh-model-router/actions/runs/41993183266) success (publish skipped, not a tag); drift run 41993183285 success |
+| npm | `dist-tags.latest = 1.1.1`, tarball shasum `875b1fac1d69b82f2dcc6083f14ae88766d62705`, integrity `sha512-yGNmnZZVn+dcQC5GUwqSU89CAt+9M0CJWK/Jlycc/aVuCboaeq0bCrmJXHhJHsRlrxRIeWUjXT5SQW6DB1JC6g==`, **40 files** (unchanged: no new module), provenance attestation present |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@1.1.1 --save-exact` — dependency pinned to `1.1.1`; the desktop app must be restarted to load it |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router 1.1.0 latest` and `pnpm add` 1.1.0 in
+the profile. 1.1.1 changes no store shape: the catalog is data, `GET /catalog` only *adds* `efforts`, and
+the `fixedEffort` values already stored are exactly the values 1.1.0 wrote, so the downgrade is lossless.
+
+**Honest limits.** The narrowed picker is only as good as `resolveModelInfo`: a provider that declares no
+reasoning vocabulary still shows the nine words, because the fallback has to be *something* and hiding the
+control entirely would remove a working pin from an entry that is still routing. The unpriced section is
+advisory by construction — it will keep listing the same 11 null price fields until someone fills them in,
+which is the point: it is a to-do list, not a failure. `catalog-diff` still cannot tell "upstream has no
+price" from "upstream's page changed shape"; both read as no number, and no number is never drift.
