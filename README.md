@@ -516,6 +516,50 @@ surface legible rather than adding capability.
 Deliberately not in this version: splitting the browser bundle into a build artifact, and a CI matrix
 against two host versions. Both are infrastructure work that does not change what the router decides,
 and both are recorded as deferred in `PLAN.md` rather than implied by the version number.
+## The mode pool and a pinned relay effort (v1.1.0)
+
+Two additions that answer two very different problems: DSH ships four agent presets and the router had
+nothing to say about them, and relay gateways pin a model to one reasoning word and used to receive
+whatever the ladder produced.
+
+- **The mode pool.** `modes: [standard, ptc, minimal, cordis]` turns on a keyword classifier over the
+  session's first message: batch work over many files leans `ptc`, a one-line rename leans
+  `minimal`, plugin work leans `cordis`, everything else `standard`. No model call, no budget.
+- **The router recommends, it does not switch behind your back.** The host accepts a preset change
+  only before a session's first turn, and that window closes synchronously with the message that
+  opens it — a plugin calling `agentPresets.select()` from the event races the host and, when it
+  loses, throws a refusal into the user's first message. So the recommendation is recorded in
+  `/state.modes.decision`, drawn in the panel and in `/router modes`, and applied only when you
+  click it, which is the one moment the host is guaranteed to accept. `modeSetDefault` also writes
+  the pick to `agent-preset-registry.selectedDefault`, so the next session starts there.
+- **A pin for relay entries.** `fixedEffort` on any pool entry (`off`/`low`/`high`/`max`) makes the
+  router send one word and stop asking. A relay that declares only `max` rejects every other word, so
+  the pin is not an optimisation but the difference between a call and an error. The panel grows a
+  per-entry pin selector; the decision's reasons say "effort pinned to max on this route (would have
+  sent high)". A history that already contains a tool call without a thinking block still gets
+  `off`, because that conversation rejects thinking outright — safety outranks the pin.
+- **The effort vocabulary now comes from the host.** `supportedEfforts` called
+  `runtime.resolveModel`, which only exists on the adapter layer, so every non-DeepSeek entry
+  silently got an empty vocabulary and the router never adjusted its effort. It reads
+  `resolveModelInfo(...).reasoning.efforts` now — the same source the host's model catalog uses.
+- **A pool entry is managed by definition.** `manages()` tested the family regex before the pool, so a
+  non-DeepSeek entry on the default provider was never taken over. The pool check comes first now.
+
+```yaml
+# cordis.patch.yml
+- id: model-router
+  config:
+    modes: [standard, ptc, minimal, cordis]
+    modeAuto: true          # recommend from the first message (default)
+    modeSetDefault: false   # also set the default for the next session
+    pool:
+      - id: qiyue/deepseek-v4.1-flash
+        tier: cheap
+        fixedEffort: max    # this relay declares max and nothing else
+      - id: deepseek-official/deepseek-flash
+        tier: cheap
+```
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -707,7 +751,17 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-447 tests. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
+471 tests. `test/mode-pool.test.js` (18) covers the preset pool: normalisation, the keyword classifier (a batch
+brief leans `ptc`, a typo fix leans `minimal`, a plugin brief leans `cordis`, a refactor stays `standard`),
+the deterministic tie order, an empty and a single-mode pool, and — through host doubles — that the first message only
+*recommends* (nothing is switched), that the panel call applies a mode, that an already-started session is refused
+before the host is ever asked, that a host refusal is passed through verbatim, that a host without `agentPresets`
+says so, that `pool`/`auto`/`setDefault` ride the same route, that `modeSetDefault` writes
+`selectedDefault`, that one session is judged once, and the `/router modes` text. `test/fixed-effort.test.js`
+(6) covers the relay pin: normalisation keeps a known word and drops `turbo`, the entry is frozen, the pin overrides
+the ladder, an unpinned entry still maps, the vocabulary comes from `resolveModelInfo` (`high` lands on `xhigh`
+because that is what the host advertises), a poisoned history still wins over the pin, and `/pool` round-trips the
+field. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
 hook, and the refusal to pin a non-finite instant. `test/shadow-gate.test.js` (9) drives `scripts/shadow-gate.mjs` against synthetic ledgers: seven days of cheap
 shadow steps open the flip gate, a 5% saving keeps it shut, unpriced steps count as evidence but never as priced
 ones, and a missing ledger is reported as missing rather than as zero. `test/replay-l1.test.js` (4) replays

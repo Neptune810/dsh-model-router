@@ -29,10 +29,11 @@ additive, and a field is only removed in a major version.
 | POST | /model-router/effort-model | `{ sessionId, model }` | Binds (or unbinds, `null`) the one model the effort scope may use. |
 | POST | /model-router/task-type | `{ sessionId, preset }` | Pins the task type for the next turn, or `null` for automatic. |
 | POST | /model-router/confirm | `{ sessionId, plan }` | Confirms the plan signature the state route reported. |
-| POST | /model-router/pool | `{ pool }` | Replaces the pool (strings or `{ id, tier, cost, channel, tags, weights, efforts }` entries). |
+| POST | /model-router/pool | `{ pool }` | Replaces the pool (strings or `{ id, tier, cost, channel, tags, weights, efforts, fixedEffort }` entries). |
 | POST | /model-router/pool/auto-price | `{ fetch }` | Fills relative cost levels from the built-in rules, optionally from a fresh OpenRouter snapshot. |
 | POST | /model-router/prices | — | Re-reads the catalog price file. |
 | POST | /model-router/cross | `{ sessionId, action }` | Answers a cross-provider proposal: `allow` / `once` / `never`. |
+| POST | /model-router/modes | `{ sessionId, mode, pool, auto, setDefault }` | The agent-preset pool (v1.1): recommends a mode from the session's first message, and applies one while the host still allows it (before the session's first turn). |
 | POST | /model-router/presets | `{ presets }` | Replaces task presets. |
 | POST | /model-router/settings | `{ settings }` | Updates one settings block (control, image policy, classifier, panel background, signals, subagent, effort model). |
 | POST | /model-router/budget | `{ sessionId, action }` | `once` lets the next step through a hard budget stop and re-arms; `rearm` clears the stop immediately. |
@@ -57,6 +58,7 @@ additive, and a field is only removed in a major version.
 | ./feedback-store | lib/feedback-store.js | The local JSONL feedback log. |
 | ./replay | lib/replay.js | The offline replay CLI (`dsh-model-router-replay`). |
 | ./clock | lib/clock.js | The plugin's clock: `now()`, `freeze(ms)`, `isFrozen()`. |
+| ./mode-pool | lib/mode-pool.js | The agent-preset pool: `MODE_IDS`, `normalizeModes`, `classifyMode`, `describeModes`. |
 
 
 ## Deterministic time

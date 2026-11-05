@@ -111,7 +111,14 @@ window.__ModuleLoader__.load({
 				feedbackPending: "等下一步验证", feedbackStayed: "下一步留在原路由", feedbackMoved: "下一步换了路由",
 				experimentNote: "探索实验：这一步试了 {arm}", experimentShadow: "探索影子：抽到 {arm}，未改路由", experimentHint: "epsilon-greedy 只在非 hard、非 engineering 的步骤抽签；默认关闭",
 				classifierEscalated: "分类器低置信（{c}）已上调一档", classifierBreaker: "分类器连续失败，暂时只用规则", classifierHint: "分类器给不出高置信结论时宁可上调一档，也不猜",
-				compatLabel: "宿主能力缺失：{c}", compatHint: "缺少的宿主能力对应的功能不可用；路由本身仍在运行，不会静默假装正常"
+				compatLabel: "宿主能力缺失：{c}", compatHint: "缺少的宿主能力对应的功能不可用；路由本身仍在运行，不会静默假装正常",
+				fixedEffort: "固定档", fixedEffortHint: "中转站常把模型钉死在一个思考档上，换别的词只会换来 400：钉死之后不再自动调档（历史里有不带思考的工具调用时仍会退回 off）",
+				fixedEffortAuto: "自动", fixedEffortPinned: "已钉在 {e}",
+				modes: "模式池", modesTitle: "模式池（宿主 agent preset）", modesHint: "勾选的模式会参与自动推荐；DSH 自带 标准 / PTC / 极简 / 创造 四个模式",
+				modeCurrent: "本会话", modeUnknown: "未知", modeRecommend: "建议 {m} · {why}",
+				modeApply: "切到这个模式", modeApplied: "已由路由器切换", modeAuto: "自动推荐", modeSetDefault: "同时设为下次会话的默认",
+				modeLocked: "本会话已开始，模式已锁定（宿主只允许在第一条消息之前切换）", modeNoHost: "宿主没有 agentPresets 服务",
+				modeWhyOnly: "池里只有一个模式", modeNone: "没有证据，保持现状"
 			},
 			en: {
 				title: "Model router", scope: "Scope", full: "Model+Effort", effort: "Effort", model: "Model",
@@ -195,7 +202,14 @@ window.__ModuleLoader__.load({
 				feedbackPending: "waiting for the next step", feedbackStayed: "the next step stayed on the route", feedbackMoved: "the next step moved to another route",
 				experimentNote: "experiment: this step tried {arm}", experimentShadow: "experiment shadow: drew {arm}, route unchanged", experimentHint: "epsilon-greedy draws only on steps that are neither hard nor engineering; off by default",
 				classifierEscalated: "classifier confidence low ({c}), tier raised", classifierBreaker: "the classifier keeps failing, rules only for now", classifierHint: "when the classifier cannot be confident it raises the tier instead of guessing",
-				compatLabel: "missing host capability: {c}", compatHint: "features that need that capability are unavailable; routing still runs and never pretends to be fine"
+				compatLabel: "missing host capability: {c}", compatHint: "features that need that capability are unavailable; routing still runs and never pretends to be fine",
+				fixedEffort: "pin", fixedEffortHint: "a relay often pins a model to one thinking level and answers any other word with a 400: a pinned entry is never re-mapped (history that already contains a thinking-less tool call still falls back to off)",
+				fixedEffortAuto: "auto", fixedEffortPinned: "pinned to {e}",
+				modes: "Mode pool", modesTitle: "Mode pool (host agent presets)", modesHint: "ticked modes take part in the recommendation; DSH ships Standard / PTC / Minimal / Cordis",
+				modeCurrent: "this chat", modeUnknown: "unknown", modeRecommend: "suggests {m} · {why}",
+				modeApply: "switch to it", modeApplied: "switched by the router", modeAuto: "recommend a mode", modeSetDefault: "also make it the next session's default",
+				modeLocked: "this chat has started, so the mode is locked (the host only allows a switch before the first message)", modeNoHost: "the host has no agentPresets service",
+				modeWhyOnly: "the only mode in the pool", modeNone: "no evidence, left as it is"
 			},
 		}
 		const dict = () => (typeof navigator !== "undefined" && /^en/i.test(navigator.language || "") ? TEXT.en : TEXT.zh)
@@ -699,6 +713,29 @@ window.__ModuleLoader__.load({
 			const effortNote = effortLast && effortLast.why && effortLast.why !== "exact" && effortWhy
 				? t.effortNote.replace("{from}", String(effortLast.from || "")).replace("{to}", String(effortLast.to === null || effortLast.to === undefined ? "-" : effortLast.to)).replace("{why}", effortWhy)
 				: ""
+			// Mode pool (v1.1): the host's four agent presets as a pool. A host that
+			// predates the field sends no state.modes and the panel stays silent.
+			const modeInfo = state && state.modes && typeof state.modes === "object" ? state.modes : null
+			const modePool = modeInfo && Array.isArray(modeInfo.pool) ? modeInfo.pool : []
+			const modeAvailable = modeInfo && Array.isArray(modeInfo.available) ? modeInfo.available : []
+			const modeCurrent = modeInfo ? (modeInfo.current || "") : ""
+			const modeDecision = modeInfo && modeInfo.decision && typeof modeInfo.decision === "object" ? modeInfo.decision : null
+			const modeApplied = !!(modeInfo && modeInfo.applied)
+			const modeError = modeInfo && typeof modeInfo.error === "string" ? modeInfo.error : ""
+			const modeAuto = !!(modeInfo && modeInfo.auto)
+			const modeSetDefault = !!(modeInfo && modeInfo.setDefault)
+			const modeHint = (id) => {
+				const found = modeAvailable.find((entry) => entry && entry.id === id)
+				return found && found.hint ? found.hint : undefined
+			}
+			// The recommendation is actionable until this session runs its first turn;
+			// after that the host refuses the switch and the note says so instead.
+			const modeLocked = !!sessionId && !!(state && state.current)
+			const modeNote = !modeInfo || modePool.length === 0 ? ""
+				: modeApplied ? t.modeApplied
+					: modeDecision ? t.modeRecommend.replace("{m}", String(modeDecision.id || "")).replace("{why}", String(modeDecision.why || ""))
+						: modeError ? modeError
+							: ""
 			/**
 			 * The pool list is collapsed by default: the router row carries a pool control, so the
 			 * menu body does not have to hold every model all the time. Effort scope forces it open
@@ -843,7 +880,20 @@ window.__ModuleLoader__.load({
 								? (entry.tags || []).filter((tag) => tag !== "vision")
 								: (entry.tags || []).concat(["vision"]),
 						}),
-					}, t.vision)
+					}, t.vision),
+					// v1.1 fixed effort: relays pin a model to one thinking level and
+					// answer anything else with a 400. "auto" keeps the router's own
+					// ladder; any other value is sent verbatim, every step.
+					h("span", { className: "mr-tag", title: t.fixedEffortHint }, t.fixedEffort),
+					h(Segmented, {
+						title: t.fixedEffortHint, disabled: busy, value: entry.fixedEffort || "auto",
+						"data-mr-fixed-effort": id,
+						onChange: (value) => patchEntry(id, { fixedEffort: value === "auto" ? null : value }),
+						options: [ "auto", "off", "low", "high", "max" ].map((value) => ({
+							value: value,
+							label: value === "auto" ? t.fixedEffortAuto : value,
+						})),
+					})
 				)
 			}
 			const savePresets = (next, after) => run("/presets", { presets: next }, after)
@@ -1383,6 +1433,43 @@ window.__ModuleLoader__.load({
 						h("span", { className: "mr-sub" }, (state && state.pinnedTaskType) || t.auto),
 						h("span", { className: "mr-check" }, h(Icon, { name: "chevron", size: 12 }))
 					))
+					// Mode pool (v1.1). Kept above the model pool because a mode is a
+					// per-session decision, and the host only honours it before the first
+					// message — the note says so the moment it stops being true.
+					if (modePool.length > 0) {
+						body.push(h("div", { key: "mode-div", className: "mr-div" }))
+						body.push(h("div", { key: "mode-title", className: "mr-group", title: t.modesHint },
+							t.modesTitle + " \u00b7 " + (modeCurrent || t.modeUnknown)))
+						for (const id of modePool) {
+							const isCurrent = modeCurrent === id
+							const isSuggested = !!(modeDecision && modeDecision.id === id && !modeApplied)
+							body.push(h("button", {
+								key: "mode-" + id, type: "button", className: "mr-row", disabled: busy || isCurrent,
+								title: modeHint(id), "data-mr-mode": id, "data-suggested": String(isSuggested),
+								onClick: () => { run("/modes", { sessionId: sessionId, mode: id, setDefault: modeSetDefault ? id : undefined }); setView("main") },
+							},
+								h("span", { className: "mr-check" }, isCurrent ? h(Icon, { name: "check" }) : null),
+								h("span", { className: "mr-name" }, id),
+								h("span", { className: "mr-sub" }, isCurrent ? t.modeCurrent : isSuggested ? t.modeRecommend.split("{m}")[0].trim() : (modeHint(id) || ""))
+							))
+						}
+						if (modeNote) {
+							body.push(h("div", { key: "mode-note", className: "mr-note", style: { padding: "0 8px 4px" }, "data-mr-mode-note": "true" },
+								modeNote + (modeLocked && !modeApplied ? " \u00b7 " + t.modeLocked : "")))
+						}
+						body.push(h("div", { key: "mode-auto", className: "mr-line", style: { padding: "0 8px 6px" } },
+							h("button", {
+								type: "button", className: "mr-chip", disabled: busy, title: t.modesHint,
+								"data-active": String(modeAuto), "data-mr-mode-auto": "true",
+								onClick: () => run("/modes", { sessionId: sessionId, auto: !modeAuto }),
+							}, t.modeAuto),
+							h("button", {
+								type: "button", className: "mr-chip", disabled: busy, title: t.modesHint,
+								"data-active": String(modeSetDefault), "data-mr-mode-default": "true",
+								onClick: () => run("/modes", { sessionId: sessionId, setDefault: modeCurrent || modePool[0] }),
+							}, t.modeSetDefault)
+						))
+					}
 					body.push(h("div", { key: "div1", className: "mr-div" }))
 					if (!seated && showPool) {
 
@@ -1456,7 +1543,17 @@ window.__ModuleLoader__.load({
 												? (entry.tags || []).filter((tag) => tag !== "vision")
 												: (entry.tags || []).concat(["vision"]),
 										}),
-									}, t.vision)
+									}, t.vision),
+									h("span", { className: "mr-tag", title: t.fixedEffortHint }, t.fixedEffort),
+									h(Segmented, {
+										title: t.fixedEffortHint, disabled: busy, value: entry.fixedEffort || "auto",
+										"data-mr-fixed-effort": model.id,
+										onChange: (value) => patchEntry(model.id, { fixedEffort: value === "auto" ? null : value }),
+										options: [ "auto", "off", "low", "high", "max" ].map((value) => ({
+											value: value,
+											label: value === "auto" ? t.fixedEffortAuto : value,
+										})),
+									})
 								))
 							}
 						}

@@ -428,6 +428,45 @@ experiments: { enabled: false, apply: false, epsilon: 0.1, seed: null }
 
 这一版故意不含：把浏览器包拆成构建产物、以及面向两个宿主版本的 CI 矩阵。两者都是不改变路由结论的
 基础设施工作，都在 `PLAN.md` 里如实记为顺延，而不是靠版本号暗示已经做完。
+## 模式池与中转固定档（v1.1.0）
+
+这一版的两件事回答两个完全不同的问题：DSH 自带四个 agent preset，而路由器此前对它们一无所知；
+中转网关把模型钉死在一个思考词上，而它此前收到的是阶梯算出来的任意一个。
+
+- **模式池。** `modes: [standard, ptc, minimal, cordis]` 打开后，路由器对会话的第一条消息做关键词
+  分类：跨多文件的批量活偏向 `ptc`，改个名字、一行修正偏向 `minimal`，写插件偏向 `cordis`，
+  其余 `standard`。不调用模型，不花额度。
+- **只推荐，不背着你切换。** 宿主只在会话第一轮开始之前接受 preset 变更，而这个窗口与「开启第一轮
+  的那条消息」同步关闭——插件在该事件里调 `agentPresets.select()` 是在和宿主赛跑，跑输了会把一条
+  拒绝提示扔进用户的第一条消息里。所以推荐值写进 `/state.modes.decision`，面板与 `/router modes`
+  显示它，只有你点一下才真的切——那是宿主保证还接受的唯一时刻。`modeSetDefault` 还会把结果写进
+  `agent-preset-registry.selectedDefault`，让**下一个**会话直接以它开局。
+- **中转条目的固定档。** 池条目上的 `fixedEffort`（`off`/`low`/`high`/`max`）让路由器只发这一个词、
+  不再换算。只声明 `max` 的中转会拒收其它任何词——这时的固定档不是优化，而是「这一次能跑」与
+  「直接报错」的差别。面板给每个条目加了固定档选择器，决策理由会写
+  「effort pinned to max on this route (would have sent high)」。一条安全规则高于固定档：历史里已经
+  有不带思考块的工具调用时，仍然发 `off`，因为那种对话结构上拒收思考。
+- **思考词表终于来自宿主。** `supportedEfforts` 过去调用 `runtime.resolveModel`——那只是适配器层的
+  方法名，于是每个非 DeepSeek 条目都静默拿到空词表，路由器从不调整它们的思考强度。现在读
+  `resolveModelInfo(...).reasoning.efforts`，与宿主自己的模型目录同源。
+- **进池即接管。** `manages()` 过去先问 family 正则再看池子，导致默认 provider 上非本家族的条目
+  永远不被接管。现在先看池子。
+
+```yaml
+# cordis.patch.yml
+- id: model-router
+  config:
+    modes: [standard, ptc, minimal, cordis]
+    modeAuto: true          # 按首条消息推荐（默认开）
+    modeSetDefault: false   # 同时设为下一个会话的默认
+    pool:
+      - id: qiyue/deepseek-v4.1-flash
+        tier: cheap
+        fixedEffort: max    # 这家中转只认 max
+      - id: deepseek-official/deepseek-flash
+        tier: cheap
+```
+
 ## 五条规则
 
 1. **无棘轮。** 轮次深度默认不贡献任何分数（`scoring.turnPerPoint: 0`），工具调用按「当前任务」
@@ -605,7 +644,14 @@ profile 补丁里加的 `routes.trivial.effort: low` 可以删掉（重装插件
 node --test
 ```
 
-447 个用例。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
+471 个用例。`test/mode-pool.test.js`（18 个）覆盖预设池：归一化、关键词分类（批量任务偏 `ptc`、错别字
+修正偏 `minimal`、插件任务偏 `cordis`、重构留在 `standard`）、平局的固定顺序、空池与单模式池，以及用宿主替身
+验证的完整语义——首条消息只**推荐**（什么都不切）、面板调用才真的切、已开始的会话在问宿主之前就被拒、宿主的拒绝
+原样透传、没有 `agentPresets` 服务时如实说明、`pool`/`auto`/`setDefault` 走同一条路由、`modeSetDefault`
+会写 `selectedDefault`、一个会话只判一次，以及 `/router modes` 的文本。`test/fixed-effort.test.js`（6 个）
+覆盖中转固定档：归一化保留已知词、丢弃 `turbo`、条目被冻结、固定档压过阶梯、未固定时照旧映射、词表来自
+`resolveModelInfo`（`high` 落到 `xhigh`，因为宿主只提供这个）、中毒历史仍然压过固定档，以及 `/pool`
+往返保留该字段。`test/clock.test.js`（5 个）钉住唯一的时钟（`freeze`）、`DSH_MODEL_ROUTER_NOW`
 环境钩子，以及「拒绝把非有限值钉成时间」；`test/shadow-gate.test.js`（9 个）用合成账本驱动 `scripts/shadow-gate.mjs`：七天便宜影子步开闸、只省 5% 不开闸、未定价影子步算证据但不算已定价、账本不存在就报「不存在」而不是报 0；`test/replay-l1.test.js`（4 个）把二十条人工复核过的路由
 （五个池 × 四个步骤等级）通过 `lib/replay.js --fail-on-change` 回放一遍，目录或打分一变就会在这里红，
 而不是等到账单上才发现；`test/policy.test.js`（40 个）覆盖分类、无棘轮、max 不可达、拒绝 `off`、

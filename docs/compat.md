@@ -11,6 +11,9 @@ re-measured against host 0.1.7-rc.2.
 | `agent/pre-step` | optional | Budget hard-gate disabled; the step runs. |
 | `agent/request-error` | optional | Channel health still records successes; failover retries are not offered. |
 | `agent/inbox/claimed` | optional | Reserved for session binding; routing works without it. |
+| `agent/inbox/inserted` | optional | The mode pool's only window: without it no mode is recommended (routing is unaffected). |
+| `agentPresets` service | optional | The mode pool still recommends; applying a mode is refused with "the host has no agentPresets service". |
+| `settings` service | optional | `modeSetDefault` cannot seed the next session's preset; the recommendation is still recorded. |
 | `webServer` service | optional | No HTTP surface; the panel shows the state it can read and every control is disabled. |
 | `commands` service | optional | The `/router` command is not registered. |
 | `llm` service | optional | The semantic classifier falls back to keywords. |

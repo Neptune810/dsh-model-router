@@ -289,7 +289,9 @@ test('third-party models route with their own effort vocabulary', async () => {
       presets: { novel: { match: ['续写'] } },
       routes: { ...ROUTES, standard: { effort: 'max' } },
     },
-    { llm: { resolveModel: async () => ({ reasoning: { efforts: [{ id: 'low' }, { id: 'high' }] } }) } },
+    // resolveModelInfo is the service-layer call (1.1); resolveModel only exists
+    // on an adapter, so the old call silently produced an empty vocabulary here.
+    { llm: { resolveModelInfo: async () => ({ reasoning: { efforts: [{ id: 'low' }, { id: 'high' }] } }) } },
   )
   const agent = agentWith()
   emit(host, 'agent/inbox/claimed', { agent, ...claimed('帮我续写这一段') })
