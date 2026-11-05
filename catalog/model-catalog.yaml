@@ -1,12 +1,12 @@
 # model-catalog.yaml
 # 机器可读模型目录 · @neptune810/dsh-model-router 0.16 成本引擎与每日目录更新流水线消费
-# 证据时点（evidenceDate）：2026-11-01。价格一律「每 1,000,000 tokens」，货币见 pricing.currency。
+# 证据时点（evidenceDate）：2026-11-05。价格一律「每 1,000,000 tokens」，货币见 pricing.currency。
 # 数据来源与置信度逐条写在 sources[]；unknown 表示未核实，禁止推断成数字（下游必须显式处理）。
 # 本文件为手写 + 校验产物；生成/校验见 model-catalog.README.md。
 
 schemaVersion: "1.0.0"
-generatedAt: "2026-11-01T09:55:00+08:00"
-evidenceDate: "2026-11-01"
+generatedAt: "2026-11-05T14:30:00+08:00"
+evidenceDate: "2026-11-05"
 evidenceTool: "web_fetch / OpenRouter models API / PyYAML 6.0.3 校验"
 fxRate: { base: CNY, quote: USD, rate: 7.0, note: "由 OpenRouter 对 DeepSeek 的挂牌价反推，仅用于 usdApprox 参考" }
 # AA Intelligence Index v5.0（9 项评测，2026-11-01 复核；v4.3.2 分数与 v5.0 不可比）
@@ -1021,14 +1021,14 @@ models:
         - { channel: qy, qualifiedId: "qy/gemini-3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
         - { channel: sub2, qualifiedId: "sub2/gemini-3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
       openrouterId: google/gemini-3.8-flash
-      openrouterPriceUsd: { input: 0.825, output: 4.125, cacheRead: 0.0825 }
+      openrouterPriceUsd: { input: 0.825, output: 4.125, cacheRead: 0.0825, cacheWrite: 0.0416667 }
     quirks:
       - "2027-01-01 促销结束：0.825/4.125 → 1.50/7.50（pricing.next）"
       - "minimal thinking level 被拒"
       - "被 Google 路由的上代 gemini-3.5-flash 会 redirect 到 3.6-flash（弃用前兆，目录需监控）"
     sources:
       - { url: "https://docs.timbal.ai/models/google", checkedAt: "2026-10-26", confidence: high }
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-05", confidence: high }
       - { url: "https://artificialanalysis.ai/models/gemini-3-8-flash", checkedAt: "2026-11-01", confidence: medium }
 
   # ── xAI / Meta ──────────────────────────────────────────────────────────
@@ -1372,13 +1372,14 @@ models:
         - { channel: qy, qualifiedId: "qy/qwen3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
         - { channel: sub2, qualifiedId: "sub2/qwen3.8-flash", billingMode: unknown, priceUnknown: true, availability: unknown }
       openrouterId: qwen/qwen3.8-flash
-      openrouterPriceUsd: null
+      openrouterPriceUsd: { input: 0.15, output: 0.47, cacheRead: 0.016 }
     quirks:
       - "兼容 OpenAI 与 Anthropic 协议（可直接接 Claude Code / Codex）"
       - "显式缓存有「创建费」0.177（唯一在本表里单列 cacheWrite 的国产模型）"
       - "releasedAt 未核实 → unknown"
     sources:
       - { url: "https://www.alibabacloud.com/help/zh/model-studio/qwen3-8-flash", checkedAt: "2026-10-26", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-05", confidence: high }
 
   - id: glm-5.3-prime
     provider: zhipu
@@ -1447,7 +1448,7 @@ models:
       effectiveFrom: "2026-09-18"
       input: 0.37
       output: 1.25
-      cacheRead: 0.09
+      cacheRead: 0.075
       cacheWrite: null
       longContext: []
       peakOffpeak: null
@@ -1474,12 +1475,12 @@ models:
         - { channel: qy, qualifiedId: "qy/glm-5.3-flashx", billingMode: unknown, priceUnknown: true, availability: unknown }
         - { channel: sub2, qualifiedId: "sub2/glm-5.3-flashx", billingMode: unknown, priceUnknown: true, availability: unknown }
       openrouterId: z-ai/glm-5.3-flashx
-      openrouterPriceUsd: { input: 0.37, output: 1.25, cacheRead: 0.09 }
+      openrouterPriceUsd: { input: 0.37, output: 1.25, cacheRead: 0.075 }
     quirks:
       - "1M 上下文 + 0.37/1.25，长文档/批量场景的价格优势明显"
       - "仅文本，不支持图像"
     sources:
-      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-01", confidence: high }
+      - { url: "https://openrouter.ai/api/v1/models", checkedAt: "2026-11-05", confidence: high }
 
 # ── 日历（从各 pricing.effectiveFrom / next / perCall 派生，便于人工核对）────
 calendar:

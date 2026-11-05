@@ -246,6 +246,7 @@ export function diffCatalog (catalog, upstream, options) {
   }
   if (opts.sourceError) source.error = String(opts.sourceError)
   const priceChanges = []
+  const priceGaps = []
   const contextChanges = []
   const missingUpstream = []
   const newUpstream = []
@@ -266,7 +267,16 @@ export function diffCatalog (catalog, upstream, options) {
       for (const field of PRICE_FIELDS) {
         const oldPrice = toCatalogPrice(catalogPrices[field])
         const newPrice = live.pricing !== null && typeof live.pricing === 'object' ? toCatalogPrice(live.pricing[field]) : null
-        if (oldPrice === null || newPrice === null || oldPrice === newPrice) continue
+        if (newPrice === null) continue
+        if (oldPrice === null) {
+          // The catalog leaves the field null while upstream publishes a number.
+          // That is a gap in the projection, not a price change, so it gets its
+          // own list: a null catalog price silently disables every comparison,
+          // which is how a real drift can hide for months.
+          priceGaps.push({ model: model.id, openrouterId, field, upstream: newPrice })
+          continue
+        }
+        if (oldPrice === newPrice) continue
         if (oldPrice === 0) {
           priceChanges.push({ model: model.id, openrouterId, field, old: oldPrice, new: newPrice, percent: null })
           continue
@@ -324,6 +334,7 @@ export function diffCatalog (catalog, upstream, options) {
   const calendar = collectCalendarDue(catalog, now, days)
   const summary = {
     price: priceChanges.length,
+    gaps: priceGaps.length,
     context: contextChanges.length,
     missing: missingUpstream.length,
     new: newUpstream.length,
@@ -342,6 +353,7 @@ export function diffCatalog (catalog, upstream, options) {
     summary,
     drift: summary.drift,
     priceChanges,
+    priceGaps,
     contextChanges,
     missingUpstream,
     newUpstream,
@@ -430,6 +442,7 @@ export function renderMarkdown (report) {
   lines.push('| Signal | Count |')
   lines.push('| --- | --- |')
   lines.push('| Price changes (more than ' + String(report.threshold) + '%) | ' + String(report.summary.price) + ' |')
+  lines.push('| Unpriced fields upstream already quotes | ' + String(report.summary.gaps) + ' |')
   lines.push('| Context changes | ' + String(report.summary.context) + ' |')
   lines.push('| Missing upstream models | ' + String(report.summary.missing) + ' |')
   lines.push('| New upstream models | ' + String(report.summary.new) + ' |')
@@ -446,6 +459,20 @@ export function renderMarkdown (report) {
     lines.push('| --- | --- | --- | --- | --- | --- |')
     for (const change of report.priceChanges) {
       lines.push('| ' + formatCell(change.model) + ' | ' + formatCell(change.openrouterId) + ' | ' + formatCell(change.field) + ' | ' + formatUsd(change.old) + ' | ' + formatUsd(change.new) + ' | ' + formatPercent(change.percent) + ' |')
+    }
+  }
+  lines.push('')
+  lines.push('## Unpriced fields')
+  lines.push('')
+  if (report.priceGaps.length === 0) {
+    lines.push('None: every field the catalog tracks is priced.')
+  } else {
+    lines.push('The catalog leaves these fields null while upstream quotes a number, so a later change would not be detected. Fill them in when reviewing.')
+    lines.push('')
+    lines.push('| Model | OpenRouter id | Field | Upstream (USD / 1M) |')
+    lines.push('| --- | --- | --- | --- |')
+    for (const gap of report.priceGaps) {
+      lines.push('| ' + formatCell(gap.model) + ' | ' + formatCell(gap.openrouterId) + ' | ' + formatCell(gap.field) + ' | ' + formatUsd(gap.upstream) + ' |')
     }
   }
   lines.push('')

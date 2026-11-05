@@ -500,12 +500,13 @@ function officialSnapshot(overrides = {}) {
  * Mount the control through the chip entry with the host face plus the official
  * catalog wiring. The component is shared by the chip and the merged seat; here it
  * is mounted with the chip face, so directory/load/select are passed explicitly.
+ * `options.catalog` answers GET /catalog (the host's provider/models/efforts list).
  */
 async function openControl(options = {}) {
   const dir = directoryStub(options.snapshot || officialSnapshot(), options)
   const dirs = directoriesStub({ 'session-1': dir })
   const net = fetchStub((record) => {
-    if (record.path === '/model-router/catalog') return { groups: [] }
+    if (record.path === '/model-router/catalog') return { groups: options.catalog || [] }
     if (record.path === '/model-router/state') return options.stateAnswer ? options.stateAnswer(record) : (options.state || {})
     return { ok: true }
   })
@@ -1799,4 +1800,79 @@ test('a missing host capability is named on the panel instead of silently degrad
   openPanel(malformed.holder)
   await malformed.rt.flush()
   assert.equal(byProp(malformed.holder.tree, 'data-mr-compat', 'true').length, 0, 'a malformed report is ignored')
+})
+
+/**
+ * The Segmented stub is not expanded, so read the options it was handed.
+ * plain(): the sandbox array carries another realm's prototype, which deepEqual rejects.
+ */
+const segmentedOptions = (tree, id) => {
+  const seg = byProp(tree, 'data-mr-fixed-effort', id)[0]
+  return seg ? plain(seg.props.options || []) : null
+}
+const segmentedWords = (tree, id) => {
+  const options = segmentedOptions(tree, id)
+  return options === null ? null : options.map((option) => option.value)
+}
+
+test('the pin picker offers only the words the route declares, and keeps a stale pin', async () => {
+  // The directory half reports { low, high } for V4 Pro: the picker must show
+  // those two words (plus auto), not the nine generic ones.
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [] }],
+    presets: {}, settings: {}, decisions: [],
+  }
+  const app = await openControl({ state })
+  openPanel(app.holder)
+  await app.rt.flush()
+  assert.deepEqual(segmentedWords(app.holder.tree, 'deepseek-official/deepseek-v4-pro'), ['auto', 'low', 'high'])
+  const known = segmentedOptions(app.holder.tree, 'deepseek-official/deepseek-v4-pro')
+  assert.equal(known[1].title, '这条路由声明的档位：low / high', 'every word carries the declared list as its tooltip')
+  assert.equal(known[0].title, known[1].title, 'auto carries the same note')
+
+  // A pin already on the entry survives even though the host no longer lists it:
+  // a re-render must never silently move a relay off the level it accepts.
+  const stale = Object.assign({}, state, {
+    pool: [{ id: 'deepseek-official/deepseek-v4-pro', tier: 'strong', cost: 4, tags: [], fixedEffort: 'max' }],
+  })
+  const second = await openControl({ state: stale })
+  openPanel(second.holder)
+  await second.rt.flush()
+  assert.deepEqual(segmentedWords(second.holder.tree, 'deepseek-official/deepseek-v4-pro'), ['auto', 'low', 'high', 'max'])
+})
+
+test('a route the directory never lists still narrows through the host catalog route', async () => {
+  // kakou/qiyue style relay: only /catalog knows it, and it declares four words.
+  const state = {
+    effectiveControl: 'full', engaged: true, effortModelPending: false, effectiveEffortModel: null,
+    current: { provider: 'relay-x', model: 'glm-5.3-flashx', effort: 'high', stepClass: 'standard' },
+    pool: [{ id: 'relay-x/glm-5.3-flashx', tier: 'cheap', cost: 1, tags: [] }],
+    presets: {}, settings: {}, decisions: [],
+  }
+  const app = await openControl({
+    state,
+    catalog: [{ id: 'relay-x', name: 'Relay X', models: [{ id: 'glm-5.3-flashx', name: 'GLM 5.3 FlashX', efforts: ['off', 'low', 'high', 'max'] }] }],
+  })
+  openPanel(app.holder)
+  await app.rt.flush()
+  assert.deepEqual(segmentedWords(app.holder.tree, 'relay-x/glm-5.3-flashx'), ['auto', 'off', 'low', 'high', 'max'])
+
+  // An unknown vocabulary is not "this model takes no reasoning": the full list
+  // stays available and the note says the host reported nothing.
+  const bare = await openControl({
+    state: Object.assign({}, state, { pool: [{ id: 'relay-y/bare-model', tier: 'cheap', cost: 1, tags: [] }] }),
+    snapshot: officialSnapshot({ groups: [] }),
+    catalog: [{ id: 'relay-y', name: 'Relay Y', models: [{ id: 'bare-model', name: 'Bare', efforts: [] }] }],
+  })
+  openPanel(bare.holder)
+  await bare.rt.flush()
+  const words = segmentedWords(bare.holder.tree, 'relay-y/bare-model')
+  assert.deepEqual(words, ['auto', 'off', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+  assert.equal(
+    segmentedOptions(bare.holder.tree, 'relay-y/bare-model')[1].title,
+    '宿主没有给出这条路由的档位表，先按九个通用词显示',
+    'an unknown vocabulary says so instead of pretending the model takes none',
+  )
 })

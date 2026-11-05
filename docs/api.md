@@ -22,7 +22,7 @@ additive, and a field is only removed in a major version.
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | /model-router/state | — (`?sessionId=` optional) | The whole panel state: control, plan, presets, pool, decisions, live route, cost shadow, channels, budget, peak, catalog, effort, classifier, experiments, feedback, compat, telemetry. Absolute paths are redacted to bare file names. |
-| GET | /model-router/catalog | — | The bundled model catalog and its watchlist. |
+| GET | /model-router/catalog | — | The host LLM registry for the pool UI: every provider, its models, and `efforts` — the reasoning words that model really accepts (v1.1.1). An empty `efforts` means the host reports no vocabulary; it is not "this model takes no reasoning". |
 | GET | /model-router/stats | — (`?since&until&limit`) | Aggregated telemetry over a window: `byClass`, `byModel`, `byEffort`, `totals` (tokens, priced steps, cost, peak, failover, effort mapping, experiments), `shadow`, `feedback`, `catalog`. |
 | POST | /model-router/control | `{ sessionId, control }` | `full` / `effort` / `model` / `null` (null resumes routing). |
 | POST | /model-router/resume | `{ sessionId }` | Drops a manual override. |
@@ -73,6 +73,20 @@ telemetry timestamp. A consumer that wants a reproducible answer has two hooks, 
 Neither hook changes stored data; both only decide which rates and boundaries are in force. The release gate
 runs the whole suite a second and third time with the clock pinned to a peak and an off-peak instant, because
 the catalog's off-peak half-rate is otherwise a genuine source of hour-dependent test results.
+
+## The pin picker (v1.1.1)
+
+A pool entry may carry `fixedEffort`: one reasoning word the route is pinned to, so a relay that rejects
+anything else never sees a 400. The panel used to offer five hard-coded words. It now offers `auto` plus the
+words the route declares, read from the same resolver the router maps a tier onto:
+
+- `GET /catalog` — the host registry half (providers outside the composer directory, relays included).
+- the model directory snapshot — the official half, from `model.reasoning.efforts[].id`.
+
+An empty or missing vocabulary falls back to the nine generic words with a note saying the host reported
+nothing; an unknown list is never rendered as "this model takes no reasoning". A pin already stored on the
+entry stays in the list even when the resolver no longer reports it, so a re-render can never silently move a
+relay off the one level it accepts.
 
 ## Stability promise
 

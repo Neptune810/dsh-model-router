@@ -114,6 +114,7 @@ window.__ModuleLoader__.load({
 				compatLabel: "宿主能力缺失：{c}", compatHint: "缺少的宿主能力对应的功能不可用；路由本身仍在运行，不会静默假装正常",
 				fixedEffort: "固定档", fixedEffortHint: "中转站常把模型钉死在一个思考档上，换别的词只会换来 400：钉死之后不再自动调档（历史里有不带思考的工具调用时仍会退回 off）",
 				fixedEffortAuto: "自动", fixedEffortPinned: "已钉在 {e}",
+				fixedEffortKnown: "这条路由声明的档位：{v}", fixedEffortUnknown: "宿主没有给出这条路由的档位表，先按九个通用词显示",
 				modes: "模式池", modesTitle: "模式池（宿主 agent preset）", modesHint: "勾选的模式会参与自动推荐；DSH 自带 标准 / PTC / 极简 / 创造 四个模式",
 				modeCurrent: "本会话", modeUnknown: "未知", modeRecommend: "建议 {m} · {why}",
 				modeApply: "切到这个模式", modeApplied: "已由路由器切换", modeAuto: "自动推荐", modeSetDefault: "同时设为下次会话的默认",
@@ -205,6 +206,7 @@ window.__ModuleLoader__.load({
 				compatLabel: "missing host capability: {c}", compatHint: "features that need that capability are unavailable; routing still runs and never pretends to be fine",
 				fixedEffort: "pin", fixedEffortHint: "a relay often pins a model to one thinking level and answers any other word with a 400: a pinned entry is never re-mapped (history that already contains a thinking-less tool call still falls back to off)",
 				fixedEffortAuto: "auto", fixedEffortPinned: "pinned to {e}",
+				fixedEffortKnown: "this route declares {v}", fixedEffortUnknown: "the host reports no vocabulary for this route; the nine generic words are shown",
 				modes: "Mode pool", modesTitle: "Mode pool (host agent presets)", modesHint: "ticked modes take part in the recommendation; DSH ships Standard / PTC / Minimal / Cordis",
 				modeCurrent: "this chat", modeUnknown: "unknown", modeRecommend: "suggests {m} · {why}",
 				modeApply: "switch to it", modeApplied: "switched by the router", modeAuto: "recommend a mode", modeSetDefault: "also make it the next session's default",
@@ -222,6 +224,8 @@ window.__ModuleLoader__.load({
 		]
 		const TIERS = [["cheap", "cheap"], ["strong", "strong"]]
 		const COSTS = [1, 4, 8]
+		/** The nine words a route config may use, used only when no vocabulary is known. */
+		const FIXED_EFFORT_WORDS = ["off", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
 		const WEIGHTS = [[0, "none"], [40, "low"], [70, "mid"], [95, "high"]]
 
 		/** One stylesheet for the whole panel; hover and focus need real CSS. */
@@ -774,6 +778,48 @@ window.__ModuleLoader__.load({
 					rows.push({ id: id, label: model.name ? model.name : model.id })
 				}
 			}
+			/**
+			 * v1.1.1: the effort vocabulary each route really accepts, from the host's
+			 * own resolver (the same source the router maps a tier onto). Both shapes
+			 * are read: the router's flat `efforts` list and the model directory's
+			 * `reasoning.efforts`, so the official half works without /catalog too.
+			 * A route with no known vocabulary gets no entry, and the picker keeps its
+			 * full list: an unknown list must never look like "takes no reasoning".
+			 * This is deliberately a pass of its own: the rows above de-duplicate by
+			 * id, so a model already listed by the directory would never contribute
+			 * its vocabulary from the second source.
+			 */
+			const effortVocab = {}
+			const vocabularyOf = (model) => {
+				if (Array.isArray(model.efforts) && model.efforts.length > 0) return model.efforts
+				const reasoning = model.reasoning
+				if (!reasoning || !Array.isArray(reasoning.efforts)) return null
+				const ids = reasoning.efforts
+					.map((effort) => (effort && effort.id))
+					.filter((value) => typeof value === "string" && value.length > 0)
+				return ids.length > 0 ? ids : null
+			}
+			for (const group of clientGroups.concat(hostGroups)) {
+				for (const model of (group.models || [])) {
+					const words = vocabularyOf(model)
+					if (words) effortVocab[group.id + "/" + model.id] = words
+				}
+			}
+			/**
+			 * The pin picker: auto, then only the words this route accepts. A pin that
+			 * is already set stays listed even when the resolver has not reported it,
+			 * so an old entry can never be silently changed by a re-render.
+			 */
+			const fixedEffortOptions = (id, current) => {
+				const known = effortVocab[id]
+				const words = known ? known.slice() : FIXED_EFFORT_WORDS.slice()
+				if (current && current !== "auto" && words.indexOf(current) < 0) words.push(current)
+				return ["auto"].concat(words).map((value) => ({
+					value: value,
+					label: value === "auto" ? t.fixedEffortAuto : value,
+					title: known ? t.fixedEffortKnown.replace("{v}", known.join(" / ")) : t.fixedEffortUnknown,
+				}))
+			}
 
 			const savePool = (next) => { setPoolOverride(next); run("/pool", { pool: next }, () => setPoolOverride(null)) }
 			const toggleModel = (id) => {
@@ -889,10 +935,7 @@ window.__ModuleLoader__.load({
 						title: t.fixedEffortHint, disabled: busy, value: entry.fixedEffort || "auto",
 						"data-mr-fixed-effort": id,
 						onChange: (value) => patchEntry(id, { fixedEffort: value === "auto" ? null : value }),
-						options: [ "auto", "off", "low", "high", "max" ].map((value) => ({
-							value: value,
-							label: value === "auto" ? t.fixedEffortAuto : value,
-						})),
+						options: fixedEffortOptions(id, entry.fixedEffort || "auto"),
 					})
 				)
 			}
@@ -1549,10 +1592,7 @@ window.__ModuleLoader__.load({
 										title: t.fixedEffortHint, disabled: busy, value: entry.fixedEffort || "auto",
 										"data-mr-fixed-effort": model.id,
 										onChange: (value) => patchEntry(model.id, { fixedEffort: value === "auto" ? null : value }),
-										options: [ "auto", "off", "low", "high", "max" ].map((value) => ({
-											value: value,
-											label: value === "auto" ? t.fixedEffortAuto : value,
-										})),
+										options: fixedEffortOptions(model.id, entry.fixedEffort || "auto"),
 									})
 								))
 							}

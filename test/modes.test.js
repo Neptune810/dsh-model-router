@@ -453,12 +453,21 @@ test('the settings route drives images, classifier and pressure from the UI', as
   assert.equal(after.settings.panelBg, 'theme')
 })
 
-test('the catalog route lists provider models for the pool UI', async () => {
+test('the catalog route lists provider models with the effort words each one accepts', async () => {
+  // v1.1.1: the panel narrows the pin picker to this list, and the router maps a
+  // tier onto the same list, so the two can never disagree about a route.
   const llm = {
-    listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek' }],
+    listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek' }, { id: 'relay', name: 'Relay' }],
     listModels: async (provider) => (provider === 'deepseek-official'
       ? [{ id: 'deepseek-flash', name: 'Flash' }, { id: 'deepseek-v4-pro', name: 'Pro' }]
-      : []),
+      : [{ id: 'gpt-image-3', name: 'Image' }]),
+    resolveModelInfo: async (provider, model) => ({
+      reasoning: {
+        efforts: provider === 'relay'
+          ? []
+          : [{ id: 'off' }, { id: 'low' }, { id: 'medium' }, { id: 'high' }],
+      },
+    }),
   }
   const host = makeHost({ pool: POOL, routes: ROUTES }, { llm })
   const response = await call(host.routes.get('/model-router/catalog'), { method: 'GET', url: '/model-router/catalog' })
@@ -467,7 +476,14 @@ test('the catalog route lists provider models for the pool UI', async () => {
   assert.deepEqual(body.groups, [{
     id: 'deepseek-official',
     name: 'DeepSeek',
-    models: [{ id: 'deepseek-flash', name: 'Flash' }, { id: 'deepseek-v4-pro', name: 'Pro' }],
+    models: [
+      { id: 'deepseek-flash', name: 'Flash', efforts: ['off', 'low', 'medium', 'high'] },
+      { id: 'deepseek-v4-pro', name: 'Pro', efforts: ['off', 'low', 'medium', 'high'] },
+    ],
+  }, {
+    id: 'relay',
+    name: 'Relay',
+    models: [{ id: 'gpt-image-3', name: 'Image', efforts: [] }],
   }])
 })
 

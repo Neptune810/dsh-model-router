@@ -38,7 +38,7 @@ const clone = () => JSON.parse(JSON.stringify(CATALOG))
 
 test('catalog header describes a dated evidence snapshot', () => {
   assert.equal(CATALOG.schemaVersion, '1.0.0')
-  assert.equal(CATALOG.evidenceDate, '2026-11-01')
+  assert.equal(CATALOG.evidenceDate, '2026-11-05')
   assert.match(CATALOG.generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/)
   assert.equal(CATALOG.aaVersion, 'v5.0')
   assert.equal(CATALOG.fxRate.base, 'CNY')
@@ -384,7 +384,7 @@ test('the generated module is frozen, JSON-safe, and marked generated', () => {
   assert.ok(source.endsWith('}\n'))
   assert.ok(!source.endsWith('\n\n'))
   const yaml = readFileSync(new URL('../catalog/model-catalog.yaml', import.meta.url), 'utf8')
-  assert.match(yaml, /^evidenceDate: "2026-11-01"$/m)
+  assert.match(yaml, /^evidenceDate: "2026-11-05"$/m)
   assert.match(yaml, /^schemaVersion: "1\.0\.0"$/m)
 })
 

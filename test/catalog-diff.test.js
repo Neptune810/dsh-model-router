@@ -14,6 +14,7 @@ const NOW = '2026-10-26'
 const SECTION_HEADERS = [
   '## Summary',
   '## Price changes',
+  '## Unpriced fields',
   '## Context changes',
   '## Missing upstream',
   '## New upstream models',
@@ -159,6 +160,37 @@ test('diffCatalog ignores changes at or below ten percent because the boundary i
   }], { now: NOW })
   assert.deepEqual(report.priceChanges, [])
   assert.equal(report.drift, false)
+})
+
+test('diffCatalog lists a null catalog price when upstream already quotes one', () => {
+  // A null field used to be skipped in silence, which hides every later change
+  // to that field: the qwen3.8-flash listing sat at null while OpenRouter
+  // published 0.15/0.47/0.016.
+  const model = catalogModel({
+    id: 'gap-model',
+    channels: {
+      openrouterId: 'openai/gap-model',
+      openrouterPriceUsd: { input: 10, output: 10, cacheRead: null, cacheWrite: null },
+    },
+  })
+  const report = diffCatalog(miniCatalog([model]), [{
+    id: 'openai/gap-model',
+    contextLength: 1000,
+    pricing: { input: 10, output: 10, cacheRead: 0.016, cacheWrite: null },
+  }], { now: NOW })
+  assert.deepEqual(report.priceGaps, [{
+    model: 'gap-model',
+    openrouterId: 'openai/gap-model',
+    field: 'cacheRead',
+    upstream: 0.016,
+  }])
+  assert.equal(report.summary.gaps, 1)
+  // A gap is a projection problem, not drift: the advisory run stays green.
+  assert.equal(report.drift, false)
+  assert.deepEqual(report.priceChanges, [])
+  const markdown = renderMarkdown(report)
+  assert.match(markdown, /## Unpriced fields/)
+  assert.match(markdown, /\| gap-model \| openai\/gap-model \| cacheRead \| 0\.016 \|/)
 })
 
 test('diffCatalog reports context window changes', () => {

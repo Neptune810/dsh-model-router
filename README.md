@@ -560,6 +560,35 @@ whatever the ladder produced.
         tier: cheap
 ```
 
+## The pin picker and an audited catalog sync (v1.1.1)
+
+A small release with one UI change and three price facts. Nothing in the ladder moved.
+
+- **The pin picker offers only the words the route declares.** `GET /model-router/catalog` now carries an
+  `efforts` array per model — the reasoning words that model really accepts, read from the host
+  `resolveModelInfo` (the same source the host catalog uses) and cached. The `fixedEffort` selector narrows to
+  that list instead of always offering five words, so a relay that declares only `max` shows only `auto` and
+  `max`. The official half of the list reads `reasoning.efforts[].id` from the directory snapshot, so it keeps
+  working when the catalog route is not loaded.
+- **Nothing is guessed and nothing is rewritten.** A route the host cannot describe falls back to the nine
+  documented words with a title that says so; an empty `efforts` means "the host reports no vocabulary", which
+  is not "this model takes no reasoning"; and a pin that is no longer in the vocabulary stays visible instead of
+  being silently dropped. `fixedEffort` itself always accepted all nine words — normalisation has used the
+  router's full effort table since the field shipped in 1.1.0; it was the picker that was narrow.
+- **Three price facts, each re-read from the live feed on 2026-11-05.** `glm-5.3-flashx` cache reads are
+  $0.075 per million, not $0.09; `gemini-3.8-flash` quotes a $0.0416667 cache write the catalog had as
+  `null`; `qwen3.8-flash` had no OpenRouter projection at all and now reads $0.15/$0.47/$0.016. The two
+  models that did not move (`deepseek-flash`, `gemini-4-argon`) were left alone rather than being "refreshed"
+  to look busy.
+- **`catalog-diff` stops going quiet on an unpriced field.** It used to compare only fields where both sides
+  had a number, so a catalog `null` against a live quote could never surface — `qwen3.8-flash` would have
+  stayed unpriced indefinitely. A null on our side now lands in its own `## Unpriced fields` section and
+  `summary.gaps` counter, and is deliberately not counted as drift: nothing changed upstream, our projection is
+  just incomplete.
+- **The 2026-12-01 and 2026-12-31 calendar points are still armed.** Gemini 4 Argon's `pricing.next` (2/10 →
+  4/20, cache read 0.10 → 0.20) takes over on 2026-12-01 from the base rate with no edit needed, and the GLM-4.5
+  retirement note is still in the watchlist.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -751,7 +780,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-471 tests. `test/mode-pool.test.js` (18) covers the preset pool: normalisation, the keyword classifier (a batch
+474 tests. `test/mode-pool.test.js` (18) covers the preset pool: normalisation, the keyword classifier (a batch
 brief leans `ptc`, a typo fix leans `minimal`, a plugin brief leans `cordis`, a refactor stays `standard`),
 the deterministic tie order, an empty and a single-mode pool, and — through host doubles — that the first message only
 *recommends* (nothing is switched), that the panel call applies a mode, that an already-started session is refused
@@ -795,7 +824,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (57)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (59)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -810,7 +839,7 @@ silence of a host that sends no `costAware` block), the spend guard (a near-budg
 overspent bar clamping to 100%, token rows, a zero limit and a malformed block staying silent), the peak note
 under `inform` and `shift` (and its silence when off or off-peak), the benched/quarantined channel line in both
 languages, the effort-mapping line (an alias, a nearest tier, a model that takes none, the silence of an exact
-mapping and of a malformed block, and English), the feedback row (three labels posting the verdict, the recorded one marked, the next step's answer in both languages, and the silence of a host with no feedback report), the exploration line (a shadow draw, an applied draw, an exploit draw that says nothing, and English), the classifier line (a raised tier with its confidence, an open breaker outranking it, and the silence of a confident verdict), and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
+mapping and of a malformed block, and English), the feedback row (three labels posting the verdict, the recorded one marked, the next step's answer in both languages, and the silence of a host with no feedback report), the exploration line (a shadow draw, an applied draw, an exploit draw that says nothing, and English), the classifier line (a raised tier with its confidence, an open breaker outranking it, and the silence of a confident verdict), the pin picker narrowing to the words a route declares (through the directory snapshot, keeping a stale pin visible) and falling back to the nine documented words through `/catalog` when the host reports no vocabulary, and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
 read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
@@ -818,7 +847,7 @@ CHANGELOG agreement plus tarball contents); `test/catalog.test.js` (21) validate
 against its schema, pins the documented completeness warnings, proves the generator is deterministic, checks the
 watchlist rules and covers `findModel`; `test/catalog-pricing.test.js` (18) covers the rate in force (`pricing.next`
 on its day, the peak/off-peak windows), the token split, the null-not-zero price rules and the alert window;
-`test/catalog-diff.test.js` (21) drives the drift report against a frozen OpenRouter snapshot, including the created-date window and the untracked-provider section; `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
+`test/catalog-diff.test.js` (22) drives the drift report against a frozen OpenRouter snapshot, including the created-date window, the untracked-provider section and a catalog `null` that upstream already prices (reported as an unpriced field, not as drift); `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
 PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decision events landing on disk, monthly
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
