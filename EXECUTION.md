@@ -860,6 +860,7 @@ CHANGELOG.md, package.json.
 | tag | annotated `v1.1.1` -> commit `ebed5e9` (tag object `ebed5e9e4d36033f50cc5650140c3cd69a82cf05`) |
 | CI (tag) | Actions publish run [41993235461](https://github.com/Neptune810/dsh-model-router/actions/runs/41993235461) success: test node 20/22/24, the node 24 clock-independent suite at two pinned instants, release gate `--pack`, catalog regeneration and validator, then the OIDC publish job; drift run [41993235506](https://github.com/Neptune810/dsh-model-router/actions/runs/41993235506) success |
 | CI (main) | run [41993183266](https://github.com/Neptune810/dsh-model-router/actions/runs/41993183266) success (publish skipped, not a tag); drift run 41993183285 success |
+| evidence commit | `8faea4f` docs: record the 1.1.1 release evidence; run [41994421193](https://github.com/Neptune810/dsh-model-router/actions/runs/41994421193) success on node 20/22/24 with the publish job skipped |
 | npm | `dist-tags.latest = 1.1.1`, tarball shasum `875b1fac1d69b82f2dcc6083f14ae88766d62705`, integrity `sha512-yGNmnZZVn+dcQC5GUwqSU89CAt+9M0CJWK/Jlycc/aVuCboaeq0bCrmJXHhJHsRlrxRIeWUjXT5SQW6DB1JC6g==`, **40 files** (unchanged: no new module), provenance attestation present |
 | profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@1.1.1 --save-exact` — dependency pinned to `1.1.1`; the desktop app must be restarted to load it |
 
