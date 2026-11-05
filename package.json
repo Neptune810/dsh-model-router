@@ -1,6 +1,6 @@
 {
   "name": "@neptune810/dsh-model-router",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publishConfig": {
     "access": "public"
   },
@@ -15,6 +15,7 @@
     "./client": "./client/client.js",
     "./catalog-pricing": "./lib/catalog-pricing.js",
     "./clock": "./lib/clock.js",
+    "./mode-pool": "./lib/mode-pool.js",
     "./effort": "./lib/effort.js",
     "./channels": "./lib/channels.js",
     "./budget": "./lib/budget.js",

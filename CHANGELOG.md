@@ -1,40 +1,70 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
-**Weekly catalog review (2026-11-02). No catalog fact changed this week, so nothing here is published yet; these tool
-changes go out with the next patch.**
+**Two new capabilities plus the tooling queued for 1.0.2: the router can name the host agent preset a session
+should use (the "mode pool"), and a relay entry can pin its reasoning effort to the one word the gateway actually
+accepts. Both are additive — nothing in the routing ladder changes unless you turn one on, and every existing pool
+entry keeps working.**
 
-- **The drift report can name what is actually new.** `scripts/catalog-diff.mjs` now carries the upstream `created`
-  date (as an ISO day) and takes `--new-since <YYYY-MM-DD|Nd>`. Against the live feed on 2026-11-02 the new-model list
-  drops from 260 rows of history to the four `openai/gpt-6.1-terra*` listings; the 256 older ones are counted in the
-  summary, not hidden.
-- **A new provider is no longer invisible.** A model whose provider family the catalog does not track used to be
-  dropped from the report silently, which is exactly how a brand-new provider goes unnoticed. Such models now get
-  their own section (never counted as drift); the two-week window surfaced `particle-ai/particle-1` (2026-10-28,
-  $0.05/$0.50, 1M context) and `recursive/flint-v1.0:free`.
-- **A round million read as 1024 squared is not a change.** OpenRouter reports some windows as 1,048,576 where the
-  vendor documents 1,000,000, so every weekly run printed a fake context drift on `deepseek-flash`. The comparison now
-  treats that notation pair as one window and nothing else: a catalog value that is not a whole number of millions, or
-  a different binary size, still reports.
-- **The weekly workflow uses a two-week window.** `.github/workflows/catalog-diff.yml` runs the report with
-  `--new-since 14d`.
-- **The flip gate is one command.** `scripts/shadow-gate.mjs` (`npm run shadow-gate`) reads the monthly decisions
-  ledger and prints days covered, priced shadow steps, agreement, saved USD and the G3 cost ratio against the
-  documented bar (7 days, 300 priced steps, `<= 0.85x`); it exits 1 only with `--require-pass`, and it states
-  outright that G4 (quality) cannot come from the shadow, because the shadow records what would have been bought and
-  never whether the step went well. Recheck on 2026-11-03: **0/7 days and 0/300 priced steps** — the running profile
-  does not load the plugin, so there is no ledger at all; `costAware` stays `false` and no default moved.
-- **A frozen clock no longer hides the ledger from its own window.** Pinning the clock for the gate exposed what the
-  wall clock had been masking: `readDecisions` treats `until` as exclusive, so an event stamped at exactly the instant
-  it is read — always the case under a pinned clock — fell outside the default `[now - 7d, now]` window, and
-  `/model-router/stats` reported zero steps while the events sat on disk. The default upper bound is now inclusive
-  (an explicit `until` stays exclusive), and `lib/telemetry.js` and `lib/store.js` read the plugin clock
-  (`lib/clock.js`) instead of `Date.now`, without which the window never followed the injected instant. A regression
-  test writes one step stamped at exactly `now()` and asserts the default window counts it.
+- **The mode pool (`lib/mode-pool.js`, new subpath `./mode-pool`).** DSH ships four agent presets —
+  `standard`, `ptc`, `minimal`, `cordis` — and the router had nothing to say about which one a session
+  gets. Put the presets you want in `modes` and the router reads the session's first message and names the one it
+  would choose: batch work over many files leans `ptc`, a one-line rename leans `minimal`, plugin work leans
+  `cordis`, everything else falls back to `standard`. The classifier is a weighted keyword table with a fixed
+  tie order: no model call, no budget, and no evidence means no opinion.
+- **It recommends; it does not switch behind your back.** The host accepts a preset change only before a session's
+  first turn, and the message that opens that window is delivered synchronously to the same event that starts the
+  turn — a plugin calling `agentPresets.select()` from there races the host, and when it loses the refusal lands in
+  the user's first message. So the recommendation is recorded (`/state.modes.decision`, `/router modes`, the
+  composer panel) and applied only when you click it: `POST /model-router/modes { sessionId, mode }`, which is the
+  one moment the host is guaranteed to still accept. A session that has already started is refused before the host
+  is asked, and the panel shows the refusal verbatim.
+- **`modeSetDefault`** writes the pick to `agent-preset-registry.selectedDefault` through the host `settings`
+  service, so the *next* session starts there even though this one cannot change. Off by default.
+  `modeAuto: false` turns the recommendation off; an empty pool means the feature is off entirely.
+- **A pinned reasoning effort for relay entries (`fixedEffort`).** A relay exposes a subset of a model's efforts —
+  the desktop profile's `qiyue` declares `max` alone, `ok` declares none — and any other word earns an error,
+  not a cheaper call. Pool entries now take `fixedEffort` (one of `off/``low/``high/``max`; anything else
+  is dropped at normalisation), the panel grows a per-entry pin selector, and `decide()` applies the pin after the
+  effort ladder with the reason written out ("effort pinned to max on this route (would have sent high)"). Safety
+  still outranks the pin: a history that already contains a tool call without a thinking block gets `off`,
+  because that conversation rejects thinking outright.
+- **The real effort vocabulary now comes from the host.** `supportedEfforts` called `runtime.resolveModel`, a
+  name that exists only on the *adapter* layer, so every non-DeepSeek entry silently got an empty vocabulary and the
+  router never adjusted its effort. It calls `resolveModelInfo` and reads `reasoning.efforts[].id` — the same
+  source the host's own model catalog uses. `@explainMapping` still explains itself: `high` on a model that only
+  speaks `xhigh` reports `nearest`.
+- **A pool entry is managed by definition.** `manages()` tested the family regex before the pool, so a non-DeepSeek
+  entry on the default provider was never taken over. The pool check comes first now.
+- **Two optional host dependencies, both degradable.** `agentPresets` and `settings` are looked up per call; a
+  host without either reports it instead of failing the step, and `docs/compat.md` lists both plus the
+  `agent/inbox/inserted` event — the mode pool's only window.
+- **The weekly catalog review tooling.** `scripts/catalog-diff.mjs` carries the upstream `created` date and takes
+  `--new-since <YYYY-MM-DD|Nd>` (against the live feed on 2026-11-02 the new-model list drops from 260 rows of
+  history to the four `openai/gpt-6.1-terra*` listings); a model from a provider family the catalog does not track
+  now gets its own section instead of being dropped (`particle-ai/particle-1`, `recursive/flint-v1.0:free`); a
+  round million read as 1024 squared is no longer reported as context drift; the weekly workflow uses a two-week
+  window; `scripts/shadow-gate.mjs` (`npm run shadow-gate`) prints days covered, priced shadow steps,
+  agreement, saved USD and the G3 ratio against the documented bar, and says outright that G4 cannot come from the
+  shadow. Recheck on 2026-11-03: **0/7 days and 0/300 priced steps** — the running profile does not load the
+  plugin, so there is no ledger; `costAware` stays `false` and no default moved.
+- **A frozen clock no longer hides the ledger from its own window.** `readDecisions` treats `until` as
+  exclusive, so an event stamped at exactly the instant it is read — always the case under a pinned clock — fell
+  outside the default `[now - 7d, now]` window while the events sat on disk. The default upper bound is inclusive
+  (an explicit `until` stays exclusive), `lib/telemetry.js` and `lib/store.js` read the plugin clock, and a
+  regression test writes one step stamped at exactly `now()` and asserts the default window counts it.
 - **One flaky assertion is fixed.** `test/observation.test.js` waited a single fixed 30 ms tick for the telemetry
-  flush and asserted on the counter; when the whole suite runs in parallel the flush can still be pending. It now
-  waits for the counter with a bound and then asserts. Tests: 447 (1.0.1: 431).
+  flush and could still see a pending one under a parallel run; it waits for the counter with a bound.
+  `test/modes.test.js`'s host double provided `resolveModel`, which the fixed `supportedEfforts` no longer
+  calls.
+
+Tests: 471 (1.0.1: 421). 1.1.0 adds `test/mode-pool.test.js` (18) and `test/fixed-effort.test.js` (6); the
+contract suite pins the new route, export and host event.
+
+Upgrade note: no state migration and no behaviour change. `modes` defaults to empty and `fixedEffort` to
+unset, so an upgrade routes exactly like 1.0.1 until you configure one. Rolling back leaves the state file readable;
+the extra `modes` keys it stores are ignored by 1.0.1.
 
 ## 1.0.1
 
