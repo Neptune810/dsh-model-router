@@ -792,6 +792,7 @@ the new `agent/inbox/inserted` listener is in `docs/compat.md`, and `./mode-pool
 | tag | annotated `v1.1.0` -> commit `e6eb960`, recreated through `POST /git/tags` + `POST /git/refs` (identical tag object `28969cd`) |
 | CI (tag) | Actions publish run [41964397463](https://github.com/Neptune810/dsh-model-router/actions/runs/41964397463) success: test node 20/22/24, the node 24 clock-independent suite at two pinned instants, release gate `--pack`, catalog regeneration and validator, then the OIDC publish job |
 | CI (main) | run [41964309305](https://github.com/Neptune810/dsh-model-router/actions/runs/41964309305) success (publish skipped, not a tag); drift run 41964397455 success |
+| evidence commit | `3b2fdaa` docs: record the 1.1.0 release evidence, pushed the same way (replayed through the API, byte-identical); run [41971325740](https://github.com/Neptune810/dsh-model-router/actions/runs/41971325740) success on node 20/22/24 with the publish job skipped |
 | npm | `dist-tags.latest = 1.1.0`, tarball shasum `43fad068fa10d9ff51aa8493347355d3959024c7`, integrity `sha512-4gWug5nW7g5wbFtGl4/0huB36JmRVbnE9iAaE5AdRrZzZ9xWxapYiYNpc8KxREkosgUq7N2OZHsdPtE+IwkZoA==`, **40 files** (1.0.1: 39; the newcomer is `lib/mode-pool.js`), provenance attestation present |
 | profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add @neptune810/dsh-model-router@1.1.0 --save-exact` — dependency pinned to `1.1.0`, 17 exports, `lib/mode-pool.js` installed; the desktop app must be restarted to load it |
 
