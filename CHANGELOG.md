@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.1.1
+
+**A catalog sync you can audit, and a pin picker that only offers words the route really takes. The routing
+ladder is untouched; every change is either a price fact or a UI option.**
+
+- **Three price facts, each with a live source.** `glm-5.3-flashx` cache reads are $0.075 per million on
+  OpenRouter, not $0.09 (−16.7%, both the catalog pricing block and the channel projection);
+  `gemini-3.8-flash` quotes a cache write of $0.0416667 that the catalog had as `null`; `qwen3.8-flash` had
+  no OpenRouter projection at all and now reads $0.15/$0.47/$0.016 — the same numbers its Aliyun Bailian
+  Singapore entry already carried. `deepseek-flash` and `gemini-4-argon` were re-read against the live feed
+  and did **not** move, so they were left alone. `evidenceDate` is 2026-11-05.
+- **The calendar entry for 2026-12-01 is unchanged and still armed.** Gemini 4 Argon's `pricing.next` block
+  (2/10 → 4/20, cache read 0.10 → 0.20) takes over from the base rate on that date; nothing needed editing, the
+  cost engine already reads it. The GLM-4.5 watchlist entry for 2026-12-31 is likewise still in place.
+- **`catalog-diff` no longer goes quiet on an unpriced field.** It compared only fields where both sides had a
+  number, so a catalog `null` that upstream already quotes could never show up — `qwen3.8-flash` would have
+  stayed unpriced forever. A null on our side now lands in a new `## Unpriced fields` section and its own
+  `summary.gaps` counter. It is deliberately *not* drift: nothing changed upstream, our projection is just
+  incomplete, and the weekly review reads both numbers.
+- **The pin picker offers the route's own words.** `GET /model-router/catalog` now returns, per model,
+  `efforts` — the reasoning words that model really accepts, from the host `resolveModelInfo`, cached. The
+  panel narrows each `fixedEffort` selector to that list instead of always showing five words; a route the host
+  cannot describe falls back to the nine documented words with a title saying so, and a pin that is no longer in
+  the vocabulary is kept visible rather than silently rewritten. An empty `efforts` means "the host reports no
+  vocabulary", which is not the same as "this model takes no reasoning" — `docs/api.md` says so in those words.
+- **`fixedEffort` accepts the nine documented words, and always did.** 1.1.0's entry listed four; normalisation
+  has used the router's full effort table since the field shipped, and the picker is what was narrow. Both are
+  aligned now. Nothing is re-mapped: the pin is still applied verbatim after the ladder, and poisoned history
+  still wins.
+- **Two host-shape reads, one source of truth.** The picker takes the flat `efforts` array from our own
+  `/catalog` and `reasoning.efforts[].id` from the directory snapshot, so the official half of the list keeps
+  working even when the catalog route is unavailable.
+- **The route table has had seventeen rows since 1.1.0.** Earlier entries in this file describe sixteen, which
+  was correct when written; 1.1.0 added `POST /model-router/modes` and neither the count nor the table was
+  updated in the prose at the time.
+
+Tests: 474 (1.1.0: 471). New: `catalog-diff` reports an unpriced field (1), the pin picker narrows through the
+directory snapshot and through the catalog route — including a stale pin (2).
+
+Upgrade note: no state migration and no routing change. Prices in the catalog are read at decision time, so the
+first `glm-5.3-flashx` decision after upgrading costs what it should; a `fixedEffort` you already set is
+still applied, and a pin outside a route's vocabulary still reaches the wire until you change it.
+
 ## 1.1.0
 
 **Two new capabilities plus the tooling queued for 1.0.2: the router can name the host agent preset a session
