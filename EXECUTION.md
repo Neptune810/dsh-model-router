@@ -4,7 +4,7 @@ What was actually done to this repository and to the local DSH profile, with the
 proves it. Written while executing the 2026-10 roadmap
 (C:\DSH\routing-plan-2026-10\PLAN.md); this file is the running record, PLAN.md is the plan.
 
-Last updated: 2026-11-05.
+Last updated: 2026-11-07.
 
 ## Environment
 
@@ -874,3 +874,90 @@ control entirely would remove a working pin from an entry that is still routing.
 advisory by construction — it will keep listing the same 11 null price fields until someone fills them in,
 which is the point: it is a to-do list, not a failure. `catalog-diff` still cannot tell "upstream has no
 price" from "upstream's page changed shape"; both read as no number, and no number is never drift.
+
+## 1.1.2 — a quality signal that only watches, a replay that keeps its signals, and an L1 set at sixty (2026-11-07)
+
+**Goal.** The quality half of the 1.1.0 promise, shipped the only way it can be shipped before there is
+any data: turned **off** by default and recording a shadow. Plus two pieces of measurement debt — the
+replay tool was silently routing historical events as if they had carried no signals, and the L1 label
+set was still twenty cases from 0.15.
+
+**What landed.**
+
+- `scoring.qualityWeight` (default `0.15`) is the mirror of `costWeight`: when `qualityAware` is on, an
+  entry gains `qualityWeight * (aaIndex - poolFloor)`, so it can reorder a pool but never exclude anyone.
+  `qualityGuard.maxMultiple` (default `8`) refuses to let the quality term exceed eight times the
+  spread it is meant to break ties with. Both `qualityAware` and `costAware` ship **false**.
+- **A model the catalog cannot score is neither penalised nor filtered.** Five of the nineteen entries
+  have no AA index; the code has no `unknownQuality` branch, because "we have no number for this model"
+  is not evidence that the model is bad — and a router that quietly drops every relay model the catalog
+  cannot see would be a worse router than the price-first one it replaced.
+- `GET /model-router/state` grows a `quality` block: `enabled`, `qualityWeight`, `qualityGuard`,
+  `aaVersion`, `evidenceDate`, `floorIndex`, `known`, `entries[]` and the `shadow`. The panel prints one
+  row from it — agreement, or the model a quality-aware router would have picked and the catalog gain —
+  and prints nothing on a host whose `/state` predates the field.
+- `/stats.summary.qualityShadow` aggregates the shadow the way the cost one is aggregated, and as a
+  separate object: the two are parallel evidence, not one number seen twice.
+- **`lib/replay.js` carries the recorded step signals again.** `carriedSignals(event)` restores
+  `hasImage`, `escalations`, `preferCheap` and `channelBlocked[]` (as the object map `chooseEntry`
+  expects); rows gained `signals`, the summary gained `bySignal {vision, escalation, preferCheap,
+  channelBlocked}`. Missing or malformed fields fall back field-by-field, so an event written before
+  1.1.2 replays byte-identically — the vision, cooldown and escalation rules had been in the router since
+  0.16 but were invisible to every replay.
+- **The L1 label set went from 20 to 60 cases over six pools**, adding a `vision-mixed` pool (one
+  untagged entry next to three vision-tagged ones) and twelve channel-cooldown and twelve
+  escalation/`preferCheap` cases, one of which uses a three-deep escalation to prove the cap is two. One
+  test deletes `hasImage` from a case to prove the filter is load-bearing: the replay then exits 1 with a
+  different model. `why` recounts to exact 57 / nearest 3 / alias 0.
+- A tier review (`C:\DSH\routing-plan-2026-10\research\05-tier-review-2026-11.md`), delivered as a
+  report because acting on it would change routing: AA v5.0 disagrees with four tier labels
+  (`deepseek-v4-pro` scores 23 against `deepseek-flash`'s 32 yet is the only `strong` entry;
+  `claude-sonnet-5-5` dominates `claude-opus-5-5` on price per task; `gemini-3.8-flash` is tagged
+  `cheap` at roughly the same cost per task as `gemini-4-argon`; `muse` is dominated by `kimi`). The
+  report also corrects the plan: the label does not only cap `maxPerTask` for `strong` entries, it sets
+  the base score (65 cheap / 55 strong) and gates the `hard +15`, `engineering +8`, `evidence +6/esc` and
+  `preferCheap +25` bonuses.
+- `gemini-4-carbon` was **not** added: both OpenRouter endpoints 404, the AA page timed out and the only
+  59 arrived second-hand. It stays out until the source is first-party (conditions in the report).
+
+**Freeze evidence.** `node --test` **486 / 486 pass, 0 fail** (1.1.1: 474; +7 `test/replay-l1.test.js`,
++2 `test/replay.test.js`, +5 `test/quality-aware.test.js`, +2 `test/client.test.js`, +1
+`test/telemetry.test.js`; the four replay cases the earlier count carried are included in the seven).
+`node scripts/gate.mjs` **PASS** in 24.6 s: 486/486 at the real clock, 486/486 at
+`DSH_MODEL_ROUTER_NOW=1792980000000` (peak) and 486/486 at `1793496600000` (off-peak), then
+`check-release` (`version=1.1.2 changelog=1.1.2`, packed files 40) and `check-catalog` (19 models / 15
+channels / 4 calendar / 1 watchlist, evidence 2026-11-05, one standing warning: `claude-sonnet-5-5`
+`quality.aaVariant` missing next to `aaIndex: 56`).
+
+**Commits.** `febe199` feat(replay): restore step signals and grow the L1 label set to 60 (by the
+`golden` teammate, on `feat/112-replay-l1`) — lib/replay.js, test/fixtures/replay-l1.json,
+test/replay-l1.test.js, test/replay.test.js (4 files, +1027/−20); `1977b49` feat(routing): record the
+quality-aware choice as a shadow (v1.1.2) — lib/routing.js, lib/config.js, lib/index.js, lib/telemetry.js,
+client/client.js, test/telemetry.test.js, test/client.test.js, test/quality-aware.test.js (8 files,
++563/−1); `023d470` chore(release): 1.1.2 — CHANGELOG.md, README.md, README.zh.md, docs/api.md,
+package.json; `33c7f06` merge: the quality shadow, signal-preserving replay and the L1 label set at 60
+(1.1.2).
+
+### Publish evidence (2026-11-07)
+
+| step | evidence |
+| --- | --- |
+| branch | `release/1.1.2` from `3a3bbb8` (1.1.1); merged into main with `--no-ff` as `33c7f06` |
+| push to main | `git push origin main` succeeded first try (`3a3bbb8..33c7f06`), unlike 1.1.0's transport outage and 1.1.1's three retries |
+| tag | annotated `v1.1.2` -> commit `33c7f06`; the tag **object** had to be created through the REST API (`POST /git/tags` then `POST /git/refs`) because `git push origin v1.1.2` failed three times with `Failed to connect to github.com:443 after 21090 ms` while the API answered normally — tag object `b1a8fb95973c6866856836be89ad95f3aded0a94`, and the **local** tag object was rewritten to the identical bytes (`git hash-object -t tag -w`) so local and remote agree |
+| CI (tag) | Actions publish run [42331774882](https://github.com/Neptune810/dsh-model-router/actions/runs/42331774882) success: test node 20/22/24, the node 24 clock-independent suite at two pinned instants, release gate `--pack`, catalog regeneration and validator, then the OIDC publish job; drift run [42331774856](https://github.com/Neptune810/dsh-model-router/actions/runs/42331774856) success |
+| CI (main) | run [42331597501](https://github.com/Neptune810/dsh-model-router/actions/runs/42331597501) success (publish skipped, not a tag) |
+| npm | `dist-tags.latest = 1.1.2`, tarball shasum `874b74429e8cd76e5ba5e22528c2d1455766bc35`, integrity `sha512-BGCqQMs7RuLsUoK7UViZ0DSpjY4YN0OxRQWJlr3FzRkJ4rck9AncFlevOcpIP3psbYhDgVQit1+VtjVlOxRf4Q==`, **40 files** (unchanged: no new module — quality lives in `lib/routing.js` and `lib/index.js`), provenance attestation present |
+| profile | `C:\Users\97161\.dsh\profiles\web`: `pnpm add --save-exact @neptune810/dsh-model-router@1.1.2` — dependency and installed package both read `1.1.2`; the desktop app must be restarted to load it. `profiles\desktop` still pins `0.14.2` with `cordis.patch.yml` leaving model-router `disabled: true`, untouched pending the user's answer |
+
+Rollback if needed: `npm dist-tag add @neptune810/dsh-model-router 1.1.1 latest` and `pnpm add` 1.1.1 in
+the profile. 1.1.2 changes no store shape and no default: both new switches are off, the new fields are
+additive, and `/state.quality` is a block a 1.1.1 panel simply ignores, so the downgrade is lossless.
+
+**Honest limits.** The quality shadow is evidence, not a decision: it cannot answer whether quality-aware
+routing is *better*, only which models it would move to — which is precisely the question the G3/G4
+thresholds (>=7 days, >=300 priced shadow steps, >=90% agreement, 20 hand-checked disagreements) are for,
+and those need the plugin to actually be running. The AA index is one number across six different effort
+vocabularies, so `aaVariant` is recorded in the catalog but not read by the score. And the tier review
+ships as prose: `tier: "standard"` still normalises silently to `cheap` (`lib/routing.js:314`), which is
+a 1.1.3 fix, not a 1.1.2 one — changing a label's meaning is a behaviour change and this release has none.
