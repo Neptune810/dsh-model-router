@@ -235,11 +235,16 @@ test('summarize returns the fixed shape with class/model/effort aggregates', asy
   await tel.flush()
 
   const summary = await tel.summarize()
-  assert.deepEqual(Object.keys(summary).sort(), ['byClass', 'byEffort', 'byModel', 'shadow', 'totals', 'window'])
+  assert.deepEqual(Object.keys(summary).sort(), ['byClass', 'byEffort', 'byModel', 'qualityShadow', 'shadow', 'totals', 'window'])
   // v0.16.0: no event carries a shadow here, so the block is present and zero.
   assert.deepEqual(summary.shadow, {
     steps: 0, agreeSteps: 0, divergedSteps: 0, agreementRate: 0, pricedSteps: 0,
     currentUsd: 0, candidateUsd: 0, savedUsd: 0, savedRatio: 0,
+  })
+  // v1.1.2: the quality shadow keeps the same fixed shape for the same reason.
+  assert.deepEqual(summary.qualityShadow, {
+    steps: 0, agreeSteps: 0, divergedSteps: 0, agreementRate: 0, indexedSteps: 0,
+    currentIndexAvg: 0, candidateIndexAvg: 0, avgGainRatio: 0,
   })
   assert.deepEqual(Object.keys(summary.window).sort(), ['since', 'steps', 'until'])
   assert.deepEqual(summary.window, { since: nowMs - WEEK_MS, until: nowMs, steps: 3 })
@@ -476,6 +481,16 @@ test('summarize keeps the fixed shape with zero events and accepts no/empty/expl
       savedUsd: 0,
       savedRatio: 0,
     },
+    qualityShadow: {
+      steps: 0,
+      agreeSteps: 0,
+      divergedSteps: 0,
+      agreementRate: 0,
+      indexedSteps: 0,
+      currentIndexAvg: 0,
+      candidateIndexAvg: 0,
+      avgGainRatio: 0,
+    },
   }
   assert.deepEqual(await tel.summarize(), empty)
   assert.deepEqual(await tel.summarize({}), empty)
@@ -608,4 +623,43 @@ test('the default window includes a step stamped at exactly now', async (t) => {
 
   assert.equal((await tel.summarize({ until: at })).window.steps, 0, 'an explicit until stays exclusive')
   assert.equal((await tel.summarize({ until: at + 1 })).window.steps, 1, 'one millisecond later it is inside')
+})
+
+test('summarize aggregates the quality shadow independently of the cost one', async (t) => {
+  const dir = tempDir(t)
+  const nowMs = Date.UTC(2026, 10, 3, 9)
+  const tel = createTelemetry({ dir, now: () => nowMs })
+  const base = (over) => ({
+    ts: nowMs - 2000,
+    stepClass: 'standard',
+    score: 70,
+    chosen: { provider: 'deepseek-official', model: 'deepseek-flash', effort: 'high', tier: 'cheap' },
+    usage: { costUnits: 0.01 },
+    ...over,
+  })
+  const events = [
+    base({ qualityShadow: { candidate: 'moonshot-official/kimi-k3.1-pro', current: 'deepseek-official/deepseek-flash', agree: false, currentIndex: 32, candidateIndex: 46, gainRatio: 0.4375, floorIndex: 32 } }),
+    base({ qualityShadow: { candidate: 'deepseek-official/deepseek-flash', current: 'deepseek-official/deepseek-flash', agree: true, currentIndex: 32, candidateIndex: 32, gainRatio: 0, floorIndex: 32 } }),
+    // A shadow where one side has no catalog index still counts as a step, but
+    // not as an index comparison.
+    base({ qualityShadow: { agree: false, currentIndex: null, candidateIndex: 46, gainRatio: null } }),
+    base({ qualityShadow: 'diverged' }),
+    base({ shadow: { candidate: 'a', current: 'b', agree: false, currentStepUsd: 0.004, candidateStepUsd: 0.001 } }),
+  ]
+  for (const event of events) assert.equal(tel.writeDecision(event), true)
+  await tel.flush()
+
+  const summary = await tel.summarize()
+  assert.deepEqual(summary.qualityShadow, {
+    steps: 3,
+    agreeSteps: 1,
+    divergedSteps: 2,
+    agreementRate: 0.3333,
+    indexedSteps: 2,
+    currentIndexAvg: 32,
+    candidateIndexAvg: 39,
+    avgGainRatio: 0.2188,
+  })
+  // The two shadows are separate ledgers: one does not feed the other.
+  assert.equal(summary.shadow.steps, 1)
 })

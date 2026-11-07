@@ -97,6 +97,8 @@ window.__ModuleLoader__.load({
 				catalogDays: "{n} 天后", catalogToday: "今天", catalogEvidence: "目录核对日期 {d}",
 				shadowLabel: "成本影子", shadowHint: "若打开成本感知路由，本步会选哪个模型（仅记录，不影响当前路由）",
 				shadowAgree: "成本路由也选 {m}", shadowDiverge: "成本路由会选 {m} 而不是 {c}", shadowSaved: "便宜约 {n}%",
+				qualityLabel: "质量影子", qualityHint: "若打开质量感知路由，本步会选哪个模型（仅记录，不影响当前路由）",
+				qualityAgree: "质量路由也选 {m}", qualityDiverge: "质量路由会选 {m} 而不是 {c}", qualityLead: "目录分高 {n}%",
 				budgetLabel: "预算", budgetHint: "本会话 / 今日 / 本月的用量与上限；到硬阈值后路由器会拒绝合成的工具步骤（带新输入的一步永远放行）",
 				budgetRow: "{id} {used} / {limit}", budgetSessionTokens: "本会话 tokens", budgetSessionUsd: "本会话", budgetDayUsd: "今日", budgetMonthUsd: "本月",
 				budgetOver: "超预算", budgetNear: "接近预算", budgetOff: "只提示",
@@ -189,6 +191,8 @@ window.__ModuleLoader__.load({
 				catalogDays: "in {n}d", catalogToday: "today", catalogEvidence: "catalog evidence {d}",
 				shadowLabel: "cost shadow", shadowHint: "which model a cost-aware router would pick for this step (recorded only; the live route is unchanged)",
 				shadowAgree: "cost routing agrees on {m}", shadowDiverge: "cost routing would pick {m} over {c}", shadowSaved: "~{n}% cheaper",
+				qualityLabel: "quality shadow", qualityHint: "which model a quality-aware router would pick for this step (recorded only; the live route is unchanged)",
+				qualityAgree: "quality routing agrees on {m}", qualityDiverge: "quality routing would pick {m} over {c}", qualityLead: "+{n}% catalog index",
 				budgetLabel: "budget", budgetHint: "spend and limits for this chat / today / this month; at the hard limit the router refuses synthetic tool steps (a step carrying new user input always runs)",
 				budgetRow: "{id} {used} / {limit}", budgetSessionTokens: "chat tokens", budgetSessionUsd: "chat", budgetDayUsd: "today", budgetMonthUsd: "month",
 				budgetOver: "over budget", budgetNear: "near budget", budgetOff: "inform only",
@@ -689,6 +693,19 @@ window.__ModuleLoader__.load({
 			const verifyNote = verifier ? t.channelCooling.replace("{c}", String(verifier.channel || "")) : ""
 			const shadowNote = costInfo && (shadowLine || costInfo.enabled)
 				? t.shadowLabel + (costInfo.enabled ? " (on)" : " (off)") + (shadowLine ? " \u00b7 " + shadowLine : "")
+				: ""
+			// v1.1.2 quality shadow: same shape as the cost one, same silence on a host
+			// that predates the field.
+			const qualityInfo = state && state.quality && typeof state.quality === "object" ? state.quality : null
+			const qualityShadow = qualityInfo && qualityInfo.shadow && typeof qualityInfo.shadow === "object" ? qualityInfo.shadow : null
+			const qualityLine = qualityShadow
+				? (qualityShadow.agree
+								? t.qualityAgree.replace("{m}", String(qualityShadow.current || "?"))
+								: t.qualityDiverge.replace("{m}", String(qualityShadow.candidate || "?")).replace("{c}", String(qualityShadow.current || "?"))
+												+ (Number(qualityShadow.gainRatio) > 0 ? " \u00b7 " + t.qualityLead.replace("{n}", String(Math.round(Number(qualityShadow.gainRatio) * 100))) : ""))
+				: ""
+			const qualityNote = qualityInfo && (qualityLine || qualityInfo.enabled)
+				? t.qualityLabel + (qualityInfo.enabled ? " (on)" : " (off)") + (qualityLine ? " \u00b7 " + qualityLine : "")
 				: ""
 			// Effort mapping (v0.17.0): a tier the model cannot take verbatim is the
 			// difference between "asked for high" and "ran at high", so it is said out loud.
@@ -1213,6 +1230,9 @@ window.__ModuleLoader__.load({
 				// Cost shadow (v0.16.0): one line, recorded only.
 				if (shadowNote) {
 					body.push(h("div", { key: "shadow", className: "mr-shadow", "data-mr-shadow": "true", title: t.shadowHint }, shadowNote))
+				}
+				if (qualityNote) {
+					body.push(h("div", { key: "qualityShadow", className: "mr-shadow", "data-mr-quality-shadow": "true", title: t.qualityHint }, qualityNote))
 				}
 					// Catalog hard dates (v0.15.1): the same alerts the dot advertises,
 					// spelled out, so the panel is readable without hovering.
