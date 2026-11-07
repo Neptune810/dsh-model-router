@@ -962,3 +962,39 @@ and those need the plugin to actually be running. The AA index is one number acr
 vocabularies, so `aaVariant` is recorded in the catalog but not read by the score. And the tier review
 ships as prose: `tier: "standard"` still normalises silently to `cheap` (`lib/routing.js:314`), which is
 a 1.1.3 fix, not a 1.1.2 one — changing a label's meaning is a behaviour change and this release has none.
+
+## Desktop profile enabled (2026-11-07)
+
+Until today the plugin that actually ran was not this repository's: the desktop app runs
+`DSH_PROFILE=desktop`, that profile pinned `@neptune810/dsh-model-router@0.14.2` and
+`cordis.patch.yml` carried `- id: model-router` with `disabled: true`, so `/model-router/state` and
+`/stats` answered 404 and `storages\model-router` did not exist. Everything since 0.14.2 was installed in
+`profiles\web`, which the app never loads — which is also why the costAware/qualityAware G3/G4 gates were
+structurally unreachable rather than merely unmet.
+
+The user answered "升" (upgrade it). What was done, in order:
+
+1. Backed up `profiles\desktop` to `C:\DSH\routing-plan-2026-10\backup\desktop-2026-11-07\`
+   (package.json, pnpm-lock.yaml, pnpm-workspace.yaml, cordis.patch.yml, cordis.yml).
+2. Replaced the disabled row with a config that changes nothing on the wire for the first week:
+   `mode: auto`, `control: effort` (the router keeps whatever model the host picked and only maps the
+   effort), and a two-entry pool — `kakou/deepseek-v4.1-flash` and `qiyue/deepseek-v4.1-flash`, both
+   `tier: cheap` with `fixedEffort: max`, which is exactly the `reasoningEffort: max` the profile already
+   declared for those relays. So the pinned word reproduces today's behaviour while the plugin starts
+   recording decisions, outcomes and the two shadows.
+3. `pnpm add --save-exact @neptune810/dsh-model-router@1.1.2` in the profile: dependency and installed
+   package both `1.1.2`; peerDependencies absent (the host's startup gate silently skips a bundle that
+   declares them), `engines` present, 17 export paths.
+4. Verified the patched YAML parses with PyYAML and that the **installed** copy normalises the row to
+   `{mode: auto, control: effort, pool: [kakou/…, qiyue/…] with fixedEffort: max}`.
+
+The app cannot be restarted from inside this session (it would kill the session), so the loaded plugin
+stays at 0.14.2-disabled until the user restarts desktop DSH. First checks after the restart:
+`GET /model-router/state` 200 with `schemaVersion: 1`, `storages\model-router\decisions.v1.jsonl`
+growing, and no `model-router is degraded` warning in the host log. If anything looks wrong, the rollback
+is restoring the backed-up `cordis.patch.yml` (or flipping `disabled: true` back) and, if the package is
+implicated, `pnpm add --save-exact @neptune810/dsh-model-router@0.14.2`.
+
+**One week from now (>= 2026-11-14)** the decision is whether to loosen anything: drop the `fixedEffort`
+pins, add the official `deepseek-flash` to the pool, or widen `control` beyond `effort`. The data for
+that decision is whatever the week writes into `decisions.v1.jsonl` — not an opinion.
