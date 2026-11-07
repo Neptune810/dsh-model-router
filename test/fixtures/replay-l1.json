@@ -1,7 +1,7 @@
 {
-  "note": "Level-1 replay labels for the 2026-11-01 monthly review (m05910). Each case is a reviewed expectation about what the shipped router would pick for one step class against one pool, decided before the run and then diffed against the code. The labels are rule-derived and hand-reviewed, not human ground truth: the point is that a future catalog, config or scoring change that moves any of these routes turns the test red, so the move is a decision instead of an accident. Coverage: 5 pools x 4 step classes = 20 cases; cheap/strong scoring, the engineering and hard bonuses, effort ladders with and without every requested word, a strong-only pool that must still route cheap steps, and a relay/official tie that the official entry wins. Pool entries only ever use the two tier words the router understands (cheap/strong): normalizePool coerces anything else to cheap, so writing \"standard\" would have implied a third tier that does not exist.",
-  "reviewedAt": "2026-11-01",
-  "reviewedAgainst": "catalog evidenceDate 2026-11-01, AA Intelligence Index v5.0",
+  "note": "Level-1 replay labels for the 2026-11-07 monthly review (m05910). Each case is a reviewed expectation about what the shipped router would pick for one step class against one pool, decided before the run and then diffed against the code. The labels are rule-derived and hand-reviewed, not human ground truth: the point is that a future catalog, config or scoring change that moves any of these routes turns the test red, so the move is a decision instead of an accident. Coverage: 6 pools x 4 step classes = 60 cases; the original 20 pin cheap/strong scoring, the engineering and hard bonuses, effort ladders with and without every requested word, a strong-only pool that must still route cheap steps, and a relay/official tie that the official entry wins. The 40 added cases pin the step signals replay now restores: 16 vision steps (hasImage hard-filters untagged entries and moves the pick off the cheap untagged default), 12 channel cooldown cases (a blocked channel sorts behind its healthy sibling and an all-blocked pool still routes), and 12 escalation/preferCheap cases (evidence bonuses cap at two escalations, and the cheap preference outranking the hard bonus is pinned as designed). Pool entries only ever use the two tier words the router understands (cheap/strong): normalizePool coerces anything else to cheap, so writing \"standard\" would have implied a third tier that does not exist.",
+  "reviewedAt": "2026-11-07",
+  "reviewedAgainst": "catalog evidenceDate 2026-11-05, AA Intelligence Index v5.0",
   "pools": {
     "deepseek-only": {
       "pool": [
@@ -95,6 +95,39 @@
           "id": "deepseek-official/deepseek-v4-pro",
           "tier": "strong",
           "cost": 3
+        }
+      ]
+    },
+    "vision-mixed": {
+      "pool": [
+        {
+          "id": "deepseek-official/deepseek-flash",
+          "tier": "cheap",
+          "cost": 1
+        },
+        {
+          "id": "moonshot-official/kimi-k3.1-pro",
+          "tier": "cheap",
+          "cost": 2,
+          "tags": [
+            "vision"
+          ]
+        },
+        {
+          "id": "google-official/gemini-4-argon",
+          "tier": "strong",
+          "cost": 4,
+          "tags": [
+            "vision"
+          ]
+        },
+        {
+          "id": "anthropic-official/claude-opus-5-5",
+          "tier": "strong",
+          "cost": 2,
+          "tags": [
+            "vision"
+          ]
         }
       ]
     }
@@ -438,6 +471,836 @@
         "why": "exact",
         "model": "deepseek-official/deepseek-v4-pro",
         "effort": "max"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001260000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001320000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001380000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001440000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-opus-5-5",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-opus-5-5",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001500000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001560000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001620000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001680000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-opus-5-5",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-opus-5-5",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001740000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001800000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001860000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001920000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-opus-5-5",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-opus-5-5",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793001980000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793002040000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793002100000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "moonshot-official",
+        "model": "kimi-k3.1-pro",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "moonshot-official/kimi-k3.1-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "vision-mixed",
+      "ts": 1793002160000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-opus-5-5",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 2
+      },
+      "signals": {
+        "hasImage": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-opus-5-5",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793002220000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "qiyue",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "deepseek-official/deepseek-flash"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "qiyue/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793002280000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "qiyue",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "deepseek-official/deepseek-flash"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "qiyue/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793002340000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "qiyue",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "deepseek-official/deepseek-flash"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "qiyue/deepseek-flash",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793002400000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "qiyue",
+        "model": "deepseek-v4-pro",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "channelBlocked": [
+          "deepseek-official/deepseek-v4-pro"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "qiyue/deepseek-v4-pro",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793002460000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "channelBlocked": [
+          "qiyue/deepseek-flash",
+          "deepseek-official/deepseek-flash",
+          "qiyue/deepseek-v4-pro",
+          "deepseek-official/deepseek-v4-pro"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "relay-plus-official",
+      "ts": 1793002520000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "qiyue/deepseek-flash",
+          "deepseek-official/deepseek-flash",
+          "qiyue/deepseek-v4-pro",
+          "deepseek-official/deepseek-v4-pro"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793002580000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "anthropic-official/claude-haiku-5-5"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793002640000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "anthropic-official/claude-haiku-5-5"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793002700000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "high",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "channelBlocked": [
+          "anthropic-official/claude-haiku-5-5"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793002760000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-opus-5-5",
+        "effort": "max",
+        "tier": "strong",
+        "cost": 8
+      },
+      "signals": {
+        "channelBlocked": [
+          "google-official/gemini-4-argon"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-opus-5-5",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793002820000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "low",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "channelBlocked": [
+          "deepseek-official/deepseek-flash"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793002880000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "high",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "channelBlocked": [
+          "deepseek-official/deepseek-flash"
+        ]
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793002940000,
+      "stepClass": "trivial",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "low",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "escalations": 2
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793003000000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "escalations": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-flash",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793003060000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "low",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "escalations": 2
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793003120000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "low",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "escalations": 3
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793003180000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "high",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "escalations": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "deepseek-only",
+      "ts": 1793003240000,
+      "stepClass": "engineering",
+      "chosen": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-pro",
+        "effort": "high",
+        "tier": "strong",
+        "cost": 3
+      },
+      "signals": {
+        "escalations": 2
+      },
+      "expect": {
+        "why": "exact",
+        "model": "deepseek-official/deepseek-v4-pro",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793003300000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-4-argon",
+        "effort": "low",
+        "tier": "strong",
+        "cost": 4
+      },
+      "signals": {
+        "escalations": 2
+      },
+      "expect": {
+        "why": "exact",
+        "model": "google-official/gemini-4-argon",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793003360000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-haiku-5-5",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "escalations": 1
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-haiku-5-5",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793003420000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-4-argon",
+        "effort": "high",
+        "tier": "strong",
+        "cost": 4
+      },
+      "signals": {
+        "escalations": 2
+      },
+      "expect": {
+        "why": "nearest",
+        "model": "google-official/gemini-4-argon",
+        "effort": "high"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793003480000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-haiku-5-5",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "preferCheap": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-haiku-5-5",
+        "effort": "low"
+      }
+    },
+    {
+      "pool": "mixed-official",
+      "ts": 1793003540000,
+      "stepClass": "hard",
+      "chosen": {
+        "provider": "anthropic-official",
+        "model": "claude-haiku-5-5",
+        "effort": "max",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "preferCheap": true
+      },
+      "expect": {
+        "why": "exact",
+        "model": "anthropic-official/claude-haiku-5-5",
+        "effort": "max"
+      }
+    },
+    {
+      "pool": "price-first",
+      "ts": 1793003600000,
+      "stepClass": "standard",
+      "chosen": {
+        "provider": "google-official",
+        "model": "gemini-3.8-flash",
+        "effort": "low",
+        "tier": "cheap",
+        "cost": 1
+      },
+      "signals": {
+        "escalations": 2
+      },
+      "expect": {
+        "why": "exact",
+        "model": "google-official/gemini-3.8-flash",
+        "effort": "low"
       }
     }
   ]

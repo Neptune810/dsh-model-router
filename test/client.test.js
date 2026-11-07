@@ -1452,6 +1452,76 @@ test('the shadow line follows agreement, the enabled flag and the chat language'
   assert.equal(byProp(legacy.holder.tree, 'data-mr-shadow', 'true').length, 0)
 })
 
+/** A state carrying the v1.1.2 quality-aware block the router serves. */
+function qualityState(quality) {
+  return Object.assign(catalogState([]), { quality })
+}
+
+test('the quality shadow names the model a quality-aware router would have used', async () => {
+  const app = await openControl({
+    state: qualityState({
+      enabled: false,
+      qualityWeight: 0.15,
+      guard: { maxMultiple: 8 },
+      aaVersion: 'v5.0',
+      floorIndex: 32,
+      known: 2,
+      entries: [],
+      shadow: {
+        candidate: 'moonshot-official/kimi-k3.1-pro',
+        current: 'deepseek-official/deepseek-flash',
+        agree: false,
+        gainRatio: 0.4375,
+      },
+    }),
+  })
+  openPanel(app.holder)
+  await app.rt.flush()
+
+  const note = byProp(app.holder.tree, 'data-mr-quality-shadow', 'true')[0]
+  assert.ok(note, 'the panel carries the quality shadow line')
+  const shown = textOf(note)
+  assert.match(shown, /质量影子 \(off\)/)
+  assert.match(shown, /质量路由会选 moonshot-official\/kimi-k3\.1-pro 而不是 deepseek-official\/deepseek-flash/)
+  assert.match(shown, /目录分高 44%/)
+  assert.equal(note.props.title, '若打开质量感知路由，本步会选哪个模型（仅记录，不影响当前路由）')
+})
+
+test('the quality shadow follows agreement, the enabled flag and the language', async () => {
+  const on = await openControl({ state: qualityState({ enabled: true, entries: [], shadow: null }) })
+  openPanel(on.holder)
+  await on.rt.flush()
+  assert.equal(textOf(byProp(on.holder.tree, 'data-mr-quality-shadow', 'true')[0]), '质量影子 (on)')
+
+  const agree = await openControl({
+    state: qualityState({ enabled: false, entries: [], shadow: { candidate: 'a/flash', current: 'a/flash', agree: true, gainRatio: 0 } }),
+  })
+  openPanel(agree.holder)
+  await agree.rt.flush()
+  assert.equal(
+    textOf(byProp(agree.holder.tree, 'data-mr-quality-shadow', 'true')[0]),
+    '质量影子 (off) · 质量路由也选 a/flash',
+  )
+
+  const en = await openControl({
+    state: qualityState({ enabled: false, entries: [], shadow: { candidate: 'b/pro', current: 'a/flash', agree: false, gainRatio: 0.5 } }),
+    globals: { navigator: { language: 'en-US' } },
+  })
+  openPanel(en.holder)
+  await en.rt.flush()
+  assert.equal(
+    textOf(byProp(en.holder.tree, 'data-mr-quality-shadow', 'true')[0]),
+    'quality shadow (off) · quality routing would pick b/pro over a/flash · +50% catalog index',
+  )
+
+  // A host that predates quality awareness renders nothing at all.
+  const legacy = await openControl({ state: { effectiveControl: 'full', engaged: true, current: null, pool: [], decisions: [] } })
+  openPanel(legacy.holder)
+  await legacy.rt.flush()
+  assert.equal(byProp(legacy.holder.tree, 'data-mr-quality-shadow', 'true').length, 0)
+})
+
+
 
 /** A state carrying the 0.16.1 spend guard, peak window and channel health. */
 function spendState(overrides = {}) {
