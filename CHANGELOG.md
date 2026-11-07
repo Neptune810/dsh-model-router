@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.1.2
+
+**The catalog's quality index becomes a shadow, and the replay keeps the signals it used to drop. Nothing
+routes differently unless you ask it to.**
+
+- **Quality-aware scoring, shipped off.** `scoreEntry` gains a term that mirrors `costWeight`: an entry's
+  catalog index over the pool's lowest index *adds* points, capped by `qualityGuard.maxMultiple` (8) and
+  weighted by `scoring.qualityWeight` (0.15 — the same magnitude the cost term can subtract, so a model that
+  is both better and proportionally dearer cancels out, and the term reorders a class rather than outvoting
+  it). `qualityAware` defaults to `false`; while it is off the router records `qualityShadow` on every
+  decision — the entry a quality-aware router would have chosen, both indexes and the relative gain.
+  `GET /state` exposes a `quality` block and `GET /stats` aggregates the same events under
+  `summary.qualityShadow`, independently of the cost shadow.
+- **An unscored model is not a bad model.** Five of the nineteen catalog models have no AA index; they
+  contribute zero points and stay in the pool. There is deliberately no `unknownQuality: "exclude"`: the cost
+  guard needs one because a missing price can hide an unbounded bill, while a missing index only means the
+  catalog has nothing to say about that model.
+- **The replay stops dropping the step signals.** `lib/replay.js` now recovers the optional `signals` a
+  recorded decision carried (`hasImage`, `escalations`, `preferCheap`, `channelBlocked`), turning the
+  blocked-channel list back into the map `chooseEntry` reads. Rows gain `signals`, the summary gains
+  `bySignal`, and events written before 1.1.2 replay byte-identically because every field falls back
+  field-by-field to the old defaults.
+- **The L1 label set grows from 20 to 60 cases.** Six pools now, with a new `vision-mixed` pool. The 40 new
+  cases are 16 vision, 12 channel cooldown (two of those pools block every channel, and the router still
+  returns its best unroutable choice instead of nothing) and 12 escalation/preferCheap, one of them at 3× to
+  prove the cap at 2. `--fail-on-change` stays at zero model and zero effort changes across all six pools.
+- **A tier review, and the places the labels disagree with it.** `research/05-tier-review-2026-11.md` reads
+  all nineteen models against AA v5.0: `deepseek-v4-pro` carries a lower index (23) than `deepseek-flash`
+  (32) yet is the only `strong` entry; `claude-opus-5-5` is dominated by `claude-sonnet-5-5` (58 vs 54 at
+  half the blended price and the same $/task); `gemini-3.8-flash` is labelled cheap while costing as much per
+  task as `gemini-4-argon`. No pool ships by default, so this is documentation for your own pool rather than
+  a behaviour change — and the report also records that `tier: "standard"` is silently normalised to
+  `cheap`, which 1.1.3 turns into a warning.
+- **`gemini-4-carbon` is not added.** OpenRouter 404s both endpoint spellings and the AA page did not answer;
+  the only number found (59) comes from a second-hand aggregator. The three conditions for adding it are
+  written down in the same report.
+
+Tests: 486 (1.1.1: 474). Upgrade note: no state migration; `qualityAware` is off by default and the new
+`quality` block is additive.
+
 ## 1.1.1
 
 **A catalog sync you can audit, and a pin picker that only offers words the route really takes. The routing

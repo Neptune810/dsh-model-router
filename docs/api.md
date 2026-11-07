@@ -21,9 +21,9 @@ additive, and a field is only removed in a major version.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| GET | /model-router/state | — (`?sessionId=` optional) | The whole panel state: control, plan, presets, pool, decisions, live route, cost shadow, channels, budget, peak, catalog, effort, classifier, experiments, feedback, compat, telemetry. Absolute paths are redacted to bare file names. |
+| GET | /model-router/state | — (`?sessionId=` optional) | The whole panel state: control, plan, presets, pool, decisions, live route, cost shadow, quality shadow, channels, budget, peak, catalog, effort, classifier, experiments, feedback, compat, telemetry. Absolute paths are redacted to bare file names. |
 | GET | /model-router/catalog | — | The host LLM registry for the pool UI: every provider, its models, and `efforts` — the reasoning words that model really accepts (v1.1.1). An empty `efforts` means the host reports no vocabulary; it is not "this model takes no reasoning". |
-| GET | /model-router/stats | — (`?since&until&limit`) | Aggregated telemetry over a window: `byClass`, `byModel`, `byEffort`, `totals` (tokens, priced steps, cost, peak, failover, effort mapping, experiments), `shadow`, `feedback`, `catalog`. |
+| GET | /model-router/stats | — (`?since&until&limit`) | Aggregated telemetry over a window: `byClass`, `byModel`, `byEffort`, `totals` (tokens, priced steps, cost, peak, failover, effort mapping, experiments), `shadow`, `qualityShadow`, `feedback`, `catalog`. |
 | POST | /model-router/control | `{ sessionId, control }` | `full` / `effort` / `model` / `null` (null resumes routing). |
 | POST | /model-router/resume | `{ sessionId }` | Drops a manual override. |
 | POST | /model-router/effort-model | `{ sessionId, model }` | Binds (or unbinds, `null`) the one model the effort scope may use. |
@@ -35,7 +35,7 @@ additive, and a field is only removed in a major version.
 | POST | /model-router/cross | `{ sessionId, action }` | Answers a cross-provider proposal: `allow` / `once` / `never`. |
 | POST | /model-router/modes | `{ sessionId, mode, pool, auto, setDefault }` | The agent-preset pool (v1.1): recommends a mode from the session's first message, and applies one while the host still allows it (before the session's first turn). |
 | POST | /model-router/presets | `{ presets }` | Replaces task presets. |
-| POST | /model-router/settings | `{ settings }` | Updates one settings block (control, image policy, classifier, panel background, signals, subagent, effort model). |
+| POST | /model-router/settings | `{ settings }` | Updates one settings block (control, image policy, classifier, panel background, signals, subagent, effort model, `qualityAware`). |
 | POST | /model-router/budget | `{ sessionId, action }` | `once` lets the next step through a hard budget stop and re-arms; `rearm` clears the stop immediately. |
 | POST | /model-router/feedback | `{ sessionId, label }` | Records `too-expensive` / `too-weak` / `just-right` for that session's last route, locally only. |
 
@@ -87,6 +87,26 @@ An empty or missing vocabulary falls back to the nine generic words with a note 
 nothing; an unknown list is never rendered as "this model takes no reasoning". A pin already stored on the
 entry stays in the list even when the resolver no longer reports it, so a re-render can never silently move a
 relay off the one level it accepts.
+
+## Quality-aware routing (v1.1.2)
+
+`qualityAware` (default `false`) lets the catalog's own quality index reorder entries inside a task class.
+The term is the mirror of `costWeight`: `scoring.qualityWeight` × 10 × (entry index / pool floor − 1),
+capped at `qualityGuard.maxMultiple` − 1.
+
+`GET /state` carries the block:
+
+| Field | Meaning |
+| --- | --- |
+| `enabled` | `qualityAware` as normalised. |
+| `qualityWeight`, `guard` | The shipped weight and cap. |
+| `aaVersion`, `evidenceDate` | Which index snapshot the numbers come from. |
+| `floorIndex`, `known` | The pool's lowest known index, and how many entries have one. |
+| `entries` | `{ id, tier, aaIndex }` per pool entry; `aaIndex: null` means the catalog cannot score it. |
+| `shadow` | While `enabled` is false: `{ candidate, current, agree, currentIndex, candidateIndex, gainRatio, floorIndex, costFallback }` for the last step, or `null`. |
+
+An entry the catalog cannot score contributes no points and is never filtered — there is no `unknownQuality`
+policy, unlike `costGuard.unknownPricing`, because an unmeasured model is not a bad one.
 
 ## Stability promise
 

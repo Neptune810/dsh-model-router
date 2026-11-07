@@ -589,6 +589,37 @@ A small release with one UI change and three price facts. Nothing in the ladder 
   4/20, cache read 0.10 → 0.20) takes over on 2026-12-01 from the base rate with no edit needed, and the GLM-4.5
   retirement note is still in the watchlist.
 
+## The quality shadow (v1.1.2)
+
+The catalog has carried a quality index (`quality.aaIndex`, from Artificial Analysis) since 0.15.1. 1.1.2
+teaches the scorer to read it — and ships that off, the way 0.16.0 shipped cost awareness off, so the
+evidence arrives before the behaviour changes.
+
+- **The term mirrors the cost term.** `scoring.qualityWeight` (0.15) × 10 × (entry index / pool floor − 1),
+  capped at `qualityGuard.maxMultiple` (8). At the shipped weights an entry at 1.5× the pool floor gains
+  0.75 points and one at the 8× guard gains 10.5 — exactly what the cost term can take away at the same
+  ratios, so "better but proportionally dearer" nets out to zero. Quality reorders a task class; it does not
+  outvote the class or your own preset weights.
+- **`qualityAware` defaults to `false`.** While it is off, every decision still records `qualityShadow`:
+  the entry a quality-aware router would have picked, both catalog indexes and the relative gain.
+  `GET /model-router/state` serves it as a `quality` block, the panel prints it under the cost shadow, and
+  `GET /model-router/stats` aggregates it into `summary.qualityShadow` — so you can watch what would have
+  changed for as long as it takes to believe the number.
+- **A model the catalog cannot score only loses its bonus.** Five of the nineteen models have no AA index;
+  they score zero on this term and are never filtered out. That is the one place where quality deliberately
+  differs from cost: a missing price can hide an unbounded bill, a missing index just means nobody measured
+  it.
+- **What the labels do not agree with.** The same release ships `research/05-tier-review-2026-11.md`: of the
+  nineteen models, `deepseek-v4-pro` scores lower than `deepseek-flash` yet is the only `strong` entry,
+  `claude-opus-5-5` is dominated by `claude-sonnet-5-5` (higher index, half the blended price, the same
+  $/task), and `gemini-3.8-flash` costs about what `gemini-4-argon` does per task while being labelled
+  cheap. No pool ships by default, so read those as advice for the pool you write, not as a change to this
+  one.
+
+The replay picked up the other half of the release: recorded decisions now keep `hasImage`, `escalations`,
+`preferCheap` and `channelBlocked`, the label set is 60 cases across six pools, and `--fail-on-change` is
+still zero over all of them.
+
 ## The five rules
 
 1. **No ratchet.** Turn depth contributes no score by default (`scoring.turnPerPoint: 0`) and tool
@@ -780,7 +811,7 @@ version 2 on load and keeps the existing session records.
 node --test
 ```
 
-474 tests. `test/mode-pool.test.js` (18) covers the preset pool: normalisation, the keyword classifier (a batch
+486 tests. `test/mode-pool.test.js` (18) covers the preset pool: normalisation, the keyword classifier (a batch
 brief leans `ptc`, a typo fix leans `minimal`, a plugin brief leans `cordis`, a refactor stays `standard`),
 the deterministic tie order, an empty and a single-mode pool, and — through host doubles — that the first message only
 *recommends* (nothing is switched), that the panel call applies a mode, that an already-started session is refused
@@ -793,9 +824,11 @@ because that is what the host advertises), a poisoned history still wins over th
 field. `test/clock.test.js` (5) pins the one clock (freeze), the `DSH_MODEL_ROUTER_NOW`
 hook, and the refusal to pin a non-finite instant. `test/shadow-gate.test.js` (9) drives `scripts/shadow-gate.mjs` against synthetic ledgers: seven days of cheap
 shadow steps open the flip gate, a 5% saving keeps it shut, unpriced steps count as evidence but never as priced
-ones, and a missing ledger is reported as missing rather than as zero. `test/replay-l1.test.js` (4) replays
-twenty reviewed routes across five pools through `lib/replay.js --fail-on-change`, so a
-catalog or scoring change that moves one of them fails here instead of at the bill. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
+ones, and a missing ledger is reported as missing rather than as zero. `test/replay-l1.test.js` (7) replays
+sixty reviewed routes across six pools through `lib/replay.js --fail-on-change`, including the vision, channel
+cooldown and escalation signals, so a catalog or scoring change that moves one of them fails here instead of at
+the bill; `test/quality-aware.test.js` (5) covers the quality term (capped, weighted, off when the switch is
+off), its normalisation, the route that changes when it is on, and a pool the catalog cannot score at all. `test/policy.test.js` (40) covers classification, the absence of a ratchet, the
 unreachable `max`, the refusal of `off`, evidence escalation, effort clamping, the poisoned-history
 detector, tool-result error parsing, and the `toolCallClass` knob (default `standard`, `engineering`
 restores the pre-0.9.0 rule, any other value coerces to `standard`); `test/routing.test.js` (26) covers the pool, preset
@@ -824,7 +857,7 @@ both) plus the route's clearing and validation; `test/route-projection.test.js` 
 projection contract (key/stateVersion, plain-JSON state, header folding with absent vs explicit null
 effort, turn/step tracking, the header in force at a call, the fallback to the call's own values,
 repeated call ids, the 200-entry cap in insertion order, integer-like call-id ordering, purity and a
-JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (59)
+JSON round-trip) plus the host registration and a host without the service; `test/client.test.js` (61)
 loads the shipped browser bundle in a VM and asserts the registration (the route row, the composer chip
 as a self-retracting fallback, and the merged seat on `conversation.input.model` at priority -1), the
 closed trigger, the documented host routes, the route
@@ -839,7 +872,9 @@ silence of a host that sends no `costAware` block), the spend guard (a near-budg
 overspent bar clamping to 100%, token rows, a zero limit and a malformed block staying silent), the peak note
 under `inform` and `shift` (and its silence when off or off-peak), the benched/quarantined channel line in both
 languages, the effort-mapping line (an alias, a nearest tier, a model that takes none, the silence of an exact
-mapping and of a malformed block, and English), the feedback row (three labels posting the verdict, the recorded one marked, the next step's answer in both languages, and the silence of a host with no feedback report), the exploration line (a shadow draw, an applied draw, an exploit draw that says nothing, and English), the classifier line (a raised tier with its confidence, an open breaker outranking it, and the silence of a confident verdict), the pin picker narrowing to the words a route declares (through the directory snapshot, keeping a stale pin visible) and falling back to the nine documented words through `/catalog` when the host reports no vocabulary, and the declared `ui-chat` seat and `uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
+mapping and of a malformed block, and English), the feedback row (three labels posting the verdict, the recorded one marked, the next step's answer in both languages, and the silence of a host with no feedback report), the exploration line (a shadow draw, an applied draw, an exploit draw that says nothing, and English), the classifier line (a raised tier with its confidence, an open breaker outranking it, and the silence of a confident verdict), the pin picker narrowing to the words a route declares (through the directory snapshot, keeping a stale pin visible) and falling back to the nine documented words through `/catalog` when the host reports no vocabulary, the quality shadow line (agreement, divergence with the catalog gain, the
+enabled flag, English, and the silence of a host with no quality block), and the declared `ui-chat` seat and
+`uiConversation` service; `test/store.test.js` (6) covers state-file recovery (a corrupt file is backed up instead of
 overwritten, a version 1 file migrates, a write failure is surfaced through `storeHealth`, the session
 map is capped by least-recently-seen); `test/routes.test.js` (10) covers the panel token, the same-origin
 read guard, path redaction, ETag/304 and `/stats` pass-through; `test/release.test.js` (8) covers the release gate (tag, version and
@@ -848,10 +883,11 @@ against its schema, pins the documented completeness warnings, proves the genera
 watchlist rules and covers `findModel`; `test/catalog-pricing.test.js` (18) covers the rate in force (`pricing.next`
 on its day, the peak/off-peak windows), the token split, the null-not-zero price rules and the alert window;
 `test/catalog-diff.test.js` (22) drives the drift report against a frozen OpenRouter snapshot, including the created-date window, the untracked-provider section and a catalog `null` that upstream already prices (reported as an unpriced field, not as drift); `test/smoke.test.js` (11) drives `scripts/smoke.mjs` against a fake host and checks the
-PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (15) covers decision events landing on disk, monthly
+PASS / WARN / SKIP / FAIL exit codes; `test/telemetry.test.js` (17) covers decision events landing on disk, monthly
 files and 8 MB rotation, flush, corrupt-line tolerance, the aggregate shape, the token/USD ledger (a legacy event
 counts as unpriced), the cost-shadow ledger (a malformed shadow is skipped, a step with no priced pair counts but
-costs nothing), a once-only error, the off switch, and the effort-mapping counters;
+costs nothing), the quality-shadow aggregate (agreement, both index averages and the relative gain, counted apart
+from the cost shadow), a once-only error, the off switch, and the effort-mapping counters;
 `test/observation.test.js` (24) walks the routing surface end to end (/state fields, ETag 304, `/stats` aggregation,
 `/router replay`, classifier confidence filtering, the nine-word route guards and `scoreParts`, and the cost
 shadow: the model a cost-aware router would have picked, the agreement a cheap-live route records, the flag
@@ -865,9 +901,10 @@ mixes), the long-context tiers (the largest threshold wins, `effectiveFrom` is r
 `excess`), `stepCost` matching the catalog price at three instants, and the per-call rows before and after
 their `effectiveFrom`; `test/feedback.test.js` (8) covers the three labels and their aliases, the normalized record (note folding, length caps, absent provider), the outcome pair, a reader that skips bad lines, the aggregate (per label, per class, the override share, the answered outcomes), and a log that is switched off writing nothing; `test/classifier2.test.js` (6) covers the structured verdict behind prose, the confidence gate, the raise-instead-of-guess answer, the bounded retries and the breaker that opens after three failures; `test/experiments.test.js` (7) covers which step classes may be explored, a seeded draw, every reason a draw is refused, exploit vs explore, the epsilon clamp and the per-arm report; `test/effort.test.js` (7) covers the eight-tier ladder and its points, the unknown word ranking as `high`,
 the budget table and its per-model overrides, the `maxOutput` cap, the four `why` answers, the per-class and per-pair
-summary and malformed input; `test/replay.test.js` (5) drives `lib/replay.js` over a frozen ledger (an unchanged
+summary and malformed input; `test/replay.test.js` (6) drives `lib/replay.js` over a frozen ledger (an unchanged
 replay, a step that would route elsewhere today, `--fail-on-change`, a config exposing an alias collapse, the
-`--since` / `--until` window, and the two exit-2 paths); `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only
+`--since` / `--until` window, the step signals recovered from a recorded event (including a malformed block
+falling back field by field), and the two exit-2 paths); `test/golden.test.js` (11) freezes ten representative routing outcomes (rewritten only
 with `GOLDEN_UPDATE=1`), so unintended drift fails; `test/contract.test.js` (7) pins the 1.0
 contract itself — every response carries `schemaVersion` (refusals included), the routes in
 `docs/api.md` are exactly the registered ones, every host event the plugin listens to appears in
